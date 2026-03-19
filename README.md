@@ -1,83 +1,92 @@
-# 🏀 Court IQ — NBA Dashboard
+# 🏀 Court IQ v2 — NBA Dashboard + Pick'em Social
 
-Dashboard NBA en tiempo real con backend serverless gratuito en Vercel.
+## Qué hay nuevo en v2
+- **Logos reales** de ESPN CDN (no emojis)
+- **Todos los jugadores** de la NBA (~450) con búsqueda, filtros y paginación
+- **Pick'em Social** — crea grupos, invita amigos con código, haz picks, clasificación en vivo
+- **Auto-score** — los picks se califican automáticamente cuando termina un partido
 
-## Qué se actualiza automáticamente
+## Setup completo (15 minutos)
 
-| Dato | Fuente | Frecuencia |
-|------|--------|------------|
-| Partidos del día (scores en vivo) | ESPN Scoreboard API | Cada 2 min |
-| Standings (W-L, rachas) | ESPN Standings API | Cada 2 min |
-| Stats de jugadores (PPG, APG, RPG...) | NBA.com Stats API → ESPN fallback | Cada 10 min (cache) |
+### Paso 1: Crear proyecto en Supabase (gratis)
+1. Ve a [supabase.com](https://supabase.com) → **Start your project** → Login con GitHub
+2. **New Project** → Nombre: `court-iq` → Elige una contraseña → Región: cualquiera → **Create**
+3. Espera ~1 minuto a que se cree
+4. Ve a **SQL Editor** (menú izquierdo) → **New Query**
+5. Copia TODO el contenido de `supabase-schema.sql` y pégalo ahí
+6. Click **Run** ✅
+7. Ve a **Settings** → **API** → Copia estos 2 valores:
+   - `Project URL` (ej: `https://xxxxx.supabase.co`)
+   - `anon/public key` (empieza con `eyJ...`)
 
-## Setup en 5 pasos
-
-### 1. Sube a GitHub
+### Paso 2: Subir a GitHub
 ```bash
-# Crea un repo nuevo en github.com, luego:
-cd court-iq
+cd court-iq-v2
 git init
 git add .
-git commit -m "Court IQ v1"
+git commit -m "Court IQ v2"
 git branch -M main
 git remote add origin https://github.com/TU_USER/court-iq.git
 git push -u origin main
 ```
 
-### 2. Conecta con Vercel
-1. Ve a [vercel.com](https://vercel.com) y haz login con GitHub
-2. Click **"Add New Project"**
-3. Importa tu repo `court-iq`
-4. Framework: **Vite** (se detecta automático)
-5. Click **Deploy**
-6. ¡Listo! Tu app estará en `https://court-iq.vercel.app`
+### Paso 3: Deploy en Vercel
+1. Ve a [vercel.com](https://vercel.com) → Login con GitHub
+2. **Add New Project** → Importa `court-iq`
+3. Antes de hacer deploy, agrega las **Environment Variables**:
+   - `SUPABASE_URL` → pega tu Project URL de Supabase
+   - `SUPABASE_ANON_KEY` → pega tu anon key de Supabase
+4. Click **Deploy**
+5. ¡Listo! Tu app estará en `https://court-iq.vercel.app`
 
-### 3. Desarrollo local
+### Paso 4: Verificar
+- Abre tu URL de Vercel
+- Los partidos y standings deberían cargar en vivo
+- Ve al tab **Pick'em** → Crea tu perfil → Crea un grupo → Comparte el código con amigos
+
+## Cómo funciona el Pick'em
+
+### Para el que crea el grupo:
+1. Tab Pick'em → Crear Grupo → Le pones nombre
+2. Te da un **código de 6 letras** (ej: `ABC123`)
+3. Compartes ese código con tus amigos por WhatsApp/Telegram
+
+### Para los que se unen:
+1. Tab Pick'em → Crear perfil (nombre)
+2. Click "🔗 Unirse" → Pegan el código → Entrar
+3. Ya están en el grupo
+
+### Picks:
+- Cada día ven los partidos programados
+- Eligen al ganador de cada partido
+- Cuando termina el partido, se califica automáticamente
+- **10 puntos** por acierto
+- La clasificación se actualiza en tiempo real
+
+## APIs (todo automático)
+
+| Endpoint | Datos | Cache | Fuente |
+|----------|-------|-------|--------|
+| `/api/scoreboard` | Partidos del día | 30s | ESPN |
+| `/api/standings` | Clasificaciones | 2min | ESPN |
+| `/api/players` | Stats de TODOS los jugadores | 10min | NBA.com → ESPN |
+| `/api/pickem?action=...` | Pick'em CRUD | — | Supabase |
+
+## Costo total: $0
+
+| Servicio | Tier gratis |
+|----------|-------------|
+| **Vercel** | 100GB bandwidth, serverless ilimitado |
+| **Supabase** | 500MB database, 50K usuarios, API ilimitada |
+| **ESPN/NBA APIs** | Públicas, sin límite práctico |
+
+## Desarrollo local
 ```bash
 npm install
-npx vercel dev    # Corre frontend + API routes juntas
+
+# Necesitas crear .env.local con:
+# SUPABASE_URL=https://tu-proyecto.supabase.co
+# SUPABASE_ANON_KEY=eyJ...
+
+npx vercel dev
 ```
-> Usa `vercel dev` en vez de `npm run dev` para que las API routes `/api/*` funcionen localmente.
-
-## Estructura del proyecto
-
-```
-court-iq/
-├── api/                    ← Serverless functions (backend)
-│   ├── scoreboard.js       ← Proxy ESPN: partidos del día
-│   ├── standings.js        ← Proxy ESPN: clasificaciones
-│   └── players.js          ← Proxy NBA.com/ESPN: stats jugadores
-├── src/
-│   ├── App.jsx             ← Dashboard completo
-│   └── main.jsx            ← Entry point React
-├── index.html
-├── package.json
-├── vite.config.js
-└── vercel.json             ← Config de Vercel
-```
-
-## Cómo funciona el backend
-
-Las 3 funciones en `/api/` actúan como **proxy** — el navegador llama a tu dominio de Vercel (`/api/scoreboard`), y Vercel llama a ESPN/NBA.com desde el servidor. Esto resuelve los problemas de CORS y permite acceder a APIs que necesitan headers especiales.
-
-**Cada función tiene cache:**
-- `scoreboard` → 30 seg (datos en vivo)
-- `standings` → 2 min
-- `players` → 10 min
-
-Si alguna API falla, el frontend usa datos hardcodeados como fallback.
-
-## Costo
-
-**$0**. Vercel gratis incluye:
-- 100 GB de bandwidth/mes
-- Serverless functions ilimitadas (con limits razonables)
-- Deploy automático en cada push a GitHub
-- SSL gratis
-- CDN global
-
-## Personalización
-
-- Para cambiar rosters → edita `ROSTERS` en `App.jsx`
-- Para agregar más jugadores → edita `FB_PLAYERS` (fallback) y la API los traerá automático
-- Para cambiar frecuencia de refresh → modifica `120000` (ms) en el `setInterval`
