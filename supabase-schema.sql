@@ -46,7 +46,7 @@ create table if not exists picks (
   created_at timestamptz default now(),
   unique(user_id, group_id, game_id)
 );
-
+--
 -- Índices para performance
 create index if not exists idx_picks_user on picks(user_id);
 create index if not exists idx_picks_group on picks(group_id);
