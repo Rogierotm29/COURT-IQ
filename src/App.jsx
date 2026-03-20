@@ -287,23 +287,36 @@ const PlayersTab=({players,live})=>{
   </div>);
 };
 
-/* ═══ PICK'EM TAB (social, real backend) ═══ */
+/* ═══ PICK'EM TAB v2 (improved UX) ═══ */
 const PickemTab=({games,userCtx})=>{
   const {user,save}=userCtx;
   const [name,setName]=useState("");const [groups,setGroups]=useState([]);const [selGroup,setSelGroup]=useState(null);
   const [picks,setPicks]=useState({});const [leaderboard,setLeaderboard]=useState([]);
   const [newGroupName,setNewGroupName]=useState("");const [joinCode,setJoinCode]=useState("");
-  const [showCreate,setShowCreate]=useState(false);const [showJoin,setShowJoin]=useState(false);
+  const [panel,setPanel]=useState(null); // "create"|"join"|null
+  const [subTab,setSubTab]=useState("picks"); // "picks"|"ranking"|"members"
   const [msg,setMsg]=useState("");const [loading,setLoading]=useState(false);
-  const upcoming=games.filter(g=>g.status==="Upcoming");const finished=games.filter(g=>g.status==="Final");
+  const [copied,setCopied]=useState(false);
+  const upcoming=games.filter(g=>g.status==="Upcoming");const finished=games.filter(g=>g.status==="Final");const liveGames=games.filter(g=>g.status==="LIVE");
+  const allGames=[...liveGames,...upcoming,...finished];
 
-  // Load groups on mount
+  // Load groups on mount & auto-select first
   useEffect(()=>{
     if(!user) return;
-    pickemAPI("myGroups",{params:{userId:user.id}}).then(d=>{if(d.ok)setGroups(d.groups||[]);});
+    pickemAPI("myGroups",{params:{userId:user.id}}).then(d=>{
+      if(d.ok&&d.groups?.length){
+        setGroups(d.groups);
+        const saved=localStorage.getItem("courtiq_lastgroup");
+        const found=d.groups.find(g=>g.id===saved);
+        setSelGroup(found||d.groups[0]);
+      }
+    });
   },[user]);
 
-  // Load picks & leaderboard when group selected
+  // Save last selected group
+  useEffect(()=>{if(selGroup)localStorage.setItem("courtiq_lastgroup",selGroup.id);},[selGroup]);
+
+  // Load picks & leaderboard when group changes
   useEffect(()=>{
     if(!user||!selGroup) return;
     const today=new Date().toISOString().split("T")[0];
@@ -323,110 +336,218 @@ const PickemTab=({games,userCtx})=>{
 
   const createGroup=async()=>{
     if(!newGroupName.trim()) return;
+    setLoading(true);
     const d=await pickemAPI("createGroup",{body:{name:newGroupName.trim(),userId:user.id}});
-    if(d.ok){setGroups(g=>[...g,d.group]);setSelGroup(d.group);setShowCreate(false);setNewGroupName("");setMsg(`Grupo creado! Código: ${d.group.code}`);}
+    if(d.ok){setGroups(g=>[...g,d.group]);setSelGroup(d.group);setPanel(null);setNewGroupName("");setMsg(`¡Grupo creado! Comparte el código: ${d.group.code}`);}
     else setMsg(d.error);
+    setLoading(false);
   };
 
   const joinGroup=async()=>{
     if(!joinCode.trim()) return;
+    setLoading(true);
     const d=await pickemAPI("joinGroup",{body:{code:joinCode.trim(),userId:user.id}});
-    if(d.ok){if(!d.already)setGroups(g=>[...g,d.group]);setSelGroup(d.group);setShowJoin(false);setJoinCode("");setMsg(d.already?"Ya estás en este grupo":"¡Te uniste!");}
-    else setMsg(d.error);
+    if(d.ok){
+      if(!d.already){setGroups(g=>[...g,d.group]);setMsg("¡Te uniste al grupo!");}
+      else setMsg("Ya estás en este grupo");
+      setSelGroup(d.group);setPanel(null);setJoinCode("");
+    } else setMsg(d.error);
+    setLoading(false);
   };
 
   const makePick=async(gameId,team,homeTeam,awayTeam)=>{
+    if(!selGroup) return;
     const today=new Date().toISOString().split("T")[0];
     setPicks(p=>({...p,[gameId]:team}));
     await pickemAPI("makePick",{body:{userId:user.id,groupId:selGroup.id,gameId,gameDate:today,pickedTeam:team,homeTeam,awayTeam}});
   };
 
-  // Not registered
+  const copyCode=()=>{
+    if(!selGroup) return;
+    navigator.clipboard?.writeText(selGroup.code).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);}).catch(()=>{});
+  };
+
+  const myRank=leaderboard.findIndex(r=>r.user_id===user?.id);
+  const myStats=leaderboard.find(r=>r.user_id===user?.id);
+
+  // ─── NOT REGISTERED ───
   if(!user) return(<div className="fade-up">
     <ST sub="Pick'em">Crea tu perfil 🎯</ST>
-    <Card style={{maxWidth:400,margin:"0 auto",textAlign:"center",padding:30}}>
+    <Card style={{maxWidth:420,margin:"0 auto",textAlign:"center",padding:30}}>
       <div style={{fontSize:48,marginBottom:12}}>🏀</div>
-      <div style={{fontSize:16,fontWeight:700,color:C.text,marginBottom:16}}>Únete al Pick'em</div>
-      <div style={{fontSize:12,color:C.dim,marginBottom:20}}>Elige tu nombre para competir con amigos</div>
-      <input value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&register()} placeholder="Tu nombre..." style={{width:"100%",background:"#0a1018",border:`1px solid ${C.border}`,borderRadius:11,padding:"12px 16px",color:C.text,fontSize:14,marginBottom:12,textAlign:"center"}}/>
-      <button className="btn" onClick={register} disabled={loading} style={{width:"100%",padding:"12px",borderRadius:11,background:`linear-gradient(135deg,${C.accent},#0066ff)`,color:"#07090f",fontSize:14,fontWeight:900}}>{loading?<Spin s={14}/>:"Entrar 🚀"}</button>
-      {msg&&<div style={{marginTop:10,fontSize:12,color:C.accent}}>{msg}</div>}
+      <div style={{fontSize:18,fontWeight:800,color:C.text,marginBottom:8}}>Únete al Pick'em</div>
+      <div style={{fontSize:12,color:C.dim,marginBottom:24}}>Compite con amigos prediciendo quién gana cada partido</div>
+      <input value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&register()} placeholder="Tu nombre..." style={{width:"100%",background:"#0a1018",border:`1px solid ${C.border}`,borderRadius:11,padding:"14px 16px",color:C.text,fontSize:15,marginBottom:12,textAlign:"center"}}/>
+      <button className="btn" onClick={register} disabled={loading} style={{width:"100%",padding:"14px",borderRadius:11,background:`linear-gradient(135deg,${C.accent},#0066ff)`,color:"#07090f",fontSize:15,fontWeight:900}}>{loading?<Spin s={14}/>:"Entrar 🚀"}</button>
+      {msg&&<div style={{marginTop:10,fontSize:12,color:"#ff6666"}}>{msg}</div>}
     </Card>
   </div>);
 
+  // ─── MAIN PICK'EM VIEW ───
   return(<div className="fade-up">
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-      <ST sub={`Hola ${user.name}`}>Pick'em 🎯</ST>
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+      <div><div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2}}>Hola {user.name}</div><div style={{fontSize:22,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text}}>Pick'em 🎯</div></div>
       <div style={{display:"flex",gap:6}}>
-        <button className="btn" onClick={()=>setShowJoin(!showJoin)} style={{padding:"7px 14px",borderRadius:10,background:`${C.accent}22`,border:`1px solid ${C.accent}`,color:C.accent,fontSize:11,fontWeight:700}}>🔗 Unirse</button>
-        <button className="btn" onClick={()=>setShowCreate(!showCreate)} style={{padding:"7px 14px",borderRadius:10,background:C.accent,color:"#07090f",fontSize:11,fontWeight:700}}>+ Crear Grupo</button>
+        <button className="btn" onClick={()=>setPanel(panel==="join"?null:"join")} style={{padding:"8px 14px",borderRadius:10,background:panel==="join"?C.accent:`${C.accent}22`,border:`1px solid ${C.accent}`,color:panel==="join"?"#07090f":C.accent,fontSize:11,fontWeight:700}}>🔗 Unirse</button>
+        <button className="btn" onClick={()=>setPanel(panel==="create"?null:"create")} style={{padding:"8px 14px",borderRadius:10,background:panel==="create"?C.accent:`${C.accent}22`,border:`1px solid ${C.accent}`,color:panel==="create"?"#07090f":C.accent,fontSize:11,fontWeight:700}}>+ Crear</button>
       </div>
     </div>
-    {msg&&<div style={{marginBottom:10,padding:"8px 14px",background:`${C.accent}11`,border:`1px solid ${C.accent}44`,borderRadius:10,fontSize:12,color:C.accent}}>{msg}<button className="btn" onClick={()=>setMsg("")} style={{float:"right",background:"none",color:C.muted,fontSize:14}}>×</button></div>}
 
-    {/* Create group */}
-    {showCreate&&<Card style={{marginBottom:12,borderColor:`${C.accent}44`}}>
-      <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:10}}>Nuevo Grupo</div>
-      <div style={{display:"flex",gap:8}}><input value={newGroupName} onChange={e=>setNewGroupName(e.target.value)} placeholder="Nombre del grupo..." style={{flex:1,background:"#0a1018",border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.text,fontSize:13}}/><button className="btn" onClick={createGroup} style={{background:C.accent,borderRadius:10,padding:"10px 18px",color:"#07090f",fontSize:13,fontWeight:800}}>Crear</button></div>
+    {/* Toast message */}
+    {msg&&<div style={{marginBottom:10,padding:"10px 14px",background:"#00FF9D11",border:"1px solid #00FF9D44",borderRadius:10,fontSize:12,color:"#00FF9D",display:"flex",justifyContent:"space-between",alignItems:"center"}}>{msg}<button className="btn" onClick={()=>setMsg("")} style={{background:"none",color:C.muted,fontSize:16,padding:"0 4px"}}>×</button></div>}
+
+    {/* Create panel */}
+    {panel==="create"&&<Card style={{marginBottom:14,borderColor:`${C.accent}55`,background:"linear-gradient(135deg,#00C2FF08,#0d1117)"}}>
+      <div style={{fontSize:14,fontWeight:800,color:C.text,marginBottom:12}}>🆕 Crear nuevo grupo</div>
+      <div style={{display:"flex",gap:8}}>
+        <input value={newGroupName} onChange={e=>setNewGroupName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&createGroup()} placeholder="Nombre del grupo (ej: Los del barrio)" style={{flex:1,background:"#0a1018",border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px",color:C.text,fontSize:13}}/>
+        <button className="btn" onClick={createGroup} disabled={loading} style={{background:C.accent,borderRadius:10,padding:"12px 20px",color:"#07090f",fontSize:13,fontWeight:800}}>{loading?<Spin s={13}/>:"Crear"}</button>
+      </div>
+      <div style={{fontSize:11,color:C.dim,marginTop:8}}>Se generará un código para invitar amigos</div>
     </Card>}
 
-    {/* Join group */}
-    {showJoin&&<Card style={{marginBottom:12,borderColor:`#FFB80044`}}>
-      <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:10}}>Unirse con código</div>
-      <div style={{display:"flex",gap:8}}><input value={joinCode} onChange={e=>setJoinCode(e.target.value.toUpperCase())} placeholder="Ej: ABC123" maxLength={6} style={{flex:1,background:"#0a1018",border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.text,fontSize:16,fontWeight:800,letterSpacing:4,textAlign:"center",textTransform:"uppercase"}}/><button className="btn" onClick={joinGroup} style={{background:"#FFB800",borderRadius:10,padding:"10px 18px",color:"#07090f",fontSize:13,fontWeight:800}}>Entrar</button></div>
+    {/* Join panel */}
+    {panel==="join"&&<Card style={{marginBottom:14,borderColor:"#FFB80055",background:"linear-gradient(135deg,#FFB80008,#0d1117)"}}>
+      <div style={{fontSize:14,fontWeight:800,color:C.text,marginBottom:12}}>🔗 Unirse a un grupo</div>
+      <div style={{display:"flex",gap:8}}>
+        <input value={joinCode} onChange={e=>setJoinCode(e.target.value.toUpperCase())} onKeyDown={e=>e.key==="Enter"&&joinGroup()} placeholder="CÓDIGO" maxLength={6} style={{flex:1,background:"#0a1018",border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px",color:"#FFB800",fontSize:20,fontWeight:900,letterSpacing:6,textAlign:"center",textTransform:"uppercase"}}/>
+        <button className="btn" onClick={joinGroup} disabled={loading} style={{background:"#FFB800",borderRadius:10,padding:"12px 20px",color:"#07090f",fontSize:13,fontWeight:800}}>{loading?<Spin s={13}/>:"Entrar"}</button>
+      </div>
+      <div style={{fontSize:11,color:C.dim,marginTop:8}}>Pide el código de 6 letras al creador del grupo</div>
     </Card>}
 
-    {/* Groups */}
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10,marginBottom:20}}>
-      {groups.length===0?<Card style={{padding:20,textAlign:"center",color:C.muted}}>Crea o únete a un grupo para empezar</Card>
-      :groups.map(g=><Card key={g.id} style={{cursor:"pointer",borderColor:selGroup?.id===g.id?C.accent:C.border,background:selGroup?.id===g.id?`${C.accent}08`:C.card}} onClick={()=>setSelGroup(g)}>
-        <div style={{fontSize:14,fontWeight:800,color:C.text,marginBottom:4}}>{g.emoji||"🏀"} {g.name}</div>
-        <div style={{fontSize:10,color:C.muted,marginBottom:8}}>{g.memberCount||"?"} miembros</div>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <Tag c="#FFB800">Código: {g.code}</Tag>
-          {selGroup?.id===g.id&&<Tag c="#00FF9D">Activo</Tag>}
-        </div>
-      </Card>)}
-    </div>
+    {/* Group tabs */}
+    {groups.length>0&&<div style={{display:"flex",gap:0,marginBottom:16,background:C.card,borderRadius:12,border:`1px solid ${C.border}`,overflow:"hidden"}}>
+      {groups.map(g=><button key={g.id} className="btn" onClick={()=>{setSelGroup(g);setSubTab("picks");}} style={{flex:1,padding:"12px 8px",background:selGroup?.id===g.id?"#0a1520":"transparent",borderBottom:selGroup?.id===g.id?`2px solid ${C.accent}`:"2px solid transparent",color:selGroup?.id===g.id?C.accent:C.dim,fontSize:13,fontWeight:selGroup?.id===g.id?800:500,textAlign:"center"}}>
+        {g.emoji||"🏀"} {g.name}
+        {g.memberCount&&<span style={{fontSize:9,opacity:.6,marginLeft:4}}>({g.memberCount})</span>}
+      </button>)}
+    </div>}
 
+    {/* No groups state */}
+    {groups.length===0&&<Card style={{textAlign:"center",padding:40,marginBottom:20}}>
+      <div style={{fontSize:40,marginBottom:12}}>🏀</div>
+      <div style={{fontSize:16,fontWeight:700,color:C.text,marginBottom:8}}>¡Empieza a competir!</div>
+      <div style={{fontSize:13,color:C.dim,marginBottom:20}}>Crea un grupo o únete a uno con un código de invitación</div>
+      <div style={{display:"flex",gap:10,justifyContent:"center"}}>
+        <button className="btn" onClick={()=>setPanel("create")} style={{padding:"10px 20px",borderRadius:10,background:C.accent,color:"#07090f",fontSize:13,fontWeight:800}}>+ Crear Grupo</button>
+        <button className="btn" onClick={()=>setPanel("join")} style={{padding:"10px 20px",borderRadius:10,background:"#FFB800",color:"#07090f",fontSize:13,fontWeight:800}}>🔗 Tengo un código</button>
+      </div>
+    </Card>}
+
+    {/* Selected group content */}
     {selGroup&&<>
-      {/* Leaderboard */}
-      {leaderboard.length>0&&<Card style={{marginBottom:14}}>
-        <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:12}}>🏆 Clasificación — {selGroup.name}</div>
-        {leaderboard.map((r,i)=><div key={r.user_id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<leaderboard.length-1?`1px solid ${C.border}`:"none"}}>
-          <div style={{width:28,height:28,borderRadius:"50%",background:i===0?"#FFB80022":i===1?"#C0C0C022":i===2?"#CD7F3222":"#0a1018",border:`2px solid ${i===0?"#FFB800":i===1?"#C0C0C0":i===2?"#CD7F32":C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:i<3?"#FFB800":C.dim}}>{i+1}</div>
-          <span style={{fontSize:13,fontWeight:r.user_id===user.id?800:600,color:r.user_id===user.id?C.accent:C.text,flex:1}}>{r.avatar_emoji} {r.name}{r.user_id===user.id?" (tú)":""}</span>
-          <span style={{fontSize:10,color:C.dim}}>{r.correct_picks}/{r.total_picks} ({r.accuracy}%)</span>
-          <span style={{fontSize:18,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800",width:50,textAlign:"right"}}>{r.total_points}</span>
-        </div>)}
+      {/* Group header card */}
+      <Card style={{marginBottom:14,background:"linear-gradient(135deg,#0a152066,#0d1117)",borderColor:`${C.accent}33`}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+          <div>
+            <div style={{fontSize:16,fontWeight:800,color:C.text}}>{selGroup.emoji||"🏀"} {selGroup.name}</div>
+            <div style={{fontSize:11,color:C.dim,marginTop:2}}>{selGroup.memberCount||"?"} miembros · {allGames.length} partidos hoy</div>
+          </div>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <div style={{background:"#0a1018",borderRadius:8,padding:"8px 14px",display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:14,fontWeight:900,letterSpacing:3,color:"#FFB800",fontFamily:"'Bebas Neue',sans-serif"}}>{selGroup.code}</span>
+              <button className="btn" onClick={copyCode} style={{background:copied?"#00FF9D22":"#ffffff11",borderRadius:6,padding:"4px 10px",color:copied?"#00FF9D":C.dim,fontSize:10,fontWeight:700,border:`1px solid ${copied?"#00FF9D44":"#ffffff11"}`}}>{copied?"✓ Copiado":"📋 Copiar"}</button>
+            </div>
+          </div>
+        </div>
+        {/* My quick stats */}
+        {myStats&&<div style={{display:"flex",gap:16,marginTop:14,paddingTop:12,borderTop:`1px solid ${C.border}`}}>
+          {[["🏅 Posición",`#${myRank+1}`,"#FFB800"],["✅ Aciertos",`${myStats.correct_picks}/${myStats.total_picks}`,"#00FF9D"],["📊 Precisión",`${myStats.accuracy}%`,C.accent],["⭐ Puntos",myStats.total_points,"#FFB800"]].map(([l,v,c])=><div key={l}>
+            <div style={{fontSize:9,color:C.muted}}>{l}</div>
+            <div style={{fontSize:16,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:c}}>{v}</div>
+          </div>)}
+        </div>}
+      </Card>
+
+      {/* Sub-tabs: Picks | Ranking | Members */}
+      <div style={{display:"flex",gap:0,marginBottom:14}}>
+        {[["picks","🎯 Picks"],["ranking","🏆 Ranking"],["members","👥 Miembros"]].map(([id,label])=><button key={id} className="btn" onClick={()=>setSubTab(id)} style={{padding:"9px 18px",background:"transparent",borderBottom:subTab===id?`2px solid ${C.accent}`:"2px solid transparent",color:subTab===id?C.accent:C.dim,fontSize:12,fontWeight:subTab===id?700:500}}>{label}</button>)}
+      </div>
+
+      {/* ─── PICKS SUB-TAB ─── */}
+      {subTab==="picks"&&<>
+        {allGames.length===0?<Card style={{textAlign:"center",padding:40}}>
+          <div style={{fontSize:36,marginBottom:8}}>🌙</div>
+          <div style={{fontSize:15,fontWeight:700,color:C.text,marginBottom:6}}>No hay partidos hoy</div>
+          <div style={{fontSize:12,color:C.dim}}>Vuelve mañana para hacer tus picks</div>
+        </Card>
+        :allGames.map(g=>{
+          const picked=picks[g.id];const isFinal=g.status==="Final";const isLive=g.status==="LIVE";
+          const winner=isFinal?(g.homeScore>g.awayScore?g.home:g.away):null;
+          const correct=isFinal&&picked===winner;
+          return <Card key={g.id} style={{marginBottom:10,borderColor:isFinal?(correct?"#00FF9D33":"#ff444433"):isLive?"#ff444433":picked?`${tm(picked).color}33`:C.border}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+              {isLive?<Tag c="#ff4444">● EN VIVO {g.detail}</Tag>:isFinal?<Tag c={C.muted}>Final</Tag>:<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>}
+              {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?"✅ +10 pts":"❌ Fallaste"}</Tag>}
+              {!isFinal&&!isLive&&picked&&<Tag c="#00FF9D">✓ Pick hecho</Tag>}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:10,alignItems:"center"}}>
+              {[["away",g.away,g.awayScore],["vs"],["home",g.home,g.homeScore]].map((item,idx)=>
+                idx===1?<div key="vs" style={{textAlign:"center"}}><div style={{fontSize:12,color:C.muted,fontWeight:800}}>VS</div>{(isFinal||isLive)&&<div style={{fontSize:9,color:C.dim,marginTop:2}}>{g.detail}</div>}</div>
+                :<button key={item[1]} className="btn" disabled={isFinal||isLive} onClick={()=>!isFinal&&!isLive&&makePick(g.id,item[1],g.home,g.away)} style={{padding:"14px 8px",borderRadius:12,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:6,
+                  background:picked===item[1]?`${tm(item[1]).color}18`:C.card,
+                  border:`2px solid ${picked===item[1]?tm(item[1]).color:C.border}`,
+                  color:picked===item[1]?tm(item[1]).color:C.text,width:"100%",
+                  opacity:isFinal&&picked&&picked!==item[1]?.4:1}}>
+                  {logo(item[1],36)}
+                  <span style={{fontSize:16,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif"}}>{item[1]}</span>
+                  <span style={{fontSize:11,color:C.dim}}>{tm(item[1]).name}</span>
+                  {(isFinal||isLive)&&<span style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:isFinal&&item[1]===winner?"#00FF9D":C.text}}>{item[2]}</span>}
+                </button>
+              )}
+            </div>
+          </Card>;
+        })}
+      </>}
+
+      {/* ─── RANKING SUB-TAB ─── */}
+      {subTab==="ranking"&&<Card>
+        <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:14}}>🏆 Clasificación — {selGroup.name}</div>
+        {leaderboard.length===0?<div style={{textAlign:"center",padding:30,color:C.dim}}>Aún no hay picks. ¡Haz el primero!</div>
+        :leaderboard.map((r,i)=>{
+          const isMe=r.user_id===user.id;
+          const medalColors=["#FFB800","#C0C0C0","#CD7F32"];
+          return <div key={r.user_id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 8px",marginBottom:4,borderRadius:10,background:isMe?`${C.accent}11`:i<3?"#FFB80008":"transparent",border:isMe?`1px solid ${C.accent}33`:"1px solid transparent"}}>
+            <div style={{width:32,height:32,borderRadius:"50%",background:i<3?`${medalColors[i]}22`:"#0a1018",border:`2px solid ${i<3?medalColors[i]:C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:i<3?14:12,fontWeight:900,color:i<3?medalColors[i]:C.dim,flexShrink:0}}>
+              {i<3?["🥇","🥈","🥉"][i]:i+1}
+            </div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:13,fontWeight:isMe?800:600,color:isMe?C.accent:C.text}}>{r.avatar_emoji} {r.name}{isMe?" (tú)":""}</div>
+              <div style={{fontSize:10,color:C.dim}}>{r.correct_picks} aciertos de {r.total_picks} · {r.accuracy}% precisión</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:22,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800"}}>{r.total_points}</div>
+              <div style={{fontSize:8,color:C.muted,textTransform:"uppercase",letterSpacing:1}}>PTS</div>
+            </div>
+          </div>;
+        })}
       </Card>}
 
-      {/* Today's picks */}
-      <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:10}}>Partidos de Hoy — Elige ganador</div>
-      {upcoming.length===0&&finished.length===0?<Card style={{textAlign:"center",padding:30,color:C.muted}}>No hay partidos hoy 🏖</Card>:null}
-      {[...upcoming,...finished].map(g=>{
-        const picked=picks[g.id];const isFinal=g.status==="Final";
-        const winner=isFinal?(g.homeScore>g.awayScore?g.home:g.away):null;
-        const correct=isFinal&&picked===winner;
-        return <Card key={g.id} style={{marginBottom:10,borderColor:isFinal?(correct?"#00FF9D44":"#ff444444"):C.border}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-            <span style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1.5}}>{isFinal?"Final":"⏰ Elige al ganador"}</span>
-            {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?"✅ +10 pts":"❌ 0 pts"}</Tag>}
+      {/* ─── MEMBERS SUB-TAB ─── */}
+      {subTab==="members"&&<Card>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+          <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2}}>👥 Miembros — {selGroup.name}</div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:11,color:C.dim}}>Invita amigos:</span>
+            <button className="btn" onClick={copyCode} style={{background:"#FFB80022",border:"1px solid #FFB80044",borderRadius:8,padding:"6px 12px",color:"#FFB800",fontSize:11,fontWeight:700}}>{copied?"✓ Copiado":`📋 ${selGroup.code}`}</button>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:8,alignItems:"center"}}>
-            {[g.away,null,g.home].map((item,idx)=>idx===1
-              ?<div key="vs" style={{fontSize:11,color:C.muted,fontWeight:700,textAlign:"center"}}>VS</div>
-              :<button key={item} className="btn" disabled={isFinal} onClick={()=>!isFinal&&makePick(g.id,item,g.home,g.away)} style={{padding:"12px",borderRadius:11,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:4,
-                background:picked===item?`${tm(item).color}22`:C.card,
-                border:`2px solid ${picked===item?tm(item).color:C.border}`,
-                color:picked===item?tm(item).color:C.text,width:"100%",opacity:isFinal&&picked!==item?.5:1}}>
-                {logo(item,32)}
-                <span style={{fontSize:14,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif"}}>{picked===item&&"✓ "}{item}</span>
-                {isFinal&&<span style={{fontSize:11,color:C.dim}}>{idx===0?g.awayScore:g.homeScore}</span>}
-              </button>)}
+        </div>
+        {(selGroup.members||[]).length===0?<div style={{textAlign:"center",padding:20,color:C.dim}}>Cargando miembros...</div>
+        :(selGroup.members||[]).map((m,i)=><div key={m.userId||i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:i<(selGroup.members||[]).length-1?`1px solid ${C.border}`:"none"}}>
+          <div style={{width:36,height:36,borderRadius:"50%",background:`${C.accent}15`,border:`2px solid ${C.accent}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>{m.avatar_emoji||"🏀"}</div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:700,color:m.userId===user.id?C.accent:C.text}}>{m.name}{m.userId===user.id?" (tú)":""}</div>
+            <div style={{fontSize:10,color:C.dim}}>{m.userId===selGroup.owner_id?"👑 Creador":"Miembro"}</div>
           </div>
-        </Card>;
-      })}
+        </div>)}
+        <Divider/>
+        <div style={{textAlign:"center",marginTop:8}}>
+          <div style={{fontSize:11,color:C.dim,marginBottom:8}}>Comparte este código para que se unan:</div>
+          <div style={{fontSize:28,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:6,color:"#FFB800"}}>{selGroup.code}</div>
+        </div>
+      </Card>}
     </>}
 
     {/* Points system */}
@@ -503,3 +624,5 @@ export default function App(){
     </div>
   </div>);
 }
+
+//mejora
