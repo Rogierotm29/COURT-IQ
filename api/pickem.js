@@ -52,13 +52,26 @@ export default async function handler(req, res) {
     switch (action) {
       // ─── REGISTER ─────────────────────────────────────────
       case "register": {
-        const { name, emoji } = body;
-        if (!name) return res.json({ ok: false, error: "Nombre requerido" });
-        const [user] = await supabase("users", {
-          method: "POST",
-          body: { name: name.trim(), avatar_emoji: emoji || "🏀" },
-        });
-        return res.json({ ok: true, user });
+              const { name, emoji, pin } = body;
+              if (!name) return res.json({ ok: false, error: "Nombre requerido" });
+              if (!pin || pin.length !== 4) return res.json({ ok: false, error: "PIN de 4 dígitos requerido" });
+              // Check if user exists
+              const existing = await supabase("users", {
+                filters: `?name=eq.${encodeURIComponent(name.trim())}&limit=1`,
+              });
+              if (existing && existing.length > 0) {
+                // Verify PIN
+                if (existing[0].pin !== pin) {
+                  return res.json({ ok: false, error: "PIN incorrecto" });
+                }
+                return res.json({ ok: true, user: existing[0], reconnected: true });
+              }
+              // Create new user with PIN
+              const [user] = await supabase("users", {
+                method: "POST",
+                body: { name: name.trim(), avatar_emoji: emoji || "🏀", pin },
+              });
+              return res.json({ ok: true, user });
       }
 
       // ─── GET USER ─────────────────────────────────────────
@@ -207,6 +220,118 @@ export default async function handler(req, res) {
         }
 
         return res.json({ ok: true, scored, gamesChecked: Object.keys(finishedGames).length });
+      }
+
+      // ─── BRACKET: Save pick ─────────────────────────────
+      case "bracketPick": {
+        const { userId, matchupId, round, teamA, teamB, predictedWinner, predictedGames } = body;
+        if (!userId || !matchupId || !predictedWinner) return res.json({ ok: false, error: "Faltan datos" });
+        const existing = await supabase("bracket_picks", {
+          filters: `?user_id=eq.${userId}&matchup_id=eq.${matchupId}`,
+        });
+        if (existing?.length) {
+          await supabase(`bracket_picks?id=eq.${existing[0].id}`, {
+            method: "PATCH",
+            body: { predicted_winner: predictedWinner, predicted_games: predictedGames || 4 },
+          });
+          return res.json({ ok: true, updated: true });
+        }
+        const [pick] = await supabase("bracket_picks", {
+          method: "POST",
+          body: { user_id: userId, matchup_id: matchupId, round, team_a: teamA, team_b: teamB, predicted_winner: predictedWinner, predicted_games: predictedGames || 4 },
+        });
+        return res.json({ ok: true, pick });
+      }
+
+      // ─── BRACKET: Get my picks ──────────────────────────
+      case "myBracketPicks": {
+        const { userId } = req.query;
+        if (!userId) return res.json({ ok: false, error: "userId requerido" });
+        const picks = await supabase("bracket_picks", {
+          filters: `?user_id=eq.${userId}&order=created_at.asc`,
+        });
+        return res.json({ ok: true, picks: picks || [] });
+      }
+
+      // ─── BRACKET: Save MVP pick ─────────────────────────
+      case "mvpPick": {
+        const { userId, playerName, playerTeam } = body;
+        if (!userId || !playerName) return res.json({ ok: false, error: "Faltan datos" });
+        const existing = await supabase("mvp_picks", {
+          filters: `?user_id=eq.${userId}`,
+        });
+        if (existing?.length) {
+          await supabase(`mvp_picks?id=eq.${existing[0].id}`, {
+            method: "PATCH",
+            body: { player_name: playerName, player_team: playerTeam },
+          });
+          return res.json({ ok: true, updated: true });
+        }
+        const [pick] = await supabase("mvp_picks", {
+          method: "POST",
+          body: { user_id: userId, player_name: playerName, player_team: playerTeam },
+        });
+        return res.json({ ok: true, pick });
+      }
+
+      // ─── BRACKET: Get MVP pick ──────────────────────────
+      case "myMvpPick": {
+        const { userId } = req.query;
+        if (!userId) return res.json({ ok: false, error: "userId requerido" });
+        const picks = await supabase("mvp_picks", {
+          filters: `?user_id=eq.${userId}&limit=1`,
+        });
+        return res.json({ ok: true, pick: picks?.[0] || null });
+      }
+
+      // ─── BRACKET: Leaderboard ───────────────────────────
+      case "bracketLeaderboard": {
+        const rows = await supabase("bracket_leaderboard", {
+          filters: `?order=total_points.desc`,
+        });
+        return res.json({ ok: true, leaderboard: rows || [] });
+      }
+
+      // ─── BRACKET: Admin score a matchup ─────────────────
+      case "scoreMatchup": {
+        const { matchupId, actualWinner, actualGames } = body;
+        if (!matchupId || !actualWinner) return res.json({ ok: false, error: "Faltan datos" });
+        const picks = await supabase("bracket_picks", {
+          filters: `?matchup_id=eq.${matchupId}&scored=eq.false`,
+        });
+        let scored = 0;
+        for (const pick of (picks || [])) {
+          let points = 0;
+          const correctWinner = pick.predicted_winner === actualWinner;
+          if (correctWinner) points += 10;
+          if (correctWinner && pick.predicted_games === actualGames) points += 5;
+          if (pick.round === "finals" && correctWinner) points += 15;
+          await supabase(`bracket_picks?id=eq.${pick.id}`, {
+            method: "PATCH",
+            body: { actual_winner: actualWinner, actual_games: actualGames, points, scored: true },
+          });
+          scored++;
+        }
+        return res.json({ ok: true, scored });
+      }
+
+      // ─── BRACKET: Admin score MVP ───────────────────────
+      case "scoreMvp": {
+        const { actualMvp } = body;
+        if (!actualMvp) return res.json({ ok: false, error: "actualMvp requerido" });
+        const picks = await supabase("mvp_picks", {
+          filters: `?scored=eq.false`,
+        });
+        let scored = 0;
+        for (const pick of (picks || [])) {
+          const correct = pick.player_name.toLowerCase() === actualMvp.toLowerCase();
+          await supabase(`mvp_picks?id=eq.${pick.id}`, {
+            method: "PATCH",
+            body: { actual_mvp: actualMvp, points: correct ? 15 : 0, scored: true },
+          });
+          scored++;
+        }
+        return res.json({ ok: true, scored });
       }
 
       default:
