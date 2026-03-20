@@ -172,15 +172,24 @@ function useUser() {
 }
 
 /* ═══ HOME TAB ═══ */
-const HomeTab=({games,standings,players,live,userCtx,makePick,picks})=>{
+const HomeTab=({games,standings,players,live,userCtx})=>{
+  const {user}=userCtx||{};
   const east=standings.filter(t=>t.conf==="E").sort((a,b)=>b.w-a.w);
   const west=standings.filter(t=>t.conf==="W").sort((a,b)=>b.w-a.w);
-  {!userCtx.user&&<Card style={{marginBottom:20,background:"linear-gradient(135deg,#00C2FF11,#0d1117)",borderColor:"#00C2FF44",textAlign:"center",padding:"30px 20px"}}>
-      <div style={{fontSize:40,marginBottom:10}}>🏀</div>
-      <div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,marginBottom:6}}>¡Únete al Pick'em!</div>
-      <div style={{fontSize:13,color:C.dim,marginBottom:16}}>Regístrate para predecir ganadores y competir con amigos</div>
-      <button className="btn" onClick={()=>document.querySelector('[data-tab="pickem"]')?.click()} style={{padding:"12px 30px",borderRadius:12,background:`linear-gradient(135deg,${C.accent},#0066ff)`,color:"#07090f",fontSize:14,fontWeight:800}}>Entrar al Pick'em 🎯</button>
-    </Card>}
+  {!user&&<Card style={{marginBottom:22,background:"linear-gradient(135deg,#00C2FF11,#0d1117)",borderColor:"#00C2FF44",textAlign:"center",padding:"30px 20px"}}>
+        <div style={{fontSize:44,marginBottom:10}}>🏀🔥</div>
+        <div style={{fontSize:22,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,marginBottom:6}}>¡QUÉ SOBRES!</div>
+        <div style={{fontSize:13,color:C.dim,marginBottom:4}}>Regístrate para predecir ganadores y competir contra tus amigos</div>
+        <div style={{fontSize:11,color:C.muted,marginBottom:16}}>Elige quién gana cada partido · Gana puntos · Sube en el ranking</div>
+        <button className="btn" onClick={()=>{const b=document.querySelectorAll('.btn');b.forEach(x=>{if(x.textContent.includes('Grupos'))x.click();});}} style={{padding:"14px 36px",borderRadius:12,background:"linear-gradient(135deg,#00C2FF,#0066ff)",color:"#07090f",fontSize:15,fontWeight:900,letterSpacing:1}}>ENTRAR AL PICK'EM 🎯</button>
+      </Card>}
+
+      {user&&<Card style={{marginBottom:22,background:"linear-gradient(135deg,#00FF9D08,#0d1117)",borderColor:"#00FF9D33",padding:"14px 18px"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div><div style={{fontSize:10,color:"#00FF9D",fontWeight:700,letterSpacing:2}}>PICK'EM ACTIVO</div><div style={{fontSize:14,fontWeight:700,color:C.text,marginTop:2}}>👋 {user.name} — Elige al ganador de cada partido</div></div>
+          <Tag c="#00FF9D">✓ Logueado</Tag>
+        </div>
+      </Card>}
   return(<div className="fade-up">
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><ST sub="NBA 2025-26 · Hoy">Partidos del Día</ST><LiveBadge live={live.games}/></div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(210px,1fr))",gap:10,marginBottom:28}}>
