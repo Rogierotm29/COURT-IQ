@@ -652,6 +652,8 @@ const BracketTab=({userCtx,standings})=>{
   const west=standings.filter(t=>t.conf==="W").sort((a,b)=>b.w-a.w);
   const SEEDS_E=east.slice(0,10).map((t,i)=>({seed:i+1,s:t.abbr,c:tm(t.abbr).color}));
   const SEEDS_W=west.slice(0,10).map((t,i)=>({seed:i+1,s:t.abbr,c:tm(t.abbr).color}));
+  const maxGP=Math.max(...standings.map(t=>t.w+t.l));
+  const seasonOver=maxGP>=82;
   const {user}=userCtx;
   const [picks,setPicks]=useState({});
   const [games,setGames]=useState({});
@@ -804,9 +806,16 @@ const BracketTab=({userCtx,standings})=>{
       <div><div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2}}>NBA Playoffs 2026</div><div style={{fontSize:22,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text}}>Bracket Challenge 🏆</div></div>
       <div style={{textAlign:"right"}}><div style={{fontSize:9,color:C.muted}}>Predicciones</div><div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.accent}}>{totalPicks}</div></div>
     </div>
+    {!seasonOver&&<Card style={{marginBottom:16,background:"#FFB80011",borderColor:"#FFB80033",textAlign:"center",padding:"30px 20px"}}>
+      <div style={{fontSize:40,marginBottom:10}}>🏀</div>
+      <div style={{fontSize:18,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800",marginBottom:6}}>TEMPORADA EN CURSO</div>
+      <div style={{fontSize:13,color:C.dim,marginBottom:8}}>Los playoffs se desbloquean cuando terminen los 82 partidos de temporada regular</div>
+      <div style={{fontSize:28,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.accent}}>{maxGP} / 82</div>
+      <div style={{fontSize:10,color:C.muted,marginTop:4}}>partidos jugados por el equipo líder</div>
+    </Card>}
 
     {/* Sub tabs */}
-    <div style={{display:"flex",gap:0,marginBottom:16}}>
+    {seasonOver&&<><div style={{display:"flex",gap:0,marginBottom:16}}>
       {[["bracket","🏀 Mi Bracket"],["mvp","🌟 MVP"],["ranking","🏆 Ranking"]].map(([id,label])=><button key={id} className="btn" onClick={()=>setSubTab(id)} style={{padding:"9px 18px",background:"transparent",borderBottom:subTab===id?`2px solid ${C.accent}`:"2px solid transparent",color:subTab===id?C.accent:C.dim,fontSize:12,fontWeight:subTab===id?700:500}}>{label}</button>)}
     </div>
 
@@ -814,7 +823,7 @@ const BracketTab=({userCtx,standings})=>{
       {/* ─── PLAY-IN ─── */}
       <Card style={{marginBottom:16}}>
         <div style={{fontSize:12,fontWeight:800,color:"#FFB800",textTransform:"uppercase",letterSpacing:2,marginBottom:12}}>⚡ Play-In Tournament</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",gap:14}}>
           <div>
             <div style={{fontSize:10,color:C.dim,fontWeight:700,marginBottom:8}}>Este</div>
             <PlayInMatchup id="pi-e-78" round="playin" t1={SEEDS_E[6].s} t2={SEEDS_E[7].s} label="7 vs 8 → Gana = #7"/>
@@ -960,11 +969,12 @@ const BracketTab=({userCtx,standings})=>{
         </div>;
       })}
     </Card>}
+    </>}
   </div>);
 };
 
 /* ═══ APP ROOT ═══ */
-const TABS=[{id:"home",icon:"🏠",label:"Home"},{id:"teams",icon:"🏆",label:"Equipos"},{id:"players",icon:"⭐",label:"Jugadores"},{id:"pickem",icon:"👥",label:"Grupos"},{id:"bracket",icon:"🏅",label:"Bracket"}];
+const TABS=[{id:"home",icon:"🏠",label:"Home"},{id:"teams",icon:"🏆",label:"Equipos"},{id:"players",icon:"⭐",label:"Jugadores"},{id:"pickem",icon:"👥",label:"Grupos"},{id:"bracket",icon:"🏅",label:"Playoffs"}];
 export default function App(){
   const [tab,setTab]=useState("home");const [games,setGames]=useState([]);const [standings,setStandings]=useState(FB_ST);const [players,setPlayers]=useState(FB_PL);
   const [live,setLive]=useState({games:false,standings:false,players:false});const [loading,setLoading]=useState(false);const [lastUpd,setLastUpd]=useState(null);
