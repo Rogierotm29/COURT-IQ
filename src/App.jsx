@@ -176,6 +176,33 @@ const HomeTab=({games,standings,players,live,userCtx})=>{
   const {user}=userCtx||{};
   const east=standings.filter(t=>t.conf==="E").sort((a,b)=>b.w-a.w);
   const west=standings.filter(t=>t.conf==="W").sort((a,b)=>b.w-a.w);
+  const [picks,setPicks]=useState({});
+  const [group,setGroup]=useState(null);
+  const [loaded,setLoaded]=useState(false);
+
+  useEffect(()=>{
+    if(!user)return;
+    pickemAPI("myGroups",{params:{userId:user.id}}).then(d=>{
+      if(d.ok&&d.groups?.length){
+        const saved=localStorage.getItem("courtiq_lastgroup");
+        const g=d.groups.find(x=>x.id===saved)||d.groups[0];
+        setGroup(g);
+        const today=new Date().toISOString().split("T")[0];
+        pickemAPI("myPicks",{params:{userId:user.id,groupId:g.id,date:today}}).then(r=>{
+          if(r.ok){const m={};(r.picks||[]).forEach(p=>{m[p.game_id]=p.picked_team;});setPicks(m);}
+          setLoaded(true);
+        });
+      } else setLoaded(true);
+    });
+  },[user,games]);
+
+  const makePick=async(gameId,team,home,away)=>{
+    if(!group||!user)return;
+    setPicks(p=>({...p,[gameId]:team}));
+    const today=new Date().toISOString().split("T")[0];
+    await pickemAPI("makePick",{body:{userId:user.id,groupId:group.id,gameId,gameDate:today,pickedTeam:team,homeTeam:home,awayTeam:away}});
+  };
+
   return(<div className="fade-up">
     {!user&&<Card style={{marginBottom:22,background:"linear-gradient(135deg,#00C2FF11,#0d1117)",borderColor:"#00C2FF44",textAlign:"center",padding:"30px 20px"}}>
       <div style={{fontSize:44,marginBottom:10}}>🏀🔥</div>
@@ -185,23 +212,44 @@ const HomeTab=({games,standings,players,live,userCtx})=>{
       <button className="btn" onClick={()=>{const b=document.querySelectorAll('.btn');b.forEach(x=>{if(x.textContent.includes('Grupos'))x.click();});}} style={{padding:"14px 36px",borderRadius:12,background:"linear-gradient(135deg,#00C2FF,#0066ff)",color:"#07090f",fontSize:15,fontWeight:900,letterSpacing:1}}>ENTRAR AL PICK'EM 🎯</button>
     </Card>}
     {user&&<Card style={{marginBottom:22,background:"linear-gradient(135deg,#00FF9D08,#0d1117)",borderColor:"#00FF9D33",padding:"14px 18px"}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <div><div style={{fontSize:10,color:"#00FF9D",fontWeight:700,letterSpacing:2}}>PICK'EM ACTIVO</div><div style={{fontSize:14,fontWeight:700,color:C.text,marginTop:2}}>👋 {user.name} — Elige al ganador de cada partido</div></div>
-        <Tag c="#00FF9D">✓ Logueado</Tag>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+        <div><div style={{fontSize:10,color:"#00FF9D",fontWeight:700,letterSpacing:2}}>PICK'EM ACTIVO</div><div style={{fontSize:14,fontWeight:700,color:C.text,marginTop:2}}>👋 {user.name} — Toca un equipo para elegir ganador</div></div>
+        {group?<Tag c="#00FF9D">Grupo: {group.name}</Tag>:<Tag c="#FFB800">Ve a Grupos para crear uno</Tag>}
       </div>
     </Card>}
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><ST sub="NBA 2025-26 · Hoy">Partidos del Día</ST><LiveBadge live={live.games}/></div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(210px,1fr))",gap:10,marginBottom:28}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:10,marginBottom:28}}>
       {games.length===0?<div style={{color:C.muted,fontSize:13}}>No hay partidos programados.</div>
-      :games.map(g=><Card key={g.id} style={{padding:14}}>
-        <div style={{marginBottom:10}}>{g.status==="LIVE"?<Tag c="#ff4444">● LIVE {g.detail}</Tag>:g.status==="Final"?<Tag c={C.muted}>Final</Tag>:<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>}</div>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          {[["away",g.away,g.awayScore],["home",g.home,g.homeScore]].map(([side,abbr,score])=><div key={side} style={{textAlign:"center",flex:1}}>
-            {logo(abbr,36)}
-            <div style={{fontSize:11,color:C.dim,margin:"4px 0"}}>{abbr}</div>
-            <div style={{fontSize:g.status!=="Upcoming"?28:16,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text}}>{g.status!=="Upcoming"?score:"—"}</div>
-          </div>)}
-        </div></Card>)}
+      :games.map(g=>{
+        const picked=picks[g.id];const isFinal=g.status==="Final";const isLive=g.status==="LIVE";
+        const winner=isFinal?(g.homeScore>g.awayScore?g.home:g.away):null;
+        const correct=isFinal&&picked===winner;
+        return <Card key={g.id} style={{padding:14,borderColor:isFinal&&picked?(correct?"#00FF9D33":"#ff444433"):picked?`${tm(picked).color}33`:C.border}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          {isLive?<Tag c="#ff4444">● LIVE {g.detail}</Tag>:isFinal?<Tag c={C.muted}>Final</Tag>:<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>}
+          {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?"✅ +10":"❌"}</Tag>}
+          {!isFinal&&!isLive&&picked&&<Tag c="#00FF9D">✓ Pick</Tag>}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:8,alignItems:"center"}}>
+          {[["away",g.away,g.awayScore],["vs"],["home",g.home,g.homeScore]].map((item,idx)=>
+            idx===1?<div key="vs" style={{textAlign:"center",fontSize:12,color:C.muted,fontWeight:800}}>VS</div>
+            :user&&group&&!isFinal&&!isLive?
+              <button key={item[1]} className="btn" onClick={()=>makePick(g.id,item[1],g.home,g.away)} style={{padding:"12px 8px",borderRadius:12,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:4,
+                background:picked===item[1]?`${tm(item[1]).color}18`:"transparent",
+                border:`2px solid ${picked===item[1]?tm(item[1]).color:C.border}`,
+                color:picked===item[1]?tm(item[1]).color:C.text,width:"100%"}}>
+                {logo(item[1],36)}
+                <span style={{fontSize:13,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif"}}>{item[1]}</span>
+                <span style={{fontSize:10,color:C.dim}}>{tm(item[1]).name}</span>
+              </button>
+            :<div key={item[1]} style={{textAlign:"center",padding:"12px 8px"}}>
+                {logo(item[1],36)}
+                <div style={{fontSize:13,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,marginTop:4}}>{item[1]}</div>
+                {(isFinal||isLive)&&<div style={{fontSize:22,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:isFinal&&item[1]===winner?"#00FF9D":C.text,marginTop:4}}>{item[2]}</div>}
+              </div>
+          )}
+        </div>
+      </Card>;})}
     </div>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><ST sub="2025-26">Top Anotadores</ST><LiveBadge live={live.players}/></div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(195px,1fr))",gap:10,marginBottom:28}}>
