@@ -947,7 +947,7 @@ export default function App(){
       {TABS.map(n=><button key={n.id} className="btn" onClick={()=>setTab(n.id)} style={{padding:"11px 14px",background:"transparent",border:"none",borderBottom:`2px solid ${tab===n.id?C.accent:"transparent"}`,color:tab===n.id?C.accent:C.muted,fontSize:12,fontWeight:tab===n.id?700:500,whiteSpace:"nowrap"}}>{n.icon} {n.label}</button>)}
     </div>
     <div style={{maxWidth:1000,margin:"0 auto",padding:"22px 18px"}}>
-      {tab==="home"&&<HomeTab games={games} standings={standings} players={players} live={live} userCtx={userCtx} />}
+      {tab==="home"&&<HomeTab games={games} standings={standings} players={players} live={live} userCtx={userCtx}/>}
       {tab==="teams"&&<TeamsTab standings={standings} live={live}/>}
       {tab==="players"&&<PlayersTab players={players} live={live}/>}
       {tab==="pickem"&&<PickemTab games={games} userCtx={userCtx}/>}
