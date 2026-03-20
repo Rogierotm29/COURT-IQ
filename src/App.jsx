@@ -172,9 +172,15 @@ function useUser() {
 }
 
 /* ═══ HOME TAB ═══ */
-const HomeTab=({games,standings,players,live})=>{
+const HomeTab=({games,standings,players,live,userCtx,makePick,picks})=>{
   const east=standings.filter(t=>t.conf==="E").sort((a,b)=>b.w-a.w);
   const west=standings.filter(t=>t.conf==="W").sort((a,b)=>b.w-a.w);
+  {!userCtx.user&&<Card style={{marginBottom:20,background:"linear-gradient(135deg,#00C2FF11,#0d1117)",borderColor:"#00C2FF44",textAlign:"center",padding:"30px 20px"}}>
+      <div style={{fontSize:40,marginBottom:10}}>🏀</div>
+      <div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,marginBottom:6}}>¡Únete al Pick'em!</div>
+      <div style={{fontSize:13,color:C.dim,marginBottom:16}}>Regístrate para predecir ganadores y competir con amigos</div>
+      <button className="btn" onClick={()=>document.querySelector('[data-tab="pickem"]')?.click()} style={{padding:"12px 30px",borderRadius:12,background:`linear-gradient(135deg,${C.accent},#0066ff)`,color:"#07090f",fontSize:14,fontWeight:800}}>Entrar al Pick'em 🎯</button>
+    </Card>}
   return(<div className="fade-up">
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><ST sub="NBA 2025-26 · Hoy">Partidos del Día</ST><LiveBadge live={live.games}/></div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(210px,1fr))",gap:10,marginBottom:28}}>
@@ -895,8 +901,7 @@ const BracketTab=({userCtx,standings})=>{
 };
 
 /* ═══ APP ROOT ═══ */
-const TABS=[{id:"home",icon:"🏠",label:"Home"},{id:"teams",icon:"🏆",label:"Equipos"},{id:"players",icon:"⭐",label:"Jugadores"},{id:"pickem",icon:"🎯",label:"Pick'em"},{id:"bracket",icon:"🏅",label:"Bracket"}];
-
+const TABS=[{id:"home",icon:"🏠",label:"Home"},{id:"teams",icon:"🏆",label:"Equipos"},{id:"players",icon:"⭐",label:"Jugadores"},{id:"pickem",icon:"👥",label:"Grupos"},{id:"bracket",icon:"🏅",label:"Bracket"}];
 export default function App(){
   const [tab,setTab]=useState("home");const [games,setGames]=useState([]);const [standings,setStandings]=useState(FB_ST);const [players,setPlayers]=useState(FB_PL);
   const [live,setLive]=useState({games:false,standings:false,players:false});const [loading,setLoading]=useState(false);const [lastUpd,setLastUpd]=useState(null);
@@ -934,7 +939,7 @@ export default function App(){
       {TABS.map(n=><button key={n.id} className="btn" onClick={()=>setTab(n.id)} style={{padding:"11px 14px",background:"transparent",border:"none",borderBottom:`2px solid ${tab===n.id?C.accent:"transparent"}`,color:tab===n.id?C.accent:C.muted,fontSize:12,fontWeight:tab===n.id?700:500,whiteSpace:"nowrap"}}>{n.icon} {n.label}</button>)}
     </div>
     <div style={{maxWidth:1000,margin:"0 auto",padding:"22px 18px"}}>
-      {tab==="home"&&<HomeTab games={games} standings={standings} players={players} live={live}/>}
+      {tab==="home"&&<HomeTab games={games} standings={standings} players={players} live={live} userCtx={userCtx} />}
       {tab==="teams"&&<TeamsTab standings={standings} live={live}/>}
       {tab==="players"&&<PlayersTab players={players} live={live}/>}
       {tab==="pickem"&&<PickemTab games={games} userCtx={userCtx}/>}
