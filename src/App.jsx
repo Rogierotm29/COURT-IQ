@@ -143,19 +143,8 @@ async function loadStandings() {
 
 async function loadPlayers() {
   const d = await api("/api/players");
-  const apiPlayers = (d?.ok && d.players?.length > 10) ? d.players.map((p,i)=>({...p,id:i+1,color:tm(p.teamAbbr).color})) : FB_PL;
-  const names = new Set(apiPlayers.map(p=>p.name));
-  let nextId = apiPlayers.length+1;
-  const rosterPlayers=[];
-  Object.entries(ROSTERS).forEach(([team,roster])=>{
-    roster.forEach(name=>{
-      if(!names.has(name)){
-        rosterPlayers.push({id:nextId++,name,teamAbbr:team,pos:"—",pts:0,ast:0,reb:0,blk:0,stl:0,fgPct:0,fg3Pct:0,color:tm(team).color});
-        names.add(name);
-      }
-    });
-  });
-  return [...apiPlayers,...rosterPlayers.sort((a,b)=>a.name.localeCompare(b.name))];
+  if (d?.ok && d.players?.length > 10) return d.players.map((p,i)=>({...p,id:i+1,color:tm(p.teamAbbr).color}));
+  return null;
 }
 
 /* ═══ PICKEM API ═══ */
