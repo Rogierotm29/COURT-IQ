@@ -233,7 +233,7 @@ const HomeTab=({games,standings,players,live,userCtx})=>{
         <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:8,alignItems:"center"}}>
           {[["away",g.away,g.awayScore],["vs"],["home",g.home,g.homeScore]].map((item,idx)=>
             idx===1?<div key="vs" style={{textAlign:"center",fontSize:12,color:C.muted,fontWeight:800}}>VS</div>
-            :user&&group&&!isFinal&&!isLive?
+            :user&&group&&!isFinal&&!isLive&&!games.some(x=>x.status==="LIVE"||x.status==="Final")?
               <button key={item[1]} className="btn" onClick={()=>makePick(g.id,item[1],g.home,g.away)} style={{padding:"12px 8px",borderRadius:12,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:4,
                 background:picked===item[1]?`${tm(item[1]).color}18`:"transparent",
                 border:`2px solid ${picked===item[1]?tm(item[1]).color:C.border}`,
@@ -363,7 +363,7 @@ const PickemTab=({games,userCtx})=>{
   const [newGroupName,setNewGroupName]=useState("");const [joinCode,setJoinCode]=useState("");
   const [panel,setPanel]=useState(null); // "create"|"join"|null
   const [pin,setPin]=useState(["","","",""]);
-  const [subTab,setSubTab]=useState("picks"); // "picks"|"ranking"|"members"
+  const [subTab,setSubTab]=useState("ranking");// "picks"|"ranking"|"members"
   const [msg,setMsg]=useState("");const [loading,setLoading]=useState(false);
   const [copied,setCopied]=useState(false);
   const upcoming=games.filter(g=>g.status==="Upcoming");const finished=games.filter(g=>g.status==="Final");const liveGames=games.filter(g=>g.status==="LIVE");
@@ -536,11 +536,12 @@ const PickemTab=({games,userCtx})=>{
 
       {/* Sub-tabs: Picks | Ranking | Members */}
       <div style={{display:"flex",gap:0,marginBottom:14}}>
-        {[["picks","🎯 Picks"],["ranking","🏆 Ranking"],["members","👥 Miembros"]].map(([id,label])=><button key={id} className="btn" onClick={()=>setSubTab(id)} style={{padding:"9px 18px",background:"transparent",borderBottom:subTab===id?`2px solid ${C.accent}`:"2px solid transparent",color:subTab===id?C.accent:C.dim,fontSize:12,fontWeight:subTab===id?700:500}}>{label}</button>)}
+        {[["ranking","🏆 Ranking"],["members","👥 Miembros"],["picks","🎯 Mis Picks"]].map(([id,label])=><button key={id} className="btn" onClick={()=>setSubTab(id)} style={{padding:"9px 18px",background:"transparent",borderBottom:subTab===id?`2px solid ${C.accent}`:"2px solid transparent",color:subTab===id?C.accent:C.dim,fontSize:12,fontWeight:subTab===id?700:500}}>{label}</button>)}
       </div>
 
       {/* ─── PICKS SUB-TAB ─── */}
       {subTab==="picks"&&<>
+        <div style={{padding:"10px 14px",background:"#FFB80011",border:"1px solid #FFB80033",borderRadius:10,marginBottom:14,fontSize:11,color:"#FFB800"}}>📋 Estos son tus picks de hoy. Para hacer o cambiar picks, ve a 🏠 Home antes de que empiecen los partidos.</div>
         {allGames.length===0?<Card style={{textAlign:"center",padding:40}}>
           <div style={{fontSize:36,marginBottom:8}}>🌙</div>
           <div style={{fontSize:15,fontWeight:700,color:C.text,marginBottom:6}}>No hay partidos hoy</div>
@@ -555,20 +556,20 @@ const PickemTab=({games,userCtx})=>{
               {isLive?<Tag c="#ff4444">● EN VIVO {g.detail}</Tag>:isFinal?<Tag c={C.muted}>Final</Tag>:<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>}
               {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?"✅ +10 pts":"❌ Fallaste"}</Tag>}
               {!isFinal&&!isLive&&picked&&<Tag c="#00FF9D">✓ Pick hecho</Tag>}
+              {!isFinal&&!isLive&&!picked&&<Tag c="#ff6666">Sin pick</Tag>}
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:10,alignItems:"center"}}>
               {[["away",g.away,g.awayScore],["vs"],["home",g.home,g.homeScore]].map((item,idx)=>
-                idx===1?<div key="vs" style={{textAlign:"center"}}><div style={{fontSize:12,color:C.muted,fontWeight:800}}>VS</div>{(isFinal||isLive)&&<div style={{fontSize:9,color:C.dim,marginTop:2}}>{g.detail}</div>}</div>
-                :<button key={item[1]} className="btn" disabled={isFinal||isLive} onClick={()=>!isFinal&&!isLive&&makePick(g.id,item[1],g.home,g.away)} style={{padding:"14px 8px",borderRadius:12,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:6,
-                  background:picked===item[1]?`${tm(item[1]).color}18`:C.card,
+                idx===1?<div key="vs" style={{textAlign:"center",fontSize:12,color:C.muted,fontWeight:800}}>VS</div>
+                :<div key={item[1]} style={{textAlign:"center",padding:"12px 8px",borderRadius:12,
+                  background:picked===item[1]?`${tm(item[1]).color}18`:"transparent",
                   border:`2px solid ${picked===item[1]?tm(item[1]).color:C.border}`,
-                  color:picked===item[1]?tm(item[1]).color:C.text,width:"100%",
-                  opacity:isFinal&&picked&&picked!==item[1]?.4:1}}>
+                  opacity:picked&&picked!==item[1]?0.4:1}}>
                   {logo(item[1],36)}
-                  <span style={{fontSize:16,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif"}}>{item[1]}</span>
-                  <span style={{fontSize:11,color:C.dim}}>{tm(item[1]).name}</span>
-                  {(isFinal||isLive)&&<span style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:isFinal&&item[1]===winner?"#00FF9D":C.text}}>{item[2]}</span>}
-                </button>
+                  <div style={{fontSize:14,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:picked===item[1]?tm(item[1]).color:C.text,marginTop:4}}>{item[1]}</div>
+                  <div style={{fontSize:10,color:C.dim}}>{tm(item[1]).name}</div>
+                  {(isFinal||isLive)&&<div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:isFinal&&item[1]===winner?"#00FF9D":C.text,marginTop:4}}>{item[2]}</div>}
+                </div>
               )}
             </div>
           </Card>;
