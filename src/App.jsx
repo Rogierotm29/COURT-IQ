@@ -366,8 +366,20 @@ const PickemTab=({games,userCtx})=>{
   const [subTab,setSubTab]=useState("ranking");// "picks"|"ranking"|"members"
   const [msg,setMsg]=useState("");const [loading,setLoading]=useState(false);
   const [copied,setCopied]=useState(false);
+  const [nameStatus,setNameStatus]=useState(null);// null|"checking"|"available"|"taken"
   const upcoming=games.filter(g=>g.status==="Upcoming");const finished=games.filter(g=>g.status==="Final");const liveGames=games.filter(g=>g.status==="LIVE");
   const allGames=[...liveGames,...upcoming,...finished];
+
+  // Check username availability (debounced)
+  useEffect(()=>{
+    if(!name.trim()||name.trim().length<2){setNameStatus(null);return;}
+    setNameStatus("checking");
+    const t=setTimeout(async()=>{
+      const d=await pickemAPI("checkUsername",{params:{name:name.trim()}});
+      if(d.ok)setNameStatus(d.available?"available":"taken");
+    },500);
+    return()=>clearTimeout(t);
+  },[name]);
 
   // Load groups on mount & auto-select first
   useEffect(()=>{
@@ -445,13 +457,19 @@ const PickemTab=({games,userCtx})=>{
       <Card style={{maxWidth:420,margin:"0 auto",textAlign:"center",padding:30}}>
         <div style={{fontSize:48,marginBottom:12}}>🏀</div>
         <div style={{fontSize:18,fontWeight:800,color:C.text,marginBottom:8}}>Únete al Pick'em</div>
-        <div style={{fontSize:12,color:C.dim,marginBottom:24}}>Primera vez? Elige nombre y PIN. Ya tienes cuenta? Pon los mismos datos.</div>
-        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Tu nombre..." style={{width:"100%",background:"#0a1018",border:`1px solid ${C.border}`,borderRadius:11,padding:"14px 16px",color:C.text,fontSize:15,marginBottom:12,textAlign:"center"}}/>
-        <div style={{fontSize:10,color:C.muted,marginBottom:6,textAlign:"left",paddingLeft:4}}>🔒 PIN de 4 dígitos (para proteger tu cuenta)</div>
+        <div style={{fontSize:12,color:C.dim,marginBottom:24}}>{nameStatus==="taken"?"Ese nombre ya tiene cuenta. Ingresa tu PIN para entrar.":"Primera vez? Elige nombre y PIN para crear tu cuenta."}</div>
+        <div style={{position:"relative",marginBottom:4}}>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Tu nombre..." style={{width:"100%",background:"#0a1018",border:`1px solid ${nameStatus==="available"?"#22c55e":nameStatus==="taken"?"#f59e0b":C.border}`,borderRadius:11,padding:"14px 16px",color:C.text,fontSize:15,textAlign:"center",boxSizing:"border-box"}}/>
+        </div>
+        {nameStatus==="checking"&&<div style={{fontSize:11,color:C.muted,marginBottom:8,textAlign:"center"}}>Verificando...</div>}
+        {nameStatus==="available"&&<div style={{fontSize:11,color:"#22c55e",marginBottom:8,textAlign:"center"}}>✓ Nombre disponible</div>}
+        {nameStatus==="taken"&&<div style={{fontSize:11,color:"#f59e0b",marginBottom:8,textAlign:"center"}}>⚠️ Este nombre ya está en uso — si es tuyo, ingresa tu PIN para entrar</div>}
+        {!nameStatus&&name.trim().length>0&&name.trim().length<2&&<div style={{fontSize:11,color:C.muted,marginBottom:8}}/>}
+        {(!nameStatus||nameStatus==="checking"||nameStatus==="available"||nameStatus==="taken")&&<div style={{fontSize:10,color:C.muted,marginBottom:6,textAlign:"left",paddingLeft:4}}>{nameStatus==="taken"?"🔒 Ingresa tu PIN para acceder a tu cuenta":"🔒 PIN de 4 dígitos (para proteger tu cuenta)"}</div>}
         <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:16}}>
           {[0,1,2,3].map(i=><input key={i} id={`pin-${i}`} type="tel" maxLength={1} value={pin[i]||""} onChange={e=>{const v=e.target.value.replace(/\D/g,"");if(v.length<=1){const np=[...pin];np[i]=v;setPin(np);if(v&&i<3)document.getElementById(`pin-${i+1}`)?.focus();}}} onKeyDown={e=>{if(e.key==="Backspace"&&!pin[i]&&i>0)document.getElementById(`pin-${i-1}`)?.focus();}} style={{width:52,height:56,background:"#0a1018",border:`1px solid ${pin[i]?C.accent:C.border}`,borderRadius:12,color:C.accent,fontSize:24,fontWeight:900,textAlign:"center",fontFamily:"'Bebas Neue',sans-serif"}}/>)}
         </div>
-        <button className="btn" onClick={register} disabled={loading} style={{width:"100%",padding:"14px",borderRadius:11,background:pin.join("").length===4?`linear-gradient(135deg,${C.accent},#0066ff)`:`${C.border}`,color:pin.join("").length===4?"#07090f":C.muted,fontSize:15,fontWeight:900}}>{loading?<Spin s={14}/>:"Entrar 🚀"}</button>
+        <button className="btn" onClick={register} disabled={loading||nameStatus==="checking"||!name.trim()} style={{width:"100%",padding:"14px",borderRadius:11,background:pin.join("").length===4&&name.trim()?`linear-gradient(135deg,${C.accent},#0066ff)`:`${C.border}`,color:pin.join("").length===4&&name.trim()?"#07090f":C.muted,fontSize:15,fontWeight:900}}>{loading?<Spin s={14}/>:nameStatus==="taken"?"Entrar con PIN 🔑":"Crear cuenta 🚀"}</button>
         {msg&&<div style={{marginTop:10,fontSize:12,color:"#ff6666"}}>{msg}</div>}
       </Card>
     </div>);

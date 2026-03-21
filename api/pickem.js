@@ -334,6 +334,16 @@ export default async function handler(req, res) {
         return res.json({ ok: true, scored });
       }
 
+      // ─── CHECK USERNAME ───────────────────────────────────
+      case "checkUsername": {
+        const { name } = req.query;
+        if (!name) return res.json({ ok: false, error: "Nombre requerido" });
+        const existing = await supabase("users", {
+          filters: `?name=eq.${encodeURIComponent(name.trim())}&limit=1`,
+        });
+        return res.json({ ok: true, available: !existing?.length });
+      }
+
       default:
         return res.json({ ok: false, error: `Acción desconocida: ${action}` });
     }
