@@ -355,20 +355,38 @@ const PlayersTab=({players,live})=>{
   </div>);
 };
 
-/* ═══ PICK'EM TAB v2 (improved UX) ═══ */
+/* ═══ PICK'EM TAB v2 ═══ */
+const VAPID_KEY="BJwfMQ-4x5AHR8IEbABZl2kqdbvwANMQsg0QMLw3o0vbx2oc4LYc6fIKMLYzQDlRwsfl-BUaT-1ktJ1qtXcUsAU";
 const PickemTab=({games,userCtx})=>{
   const {user,save}=userCtx;
   const [name,setName]=useState("");const [groups,setGroups]=useState([]);const [selGroup,setSelGroup]=useState(null);
   const [picks,setPicks]=useState({});const [leaderboard,setLeaderboard]=useState([]);
   const [newGroupName,setNewGroupName]=useState("");const [joinCode,setJoinCode]=useState("");
-  const [panel,setPanel]=useState(null); // "create"|"join"|null
+  const [panel,setPanel]=useState(null);
   const [pin,setPin]=useState(["","","",""]);
-  const [subTab,setSubTab]=useState("ranking");// "picks"|"ranking"|"members"
+  const [subTab,setSubTab]=useState("ranking");
   const [msg,setMsg]=useState("");const [loading,setLoading]=useState(false);
   const [copied,setCopied]=useState(false);
-  const [nameStatus,setNameStatus]=useState(null);// null|"checking"|"available"|"taken"
+  const [nameStatus,setNameStatus]=useState(null);
+  // New features state
+  const [history,setHistory]=useState([]);
+  const [grpPicks,setGrpPicks]=useState([]);
+  const [wildcardUsed,setWildcardUsed]=useState(false);
+  const [balance,setBalance]=useState(null);
+  const [bets,setBets]=useState([]);
+  const [betGame,setBetGame]=useState(null);
+  const [betAmt,setBetAmt]=useState(50);
+  const [betTeam,setBetTeam]=useState(null);
+  const [betLoading,setBetLoading]=useState(false);
+  const [periodLb,setPeriodLb]=useState([]);
+  const [lbPeriod,setLbPeriod]=useState("season");
+  const [dailyWinner,setDailyWinner]=useState(null);
+  const [notifGranted,setNotifGranted]=useState(typeof Notification!=="undefined"&&Notification.permission==="granted");
+  const [notifPrefs,setNotifPrefs]=useState({picks_reminder:true,win_notify:true,loss_notify:true,daily_summary:true});
+  const [notifLoading,setNotifLoading]=useState(false);
   const upcoming=games.filter(g=>g.status==="Upcoming");const finished=games.filter(g=>g.status==="Final");const liveGames=games.filter(g=>g.status==="LIVE");
   const allGames=[...liveGames,...upcoming,...finished];
+  const picksLocked=liveGames.length>0||finished.length>0;
 
   // Check username availability (debounced)
   useEffect(()=>{
@@ -397,7 +415,7 @@ const PickemTab=({games,userCtx})=>{
   // Save last selected group
   useEffect(()=>{if(selGroup)localStorage.setItem("courtiq_lastgroup",selGroup.id);},[selGroup]);
 
-  // Load picks & leaderboard when group changes
+  // Load picks, leaderboard, wildcard, daily winner when group changes
   useEffect(()=>{
     if(!user||!selGroup) return;
     const today=new Date().toISOString().split("T")[0];
@@ -405,7 +423,27 @@ const PickemTab=({games,userCtx})=>{
       if(d.ok){const map={};(d.picks||[]).forEach(p=>{map[p.game_id]=p.picked_team;});setPicks(map);}
     });
     pickemAPI("leaderboard",{params:{groupId:selGroup.id}}).then(d=>{if(d.ok)setLeaderboard(d.leaderboard||[]);});
+    pickemAPI("wildcardStatus",{params:{userId:user.id,groupId:selGroup.id}}).then(d=>{if(d.ok)setWildcardUsed(d.used);});
+    pickemAPI("dailyWinner",{params:{groupId:selGroup.id}}).then(d=>{if(d.ok)setDailyWinner(d.winner);});
   },[user,selGroup]);
+
+  // Period leaderboard
+  useEffect(()=>{
+    if(!selGroup||lbPeriod==="season") return;
+    pickemAPI("periodLeaderboard",{params:{groupId:selGroup.id,period:lbPeriod}}).then(d=>{if(d.ok)setPeriodLb(d.leaderboard||[]);});
+  },[selGroup,lbPeriod]);
+
+  // Sub-tab specific data
+  useEffect(()=>{
+    if(!user||!selGroup) return;
+    if(subTab==="historial") pickemAPI("pickHistory",{params:{userId:user.id,groupId:selGroup.id}}).then(d=>{if(d.ok)setHistory(d.picks||[]);});
+    if(subTab==="grupo") pickemAPI("groupPicks",{params:{groupId:selGroup.id}}).then(d=>{if(d.ok)setGrpPicks(d.picks||[]);});
+    if(subTab==="apuestas"){
+      pickemAPI("getBalance",{params:{userId:user.id,groupId:selGroup.id}}).then(d=>{if(d.ok)setBalance(d.balance);});
+      pickemAPI("groupBets",{params:{groupId:selGroup.id}}).then(d=>{if(d.ok)setBets(d.bets||[]);});
+    }
+    if(subTab==="ajustes") pickemAPI("getNotifPrefs",{params:{userId:user.id}}).then(d=>{if(d.ok)setNotifPrefs(d.prefs);});
+  },[subTab,user,selGroup]);
 
   const register=async()=>{
     if(!name.trim()) return;
@@ -446,6 +484,62 @@ const PickemTab=({games,userCtx})=>{
   const copyCode=()=>{
     if(!selGroup) return;
     navigator.clipboard?.writeText(selGroup.code).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);}).catch(()=>{});
+  };
+
+  const doWildcard=async(gameId,team,homeTeam,awayTeam)=>{
+    if(wildcardUsed||!selGroup) return;
+    const d=await pickemAPI("useWildcard",{body:{userId:user.id,groupId:selGroup.id,gameId,pickedTeam:team,homeTeam,awayTeam}});
+    if(d.ok){setPicks(p=>({...p,[gameId]:team}));setWildcardUsed(true);setMsg("🃏 ¡Comodín usado!");}
+    else setMsg(d.error);
+  };
+
+  const doBet=async()=>{
+    if(!betGame||!betTeam||betAmt<10) return;
+    setBetLoading(true);
+    const d=await pickemAPI("createBet",{body:{userId:user.id,groupId:selGroup.id,gameId:betGame.id,amount:betAmt,pickedTeam:betTeam,homeTeam:betGame.home,awayTeam:betGame.away}});
+    if(d.ok){
+      setBalance(b=>b-betAmt);
+      pickemAPI("groupBets",{params:{groupId:selGroup.id}}).then(r=>{if(r.ok)setBets(r.bets||[]);});
+      setBetGame(null);setBetTeam(null);setMsg(`✅ Apuesta de ${betAmt} 🪙 enviada al grupo`);
+    } else setMsg(d.error);
+    setBetLoading(false);
+  };
+
+  const doAcceptBet=async(bet)=>{
+    setBetLoading(true);
+    const d=await pickemAPI("acceptBet",{body:{userId:user.id,betId:bet.id}});
+    if(d.ok){
+      setBalance(b=>b-bet.amount);
+      setBets(prev=>prev.map(b=>b.id===bet.id?{...b,status:"active",opponent_id:user.id}:b));
+      setMsg("✅ ¡Apuesta aceptada!");
+    } else setMsg(d.error);
+    setBetLoading(false);
+  };
+
+  const doCancelBet=async(bet)=>{
+    const d=await pickemAPI("cancelBet",{body:{userId:user.id,betId:bet.id}});
+    if(d.ok){setBets(prev=>prev.filter(b=>b.id!==bet.id));setBalance(b=>b+bet.amount);setMsg("Apuesta cancelada");}
+    else setMsg(d.error);
+  };
+
+  const subscribePush=async()=>{
+    setNotifLoading(true);
+    try{
+      const perm=await Notification.requestPermission();
+      if(perm!=="granted"){setMsg("Notificaciones bloqueadas por el navegador");setNotifLoading(false);return;}
+      setNotifGranted(true);
+      const reg=await navigator.serviceWorker.ready;
+      const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:VAPID_KEY});
+      await pickemAPI("subscribePush",{body:{userId:user.id,subscription:sub.toJSON()}});
+      setMsg("🔔 ¡Notificaciones activadas!");
+    }catch(e){setMsg("Error: "+e.message);}
+    setNotifLoading(false);
+  };
+
+  const saveNotifPref=(key,val)=>{
+    const next={...notifPrefs,[key]:val};
+    setNotifPrefs(next);
+    pickemAPI("setNotifPrefs",{body:{userId:user.id,...next}});
   };
 
   const myRank=leaderboard.findIndex(r=>r.user_id===user?.id);
@@ -527,9 +621,12 @@ const PickemTab=({games,userCtx})=>{
       </div>
     </Card>}
 
-    {/* Selected group content */}
-    {selGroup&&<>
-      {/* Group header card */}
+    {selGroup&&(()=>{
+      const histByDate=history.reduce((a,p)=>({...a,[p.game_date]:[...(a[p.game_date]||[]),p]}),{});
+      const grpByGame=grpPicks.reduce((a,p)=>({...a,[p.game_id]:[...(a[p.game_id]||[]),p]}),{});
+      const activeLb=lbPeriod==="season"?leaderboard:periodLb;
+      return <>
+      {/* Group header */}
       <Card style={{marginBottom:14,background:"linear-gradient(135deg,#0a152066,#0d1117)",borderColor:`${C.accent}33`}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
           <div>
@@ -537,116 +634,221 @@ const PickemTab=({games,userCtx})=>{
             <div style={{fontSize:11,color:C.dim,marginTop:2}}>{selGroup.memberCount||"?"} miembros · {allGames.length} partidos hoy</div>
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            {balance!==null&&<div style={{background:"#FFB80011",border:"1px solid #FFB80033",borderRadius:8,padding:"6px 12px",display:"flex",alignItems:"center",gap:4}}><span>🪙</span><span style={{fontSize:16,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800"}}>{balance}</span></div>}
             <div style={{background:"#0a1018",borderRadius:8,padding:"8px 14px",display:"flex",alignItems:"center",gap:8}}>
               <span style={{fontSize:14,fontWeight:900,letterSpacing:3,color:"#FFB800",fontFamily:"'Bebas Neue',sans-serif"}}>{selGroup.code}</span>
-              <button className="btn" onClick={copyCode} style={{background:copied?"#00FF9D22":"#ffffff11",borderRadius:6,padding:"4px 10px",color:copied?"#00FF9D":C.dim,fontSize:10,fontWeight:700,border:`1px solid ${copied?"#00FF9D44":"#ffffff11"}`}}>{copied?"✓ Copiado":"📋 Copiar"}</button>
+              <button className="btn" onClick={copyCode} style={{background:copied?"#00FF9D22":"#ffffff11",borderRadius:6,padding:"4px 10px",color:copied?"#00FF9D":C.dim,fontSize:10,fontWeight:700,border:`1px solid ${copied?"#00FF9D44":"#ffffff11"}`}}>{copied?"✓":"📋"}</button>
             </div>
           </div>
         </div>
-        {/* My quick stats */}
         {myStats&&<div style={{display:"flex",gap:16,marginTop:14,paddingTop:12,borderTop:`1px solid ${C.border}`}}>
-          {[["🏅 Posición",`#${myRank+1}`,"#FFB800"],["✅ Aciertos",`${myStats.correct_picks}/${myStats.total_picks}`,"#00FF9D"],["📊 Precisión",`${myStats.accuracy}%`,C.accent],["⭐ Puntos",myStats.total_points,"#FFB800"]].map(([l,v,c])=><div key={l}>
-            <div style={{fontSize:9,color:C.muted}}>{l}</div>
-            <div style={{fontSize:16,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:c}}>{v}</div>
-          </div>)}
+          {[["🏅 Pos",`#${myRank+1}`,"#FFB800"],["✅",`${myStats.correct_picks}/${myStats.total_picks}`,"#00FF9D"],["📊",`${myStats.accuracy}%`,C.accent],["⭐",myStats.total_points,"#FFB800"]].map(([l,v,c])=><div key={l}><div style={{fontSize:9,color:C.muted}}>{l}</div><div style={{fontSize:16,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:c}}>{v}</div></div>)}
         </div>}
       </Card>
 
-      {/* Sub-tabs: Picks | Ranking | Members */}
-      <div style={{display:"flex",gap:0,marginBottom:14}}>
-        {[["ranking","🏆 Ranking"],["members","👥 Miembros"],["picks","🎯 Mis Picks"]].map(([id,label])=><button key={id} className="btn" onClick={()=>setSubTab(id)} style={{padding:"9px 18px",background:"transparent",borderBottom:subTab===id?`2px solid ${C.accent}`:"2px solid transparent",color:subTab===id?C.accent:C.dim,fontSize:12,fontWeight:subTab===id?700:500}}>{label}</button>)}
+      {/* Daily winner */}
+      {dailyWinner&&<Card style={{marginBottom:14,background:"linear-gradient(135deg,#FFB80012,#0d1117)",borderColor:"#FFB80044",textAlign:"center",padding:"12px 18px"}}>
+        <div style={{fontSize:9,color:"#FFB800",textTransform:"uppercase",letterSpacing:2,marginBottom:3}}>👑 Ganador del día</div>
+        <div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text}}>{dailyWinner.avatar_emoji||"🏀"} {dailyWinner.name}</div>
+        <div style={{fontSize:11,color:C.dim}}>{dailyWinner.correct}/{dailyWinner.total} aciertos · {dailyWinner.points} pts</div>
+      </Card>}
+
+      {/* Sub-tabs */}
+      <div style={{display:"flex",gap:0,marginBottom:14,overflowX:"auto",borderBottom:`1px solid ${C.border}`}}>
+        {[["picks","🎯 Picks"],["ranking","🏆 Ranking"],["historial","📅 Historial"],["grupo","👥 Grupo"],["apuestas","🪙 Apuestas"],["ajustes","⚙️ Ajustes"]].map(([id,label])=><button key={id} className="btn" onClick={()=>setSubTab(id)} style={{padding:"9px 12px",background:"transparent",borderBottom:subTab===id?`2px solid ${C.accent}`:"2px solid transparent",color:subTab===id?C.accent:C.dim,fontSize:11,fontWeight:subTab===id?700:500,whiteSpace:"nowrap"}}>{label}</button>)}
       </div>
 
-      {/* ─── PICKS SUB-TAB ─── */}
+      {/* ─── PICKS ─── */}
       {subTab==="picks"&&<>
-        <div style={{padding:"10px 14px",background:"#FFB80011",border:"1px solid #FFB80033",borderRadius:10,marginBottom:14,fontSize:11,color:"#FFB800"}}>📋 Estos son tus picks de hoy. Para hacer o cambiar picks, ve a 🏠 Home antes de que empiecen los partidos.</div>
-        {allGames.length===0?<Card style={{textAlign:"center",padding:40}}>
-          <div style={{fontSize:36,marginBottom:8}}>🌙</div>
-          <div style={{fontSize:15,fontWeight:700,color:C.text,marginBottom:6}}>No hay partidos hoy</div>
-          <div style={{fontSize:12,color:C.dim}}>Vuelve mañana para hacer tus picks</div>
-        </Card>
+        {!picksLocked&&<div style={{padding:"10px 14px",background:"#00C2FF11",border:"1px solid #00C2FF33",borderRadius:10,marginBottom:14,fontSize:11,color:C.accent}}>🎯 Toca un equipo para hacer tu pick antes de que empiece el partido</div>}
+        {picksLocked&&!wildcardUsed&&upcoming.length>0&&<div style={{padding:"10px 14px",background:"#a78bfa11",border:"1px solid #a78bfa44",borderRadius:10,marginBottom:14,fontSize:11,color:"#a78bfa"}}>🃏 Picks cerrados — tienes 1 <b>comodín</b> disponible para cambiar un pick en un partido que aún no empiezca</div>}
+        {picksLocked&&wildcardUsed&&<div style={{padding:"10px 14px",background:"#FFB80011",border:"1px solid #FFB80033",borderRadius:10,marginBottom:14,fontSize:11,color:"#FFB800"}}>🃏 Comodín usado hoy · Vuelve mañana</div>}
+        {allGames.length===0?<Card style={{textAlign:"center",padding:40}}><div style={{fontSize:36,marginBottom:8}}>🌙</div><div style={{fontSize:15,fontWeight:700,color:C.text}}>No hay partidos hoy</div></Card>
         :allGames.map(g=>{
-          const picked=picks[g.id];const isFinal=g.status==="Final";const isLive=g.status==="LIVE";
+          const picked=picks[g.id];const isFinal=g.status==="Final";const isLive=g.status==="LIVE";const isUpcoming=g.status==="Upcoming";
           const winner=isFinal?(g.homeScore>g.awayScore?g.home:g.away):null;
           const correct=isFinal&&picked===winner;
-          return <Card key={g.id} style={{marginBottom:10,borderColor:isFinal?(correct?"#00FF9D33":"#ff444433"):isLive?"#ff444433":picked?`${tm(picked).color}33`:C.border}}>
+          const canWildcard=picksLocked&&!wildcardUsed&&isUpcoming;
+          return <Card key={g.id} style={{marginBottom:10,borderColor:isFinal?(correct?"#00FF9D33":"#ff444433"):isLive?"#ff444433":canWildcard?"#a78bfa44":picked?`${tm(picked).color}33`:C.border}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-              {isLive?<Tag c="#ff4444">● EN VIVO {g.detail}</Tag>:isFinal?<Tag c={C.muted}>Final</Tag>:<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>}
-              {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?"✅ +10 pts":"❌ Fallaste"}</Tag>}
-              {!isFinal&&!isLive&&picked&&<Tag c="#00FF9D">✓ Pick hecho</Tag>}
-              {!isFinal&&!isLive&&!picked&&<Tag c="#ff6666">Sin pick</Tag>}
+              <div style={{display:"flex",gap:6}}>{isLive?<Tag c="#ff4444">● LIVE {g.detail}</Tag>:isFinal?<Tag c={C.muted}>Final</Tag>:<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>}{canWildcard&&<Tag c="#a78bfa">🃏</Tag>}</div>
+              {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?"✅ +10":"❌"}</Tag>}
+              {!isFinal&&!isLive&&picked&&<Tag c="#00FF9D">✓ Pick</Tag>}
+              {!isFinal&&!isLive&&!picked&&!canWildcard&&picksLocked&&<Tag c="#ff6666">Sin pick</Tag>}
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:10,alignItems:"center"}}>
               {[["away",g.away,g.awayScore],["vs"],["home",g.home,g.homeScore]].map((item,idx)=>
                 idx===1?<div key="vs" style={{textAlign:"center",fontSize:12,color:C.muted,fontWeight:800}}>VS</div>
-                :<div key={item[1]} style={{textAlign:"center",padding:"12px 8px",borderRadius:12,
-                  background:picked===item[1]?`${tm(item[1]).color}18`:"transparent",
-                  border:`2px solid ${picked===item[1]?tm(item[1]).color:C.border}`,
-                  opacity:picked&&picked!==item[1]?0.4:1}}>
-                  {logo(item[1],36)}
-                  <div style={{fontSize:14,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:picked===item[1]?tm(item[1]).color:C.text,marginTop:4}}>{item[1]}</div>
-                  <div style={{fontSize:10,color:C.dim}}>{tm(item[1]).name}</div>
-                  {(isFinal||isLive)&&<div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:isFinal&&item[1]===winner?"#00FF9D":C.text,marginTop:4}}>{item[2]}</div>}
-                </div>
+                :(!isFinal&&!isLive&&(!picksLocked||canWildcard))?
+                  <button key={item[1]} className="btn" onClick={()=>canWildcard?doWildcard(g.id,item[1],g.home,g.away):makePick(g.id,item[1],g.home,g.away)} style={{padding:"12px 8px",borderRadius:12,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:picked===item[1]?`${tm(item[1]).color}18`:"transparent",border:`2px solid ${picked===item[1]?tm(item[1]).color:canWildcard?"#a78bfa44":C.border}`,color:picked===item[1]?tm(item[1]).color:C.text,width:"100%"}}>
+                    {logo(item[1],36)}<span style={{fontSize:13,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif"}}>{item[1]}</span><span style={{fontSize:10,color:C.dim}}>{tm(item[1]).name}</span>
+                  </button>
+                :<div key={item[1]} style={{textAlign:"center",padding:"12px 8px",opacity:picked&&picked!==item[1]?0.4:1}}>
+                    {logo(item[1],36)}<div style={{fontSize:13,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:picked===item[1]?tm(item[1]).color:C.text,marginTop:4}}>{item[1]}</div>
+                    {(isFinal||isLive)&&<div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:isFinal&&item[1]===winner?"#00FF9D":C.text,marginTop:4}}>{item[2]}</div>}
+                  </div>
               )}
             </div>
           </Card>;
         })}
       </>}
 
-      {/* ─── RANKING SUB-TAB ─── */}
-      {subTab==="ranking"&&<Card>
-        <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:14}}>🏆 Clasificación — {selGroup.name}</div>
-        {leaderboard.length===0?<div style={{textAlign:"center",padding:30,color:C.dim}}>Aún no hay picks. ¡Haz el primero!</div>
-        :leaderboard.map((r,i)=>{
-          const isMe=r.user_id===user.id;
-          const medalColors=["#FFB800","#C0C0C0","#CD7F32"];
-          return <div key={r.user_id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 8px",marginBottom:4,borderRadius:10,background:isMe?`${C.accent}11`:i<3?"#FFB80008":"transparent",border:isMe?`1px solid ${C.accent}33`:"1px solid transparent"}}>
-            <div style={{width:32,height:32,borderRadius:"50%",background:i<3?`${medalColors[i]}22`:"#0a1018",border:`2px solid ${i<3?medalColors[i]:C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:i<3?14:12,fontWeight:900,color:i<3?medalColors[i]:C.dim,flexShrink:0}}>
-              {i<3?["🥇","🥈","🥉"][i]:i+1}
+      {/* ─── RANKING ─── */}
+      {subTab==="ranking"&&<>
+        <div style={{display:"flex",gap:8,marginBottom:14}}>
+          {[["season","🏀 Temporada"],["month","📅 Mes"],["week","📆 Semana"]].map(([p,l])=><button key={p} className="btn" onClick={()=>setLbPeriod(p)} style={{padding:"7px 14px",borderRadius:20,background:lbPeriod===p?C.accent:"#0d1117",border:`1px solid ${lbPeriod===p?C.accent:C.border}`,color:lbPeriod===p?"#07090f":C.dim,fontWeight:700,fontSize:11}}>{l}</button>)}
+        </div>
+        <Card>
+          <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:14}}>🏆 {lbPeriod==="week"?"Esta semana":lbPeriod==="month"?"Este mes":"Temporada"} — {selGroup.name}</div>
+          {activeLb.length===0?<div style={{textAlign:"center",padding:30,color:C.dim}}>Aún no hay picks</div>
+          :activeLb.map((r,i)=>{
+            const isMe=r.user_id===user.id;const mc=["#FFB800","#C0C0C0","#CD7F32"];
+            return <div key={r.user_id||i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 8px",marginBottom:4,borderRadius:10,background:isMe?`${C.accent}11`:i<3?"#FFB80008":"transparent",border:isMe?`1px solid ${C.accent}33`:"1px solid transparent"}}>
+              <div style={{width:32,height:32,borderRadius:"50%",background:i<3?`${mc[i]}22`:"#0a1018",border:`2px solid ${i<3?mc[i]:C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:i<3?14:12,fontWeight:900,color:i<3?mc[i]:C.dim,flexShrink:0}}>{i<3?["🥇","🥈","🥉"][i]:i+1}</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,fontWeight:isMe?800:600,color:isMe?C.accent:C.text}}>{r.avatar_emoji||"🏀"} {r.name||r.user_name}{isMe?" (tú)":""}</div>
+                <div style={{fontSize:10,color:C.dim}}>{r.correct_picks??r.correct??0} aciertos · {r.accuracy}% precisión</div>
+              </div>
+              <div style={{textAlign:"right"}}><div style={{fontSize:22,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800"}}>{r.total_points??r.points??0}</div><div style={{fontSize:8,color:C.muted,letterSpacing:1}}>PTS</div></div>
+            </div>;
+          })}
+        </Card>
+      </>}
+
+      {/* ─── HISTORIAL ─── */}
+      {subTab==="historial"&&<>
+        {Object.keys(histByDate).length===0?<Card style={{textAlign:"center",padding:40}}><div style={{fontSize:36,marginBottom:8}}>📅</div><div style={{fontSize:15,fontWeight:700,color:C.text}}>Sin historial aún</div><div style={{fontSize:12,color:C.dim,marginTop:6}}>Tus picks de los últimos 7 días aparecerán aquí</div></Card>
+        :Object.entries(histByDate).map(([date,dayPicks])=>{
+          const correct=dayPicks.filter(p=>p.correct).length;
+          const pts=dayPicks.reduce((s,p)=>s+(p.points||0),0);
+          return <Card key={date} style={{marginBottom:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <div style={{fontSize:12,fontWeight:700,color:C.text}}>{new Date(date+"T12:00:00").toLocaleDateString("es",{weekday:"long",month:"short",day:"numeric"})}</div>
+              <div style={{display:"flex",gap:8}}><Tag c={correct===dayPicks.length&&dayPicks.length>0?"#00FF9D":"#FFB800"}>{correct}/{dayPicks.length} ✅</Tag><Tag c={C.accent}>+{pts} pts</Tag></div>
             </div>
-            <div style={{flex:1}}>
-              <div style={{fontSize:13,fontWeight:isMe?800:600,color:isMe?C.accent:C.text}}>{r.avatar_emoji} {r.name}{isMe?" (tú)":""}</div>
-              <div style={{fontSize:10,color:C.dim}}>{r.correct_picks} aciertos de {r.total_picks} · {r.accuracy}% precisión</div>
-            </div>
-            <div style={{textAlign:"right"}}>
-              <div style={{fontSize:22,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800"}}>{r.total_points}</div>
-              <div style={{fontSize:8,color:C.muted,textTransform:"uppercase",letterSpacing:1}}>PTS</div>
-            </div>
-          </div>;
+            {dayPicks.map(p=><div key={p.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderBottom:`1px solid ${C.border}`}}>
+              {logo(p.picked_team,20)}<span style={{flex:1,fontSize:12,color:C.text}}>{p.picked_team}{p.is_wildcard&&<span style={{fontSize:10,color:"#a78bfa"}}> 🃏</span>}</span>
+              <span style={{fontSize:11,color:C.dim}}>vs {p.picked_team===p.home_team?p.away_team:p.home_team}</span>
+              {p.scored?<Tag c={p.correct?"#00FF9D":"#ff6666"}>{p.correct?"✅":"❌"}</Tag>:<Tag c={C.muted}>Pend.</Tag>}
+            </div>)}
+          </Card>;
         })}
-      </Card>}
+      </>}
 
-      {/* ─── MEMBERS SUB-TAB ─── */}
-      {subTab==="members"&&<Card>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-          <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2}}>👥 Miembros — {selGroup.name}</div>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontSize:11,color:C.dim}}>Invita amigos:</span>
-            <button className="btn" onClick={copyCode} style={{background:"#FFB80022",border:"1px solid #FFB80044",borderRadius:8,padding:"6px 12px",color:"#FFB800",fontSize:11,fontWeight:700}}>{copied?"✓ Copiado":`📋 ${selGroup.code}`}</button>
-          </div>
-        </div>
-        {(selGroup.members||[]).length===0?<div style={{textAlign:"center",padding:20,color:C.dim}}>Cargando miembros...</div>
-        :(selGroup.members||[]).map((m,i)=><div key={m.userId||i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:i<(selGroup.members||[]).length-1?`1px solid ${C.border}`:"none"}}>
-          <div style={{width:36,height:36,borderRadius:"50%",background:`${C.accent}15`,border:`2px solid ${C.accent}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>{m.avatar_emoji||"🏀"}</div>
-          <div style={{flex:1}}>
-            <div style={{fontSize:13,fontWeight:700,color:m.userId===user.id?C.accent:C.text}}>{m.name}{m.userId===user.id?" (tú)":""}</div>
-            <div style={{fontSize:10,color:C.dim}}>{m.userId===selGroup.owner_id?"👑 Creador":"Miembro"}</div>
-          </div>
-        </div>)}
-        <Divider/>
-        <div style={{textAlign:"center",marginTop:8}}>
-          <div style={{fontSize:11,color:C.dim,marginBottom:8}}>Comparte este código para que se unan:</div>
-          <div style={{fontSize:28,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:6,color:"#FFB800"}}>{selGroup.code}</div>
-        </div>
-      </Card>}
-    </>}
+      {/* ─── GRUPO ─── */}
+      {subTab==="grupo"&&<>
+        {allGames.length===0?<Card style={{textAlign:"center",padding:40}}><div style={{fontSize:36}}>🌙</div><div style={{fontSize:14,color:C.dim,marginTop:8}}>No hay partidos hoy</div></Card>
+        :allGames.map(g=>{
+          const gp=grpByGame[g.id]||[];const total=gp.length||1;
+          const forAway=gp.filter(p=>p.picked_team===g.away);const forHome=gp.filter(p=>p.picked_team===g.home);
+          return <Card key={g.id} style={{marginBottom:10}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>{logo(g.away,20)}<span style={{fontSize:12,fontWeight:700,color:C.text}}>{g.away}</span><span style={{fontSize:10,color:C.muted}}>vs</span>{logo(g.home,20)}<span style={{fontSize:12,fontWeight:700,color:C.text}}>{g.home}</span></div>
+              <Tag c={C.accent}>{gp.length} picks</Tag>
+            </div>
+            {gp.length>0&&<>
+              <div style={{display:"flex",height:8,borderRadius:4,overflow:"hidden",marginBottom:6}}>
+                <div style={{flex:forAway.length,background:tm(g.away).color}}/><div style={{flex:forHome.length,background:tm(g.home).color}}/>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.dim,marginBottom:10}}>
+                <span style={{color:tm(g.away).color}}>{g.away} {Math.round(forAway.length/total*100)}%</span>
+                <span style={{color:tm(g.home).color}}>{Math.round(forHome.length/total*100)}% {g.home}</span>
+              </div>
+            </>}
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+              {gp.map((p,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:4,background:`${tm(p.picked_team).color}18`,border:`1px solid ${tm(p.picked_team).color}44`,borderRadius:20,padding:"3px 8px"}}>
+                <span style={{fontSize:11}}>{p.users?.avatar_emoji||"🏀"}</span><span style={{fontSize:10,color:C.text,fontWeight:600}}>{p.users?.name||"?"}</span>{p.is_wildcard&&<span style={{fontSize:10}}>🃏</span>}
+              </div>)}
+            </div>
+          </Card>;
+        })}
+      </>}
 
-    {/* Points system */}
+      {/* ─── APUESTAS ─── */}
+      {subTab==="apuestas"&&<>
+        <Card style={{marginBottom:14,background:"linear-gradient(135deg,#FFB80012,#0d1117)",borderColor:"#FFB80044",textAlign:"center",padding:"18px"}}>
+          <div style={{fontSize:9,color:"#FFB800",textTransform:"uppercase",letterSpacing:2,marginBottom:4}}>Tu saldo</div>
+          <div style={{fontSize:48,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800"}}>{balance!==null?balance:<Spin/>} 🪙</div>
+          <div style={{fontSize:10,color:C.dim,marginTop:4}}>Empiezas con 500 · +100/día si tienes menos de 200</div>
+        </Card>
+        {upcoming.length>0&&!betGame&&<Card style={{marginBottom:14}}>
+          <div style={{fontSize:13,fontWeight:800,color:C.text,marginBottom:10}}>🎲 Nueva apuesta — elige un partido:</div>
+          {upcoming.map(g=><button key={g.id} className="btn" onClick={()=>{setBetGame(g);setBetTeam(null);}} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"10px 12px",marginBottom:6,background:"#0a1018",border:`1px solid ${C.border}`,borderRadius:10,color:C.text,fontSize:12,fontWeight:600}}>
+            {logo(g.away,18)}{g.away} vs {g.home}{logo(g.home,18)}<span style={{marginLeft:"auto",color:C.accent,fontSize:10}}>{g.detail}</span>
+          </button>)}
+        </Card>}
+        {betGame&&<Card style={{marginBottom:14,borderColor:`${C.accent}44`}}>
+          <div style={{fontSize:13,fontWeight:800,color:C.text,marginBottom:12}}>🎲 {betGame.away} vs {betGame.home} — ¿Quién gana?</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+            {[betGame.away,betGame.home].map(team=><button key={team} className="btn" onClick={()=>setBetTeam(team)} style={{padding:"14px 8px",borderRadius:12,textAlign:"center",background:betTeam===team?`${tm(team).color}22`:"#0a1018",border:`2px solid ${betTeam===team?tm(team).color:C.border}`,color:betTeam===team?tm(team).color:C.text}}>
+              {logo(team,36)}<div style={{fontSize:13,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",marginTop:4}}>{team}</div>
+            </button>)}
+          </div>
+          <div style={{marginBottom:12}}>
+            <div style={{fontSize:11,color:C.dim,marginBottom:6}}>Monto:</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {[25,50,100,200].map(a=><button key={a} className="btn" onClick={()=>setBetAmt(a)} style={{padding:"6px 14px",borderRadius:20,background:betAmt===a?"#FFB80022":"#0a1018",border:`1px solid ${betAmt===a?"#FFB800":C.border}`,color:betAmt===a?"#FFB800":C.dim,fontSize:12,fontWeight:700}}>🪙{a}</button>)}
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button className="btn" onClick={()=>{setBetGame(null);setBetTeam(null);}} style={{flex:1,padding:"12px",borderRadius:10,background:"#0a1018",border:`1px solid ${C.border}`,color:C.dim,fontSize:13,fontWeight:700}}>Cancelar</button>
+            <button className="btn" onClick={doBet} disabled={!betTeam||betLoading||(balance!==null&&betAmt>balance)} style={{flex:2,padding:"12px",borderRadius:10,background:betTeam&&!betLoading?"linear-gradient(135deg,#FFB800,#ff9500)":"#0a1018",color:betTeam&&!betLoading?"#07090f":C.muted,fontSize:13,fontWeight:900}}>{betLoading?<Spin s={13}/>:`Apostar 🪙${betAmt} por ${betTeam||"..."}`}</button>
+          </div>
+        </Card>}
+        {bets.length>0&&<><div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>Apuestas del grupo</div>
+        {bets.map(b=>{const isMe=b.requester_id===user.id;const canAccept=!isMe&&b.status==="open";
+          return <Card key={b.id} style={{marginBottom:8,borderColor:b.status==="active"?"#00FF9D33":C.border}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>{logo(b.picked_team,22)}<span style={{fontSize:13,fontWeight:800,color:tm(b.picked_team).color}}>{b.picked_team} gana</span></div>
+                <div style={{fontSize:11,color:C.dim}}>{b.away_team} vs {b.home_team} · <span style={{color:"#FFB800",fontWeight:700}}>🪙{b.amount}</span>{isMe?" · (tu apuesta)":""}</div>
+              </div>
+              <div style={{display:"flex",gap:6}}>
+                {canAccept&&<button className="btn" onClick={()=>doAcceptBet(b)} disabled={betLoading||(balance!==null&&b.amount>balance)} style={{padding:"8px 14px",borderRadius:10,background:"#00FF9D22",border:"1px solid #00FF9D44",color:"#00FF9D",fontSize:12,fontWeight:700}}>Aceptar 🤝</button>}
+                {isMe&&b.status==="open"&&<button className="btn" onClick={()=>doCancelBet(b)} style={{padding:"8px 14px",borderRadius:10,background:"#ff444422",border:"1px solid #ff444444",color:"#ff6666",fontSize:12,fontWeight:700}}>Cancelar</button>}
+                {b.status==="active"&&<Tag c="#00FF9D">✓ Activa</Tag>}
+              </div>
+            </div>
+          </Card>;
+        })}</>}
+        {bets.length===0&&upcoming.length===0&&!betGame&&<Card style={{textAlign:"center",padding:30}}><div style={{fontSize:36,marginBottom:8}}>🌙</div><div style={{fontSize:14,color:C.dim}}>No hay partidos para apostar hoy</div></Card>}
+      </>}
+
+      {/* ─── AJUSTES ─── */}
+      {subTab==="ajustes"&&<>
+        <Card style={{marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+            <div style={{fontSize:12,fontWeight:700,color:C.text}}>👥 Miembros del grupo</div>
+            <button className="btn" onClick={copyCode} style={{background:"#FFB80022",border:"1px solid #FFB80044",borderRadius:8,padding:"6px 12px",color:"#FFB800",fontSize:11,fontWeight:700}}>{copied?"✓":`📋 ${selGroup.code}`}</button>
+          </div>
+          {(selGroup.members||[]).map((m,i)=><div key={m.userId||i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:i<(selGroup.members||[]).length-1?`1px solid ${C.border}`:"none"}}>
+            <div style={{width:34,height:34,borderRadius:"50%",background:`${C.accent}15`,border:`2px solid ${C.accent}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15}}>{m.avatar_emoji||"🏀"}</div>
+            <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:m.userId===user.id?C.accent:C.text}}>{m.name}{m.userId===user.id?" (tú)":""}</div><div style={{fontSize:10,color:C.dim}}>{m.userId===selGroup.owner_id?"👑 Creador":"Miembro"}</div></div>
+          </div>)}
+        </Card>
+        <Card>
+          <div style={{fontSize:13,fontWeight:800,color:C.text,marginBottom:14}}>🔔 Notificaciones</div>
+          {!notifGranted?<>
+            <div style={{fontSize:12,color:C.dim,marginBottom:12}}>Activa notificaciones para recordatorios de picks, alertas de aciertos y resúmenes diarios</div>
+            <button className="btn" onClick={subscribePush} disabled={notifLoading} style={{width:"100%",padding:"12px",borderRadius:10,background:`linear-gradient(135deg,${C.accent},#0066ff)`,color:"#07090f",fontSize:13,fontWeight:900}}>{notifLoading?<Spin s={13}/>:"🔔 Activar notificaciones"}</button>
+          </>:<>
+            <div style={{fontSize:11,color:"#00FF9D",marginBottom:14}}>✅ Activas — elige cuáles quieres:</div>
+            {[["picks_reminder","⏰ Recordatorio de picks","30 min antes del primer partido"],["win_notify","🎉 Cuando aciertes","Celebra cada predicción correcta"],["loss_notify","😅 Cuando falles","Para que aprendas jeje"],["daily_summary","📊 Resumen del día","Precisión y puntos al final del día"]].map(([key,label,desc])=><div key={key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
+              <div><div style={{fontSize:12,fontWeight:700,color:C.text}}>{label}</div><div style={{fontSize:10,color:C.dim}}>{desc}</div></div>
+              <button className="btn" onClick={()=>saveNotifPref(key,!notifPrefs[key])} style={{width:44,height:24,borderRadius:12,background:notifPrefs[key]?C.accent:"#0a1018",border:`2px solid ${notifPrefs[key]?C.accent:C.border}`,position:"relative",flexShrink:0}}>
+                <div style={{width:18,height:18,borderRadius:"50%",background:"#07090f",position:"absolute",top:1,left:notifPrefs[key]?"calc(100% - 20px)":2,transition:"left .2s"}}/>
+              </button>
+            </div>)}
+          </>}
+        </Card>
+      </>}
+    </>;
+    })()}
+
     <Card style={{marginTop:18,background:"#0a1018"}}>
       <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>Sistema de Puntos</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-        {[["✅ Acierto","10 pts"],["🔥 Racha x3","15 pts"],["🎯 Semana perfecta","50 pts"]].map(([l,v])=><div key={l} style={{background:C.card,borderRadius:9,padding:"10px",textAlign:"center"}}><div style={{fontSize:10,color:C.dim,marginBottom:4}}>{l}</div><div style={{fontSize:15,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.accent}}>{v}</div></div>)}
+        {[["✅ Acierto","10 pts"],["🃏 Comodín","1/día"],["🪙 Apuestas","vs grupo"]].map(([l,v])=><div key={l} style={{background:C.card,borderRadius:9,padding:"10px",textAlign:"center"}}><div style={{fontSize:10,color:C.dim,marginBottom:4}}>{l}</div><div style={{fontSize:15,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.accent}}>{v}</div></div>)}
       </div>
     </Card>
   </div>);
