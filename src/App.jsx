@@ -381,9 +381,6 @@ const PickemTab=({games,userCtx})=>{
   const [periodLb,setPeriodLb]=useState([]);
   const [lbPeriod,setLbPeriod]=useState("season");
   const [dailyWinner,setDailyWinner]=useState(null);
-  const [notifGranted,setNotifGranted]=useState(typeof Notification!=="undefined"&&Notification.permission==="granted");
-  const [notifPrefs,setNotifPrefs]=useState({picks_reminder:true,win_notify:true,loss_notify:true,daily_summary:true});
-  const [notifLoading,setNotifLoading]=useState(false);
   const upcoming=games.filter(g=>g.status==="Upcoming");const finished=games.filter(g=>g.status==="Final");const liveGames=games.filter(g=>g.status==="LIVE");
   const allGames=[...liveGames,...upcoming,...finished];
   const picksLocked=liveGames.length>0||finished.length>0;
@@ -442,7 +439,6 @@ const PickemTab=({games,userCtx})=>{
       pickemAPI("getBalance",{params:{userId:user.id,groupId:selGroup.id}}).then(d=>{if(d.ok)setBalance(d.balance);});
       pickemAPI("groupBets",{params:{groupId:selGroup.id}}).then(d=>{if(d.ok)setBets(d.bets||[]);});
     }
-    if(subTab==="ajustes") pickemAPI("getNotifPrefs",{params:{userId:user.id}}).then(d=>{if(d.ok)setNotifPrefs(d.prefs);});
   },[subTab,user,selGroup]);
 
   const register=async()=>{
@@ -520,26 +516,6 @@ const PickemTab=({games,userCtx})=>{
     const d=await pickemAPI("cancelBet",{body:{userId:user.id,betId:bet.id}});
     if(d.ok){setBets(prev=>prev.filter(b=>b.id!==bet.id));setBalance(b=>b+bet.amount);setMsg("Apuesta cancelada");}
     else setMsg(d.error);
-  };
-
-  const subscribePush=async()=>{
-    setNotifLoading(true);
-    try{
-      const perm=await Notification.requestPermission();
-      if(perm!=="granted"){setMsg("Notificaciones bloqueadas por el navegador");setNotifLoading(false);return;}
-      setNotifGranted(true);
-      const reg=await navigator.serviceWorker.ready;
-      const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:VAPID_KEY});
-      await pickemAPI("subscribePush",{body:{userId:user.id,subscription:sub.toJSON()}});
-      setMsg("🔔 ¡Notificaciones activadas!");
-    }catch(e){setMsg("Error: "+e.message);}
-    setNotifLoading(false);
-  };
-
-  const saveNotifPref=(key,val)=>{
-    const next={...notifPrefs,[key]:val};
-    setNotifPrefs(next);
-    pickemAPI("setNotifPrefs",{body:{userId:user.id,...next}});
   };
 
   const myRank=leaderboard.findIndex(r=>r.user_id===user?.id);
@@ -655,7 +631,7 @@ const PickemTab=({games,userCtx})=>{
 
       {/* Sub-tabs */}
       <div style={{display:"flex",gap:0,marginBottom:14,overflowX:"auto",borderBottom:`1px solid ${C.border}`}}>
-        {[["picks","🎯 Picks"],["ranking","🏆 Ranking"],["historial","📅 Historial"],["grupo","👥 Grupo"],["apuestas","🪙 Apuestas"],["ajustes","⚙️ Ajustes"]].map(([id,label])=><button key={id} className="btn" onClick={()=>setSubTab(id)} style={{padding:"9px 12px",background:"transparent",borderBottom:subTab===id?`2px solid ${C.accent}`:"2px solid transparent",color:subTab===id?C.accent:C.dim,fontSize:11,fontWeight:subTab===id?700:500,whiteSpace:"nowrap"}}>{label}</button>)}
+        {[["picks","🎯 Picks"],["ranking","🏆 Ranking"],["historial","📅 Historial"],["grupo","👥 Grupo"],["apuestas","🪙 Apuestas"]].map(([id,label])=><button key={id} className="btn" onClick={()=>setSubTab(id)} style={{padding:"9px 12px",background:"transparent",borderBottom:subTab===id?`2px solid ${C.accent}`:"2px solid transparent",color:subTab===id?C.accent:C.dim,fontSize:11,fontWeight:subTab===id?700:500,whiteSpace:"nowrap"}}>{label}</button>)}
       </div>
 
       {/* ─── PICKS ─── */}
@@ -815,33 +791,6 @@ const PickemTab=({games,userCtx})=>{
       </>}
 
       {/* ─── AJUSTES ─── */}
-      {subTab==="ajustes"&&<>
-        <Card style={{marginBottom:14}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-            <div style={{fontSize:12,fontWeight:700,color:C.text}}>👥 Miembros del grupo</div>
-            <button className="btn" onClick={copyCode} style={{background:"#FFB80022",border:"1px solid #FFB80044",borderRadius:8,padding:"6px 12px",color:"#FFB800",fontSize:11,fontWeight:700}}>{copied?"✓":`📋 ${selGroup.code}`}</button>
-          </div>
-          {(selGroup.members||[]).map((m,i)=><div key={m.userId||i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:i<(selGroup.members||[]).length-1?`1px solid ${C.border}`:"none"}}>
-            <div style={{width:34,height:34,borderRadius:"50%",background:`${C.accent}15`,border:`2px solid ${C.accent}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15}}>{m.avatar_emoji||"🏀"}</div>
-            <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:m.userId===user.id?C.accent:C.text}}>{m.name}{m.userId===user.id?" (tú)":""}</div><div style={{fontSize:10,color:C.dim}}>{m.userId===selGroup.owner_id?"👑 Creador":"Miembro"}</div></div>
-          </div>)}
-        </Card>
-        <Card>
-          <div style={{fontSize:13,fontWeight:800,color:C.text,marginBottom:14}}>🔔 Notificaciones</div>
-          {!notifGranted?<>
-            <div style={{fontSize:12,color:C.dim,marginBottom:12}}>Activa notificaciones para recordatorios de picks, alertas de aciertos y resúmenes diarios</div>
-            <button className="btn" onClick={subscribePush} disabled={notifLoading} style={{width:"100%",padding:"12px",borderRadius:10,background:`linear-gradient(135deg,${C.accent},#0066ff)`,color:"#07090f",fontSize:13,fontWeight:900}}>{notifLoading?<Spin s={13}/>:"🔔 Activar notificaciones"}</button>
-          </>:<>
-            <div style={{fontSize:11,color:"#00FF9D",marginBottom:14}}>✅ Activas — elige cuáles quieres:</div>
-            {[["picks_reminder","⏰ Recordatorio de picks","30 min antes del primer partido"],["win_notify","🎉 Cuando aciertes","Celebra cada predicción correcta"],["loss_notify","😅 Cuando falles","Para que aprendas jeje"],["daily_summary","📊 Resumen del día","Precisión y puntos al final del día"]].map(([key,label,desc])=><div key={key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
-              <div><div style={{fontSize:12,fontWeight:700,color:C.text}}>{label}</div><div style={{fontSize:10,color:C.dim}}>{desc}</div></div>
-              <button className="btn" onClick={()=>saveNotifPref(key,!notifPrefs[key])} style={{width:44,height:24,borderRadius:12,background:notifPrefs[key]?C.accent:"#0a1018",border:`2px solid ${notifPrefs[key]?C.accent:C.border}`,position:"relative",flexShrink:0}}>
-                <div style={{width:18,height:18,borderRadius:"50%",background:"#07090f",position:"absolute",top:1,left:notifPrefs[key]?"calc(100% - 20px)":2,transition:"left .2s"}}/>
-              </button>
-            </div>)}
-          </>}
-        </Card>
-      </>}
     </>;
     })()}
 
@@ -1193,8 +1142,104 @@ const BracketTab=({userCtx,standings})=>{
   </div>);
 };
 
+/* ═══ SETTINGS TAB ═══ */
+const SettingsTab=({userCtx})=>{
+  const {user,logout}=userCtx||{};
+  const [notifGranted,setNotifGranted]=useState(typeof Notification!=="undefined"&&Notification.permission==="granted");
+  const [notifPrefs,setNotifPrefs]=useState({picks_reminder:true,win_notify:true,loss_notify:true,daily_summary:true});
+  const [notifLoading,setNotifLoading]=useState(false);
+  const [msg,setMsg]=useState("");
+
+  useEffect(()=>{
+    if(!user) return;
+    pickemAPI("getNotifPrefs",{params:{userId:user.id}}).then(d=>{if(d.ok)setNotifPrefs(d.prefs);});
+  },[user]);
+
+  const subscribePush=async()=>{
+    setNotifLoading(true);
+    try{
+      const perm=await Notification.requestPermission();
+      if(perm!=="granted"){setMsg("Notificaciones bloqueadas por el navegador");setNotifLoading(false);return;}
+      setNotifGranted(true);
+      const reg=await navigator.serviceWorker.ready;
+      const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:VAPID_KEY});
+      await pickemAPI("subscribePush",{body:{userId:user.id,subscription:sub.toJSON()}});
+      setMsg("🔔 ¡Notificaciones activadas!");
+    }catch(e){setMsg("Error: "+e.message);}
+    setNotifLoading(false);
+  };
+
+  const saveNotifPref=(key,val)=>{
+    const next={...notifPrefs,[key]:val};
+    setNotifPrefs(next);
+    pickemAPI("setNotifPrefs",{body:{userId:user.id,...next}});
+  };
+
+  if(!user) return(
+    <div className="fade-up">
+      <Card style={{textAlign:"center",padding:"40px 20px"}}>
+        <div style={{fontSize:48,marginBottom:12}}>⚙️</div>
+        <div style={{fontSize:16,fontWeight:700,color:C.text,marginBottom:8}}>Inicia sesión primero</div>
+        <div style={{fontSize:12,color:C.dim}}>Ve a Grupos para crear tu perfil</div>
+      </Card>
+    </div>
+  );
+
+  return(<div className="fade-up">
+    {/* Perfil */}
+    <ST sub="Cuenta">Mi Perfil</ST>
+    <Card style={{marginBottom:18,background:`linear-gradient(135deg,${C.accent}11,${C.card})`,borderColor:`${C.accent}33`}}>
+      <div style={{display:"flex",alignItems:"center",gap:14}}>
+        <div style={{width:56,height:56,borderRadius:"50%",background:`${C.accent}20`,border:`2px solid ${C.accent}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26}}>{user.avatar_emoji||"🏀"}</div>
+        <div style={{flex:1}}>
+          <div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text}}>{user.name}</div>
+          <div style={{fontSize:10,color:C.muted,letterSpacing:1}}>ID: {user.id?.slice(0,8)}...</div>
+        </div>
+        <button className="btn" onClick={logout} style={{padding:"8px 16px",borderRadius:8,background:"#ff444422",border:"1px solid #ff444444",color:"#ff6666",fontSize:12,fontWeight:700}}>Salir</button>
+      </div>
+    </Card>
+
+    {/* Notificaciones */}
+    <ST sub="Push">Notificaciones</ST>
+    <Card style={{marginBottom:18}}>
+      {msg&&<div style={{fontSize:11,color:"#00FF9D",marginBottom:10,padding:"8px 10px",background:"#00FF9D11",borderRadius:8}}>{msg}</div>}
+      {!notifGranted
+        ?<>
+          <div style={{fontSize:12,color:C.dim,marginBottom:12}}>Activa notificaciones para recordatorios de picks, alertas de aciertos y resúmenes diarios</div>
+          <button className="btn" onClick={subscribePush} disabled={notifLoading} style={{width:"100%",padding:"13px",borderRadius:10,background:`linear-gradient(135deg,${C.accent},#0066ff)`,color:"#07090f",fontSize:13,fontWeight:900}}>{notifLoading?<Spin s={13}/>:"🔔 Activar notificaciones"}</button>
+        </>
+        :<>
+          <div style={{fontSize:11,color:"#00FF9D",marginBottom:14}}>✅ Activas — elige cuáles quieres recibir:</div>
+          {[["picks_reminder","⏰ Recordatorio de picks","30 min antes del primer partido"],["win_notify","🎉 Cuando aciertes","Celebra cada predicción correcta"],["loss_notify","😅 Cuando falles","Para que aprendas jeje"],["daily_summary","📊 Resumen del día","Precisión y puntos al final del día"]].map(([key,label,desc])=>
+            <div key={key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 0",borderBottom:`1px solid ${C.border}`}}>
+              <div><div style={{fontSize:13,fontWeight:700,color:C.text}}>{label}</div><div style={{fontSize:10,color:C.dim}}>{desc}</div></div>
+              <button className="btn" onClick={()=>saveNotifPref(key,!notifPrefs[key])} style={{width:46,height:26,borderRadius:13,background:notifPrefs[key]?C.accent:"#0a1018",border:`2px solid ${notifPrefs[key]?C.accent:C.border}`,position:"relative",flexShrink:0}}>
+                <div style={{width:18,height:18,borderRadius:"50%",background:"#07090f",position:"absolute",top:2,left:notifPrefs[key]?"calc(100% - 22px)":2,transition:"left .2s"}}/>
+              </button>
+            </div>
+          )}
+        </>
+      }
+    </Card>
+
+    {/* Puntuación */}
+    <ST sub="Cómo funciona">Sistema de Puntos</ST>
+    <Card>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+        {[["✅ Acierto","10 pts","#00FF9D"],["🃏 Comodín","1 / día","#FFB800"],["🪙 Apuestas","vs grupo",C.accent]].map(([l,v,c])=>
+          <div key={l} style={{background:"#0a1018",borderRadius:10,padding:"12px 8px",textAlign:"center"}}>
+            <div style={{fontSize:18,marginBottom:4}}>{l.split(" ")[0]}</div>
+            <div style={{fontSize:10,color:C.dim,marginBottom:4}}>{l.split(" ").slice(1).join(" ")}</div>
+            <div style={{fontSize:17,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:c}}>{v}</div>
+          </div>
+        )}
+      </div>
+    </Card>
+  </div>);
+};
+
 /* ═══ APP ROOT ═══ */
-const TABS=[{id:"home",icon:"🏠",label:"Home"},{id:"teams",icon:"🏆",label:"Equipos"},{id:"players",icon:"⭐",label:"Jugadores"},{id:"pickem",icon:"👥",label:"Grupos"},{id:"bracket",icon:"🏅",label:"Playoffs"}];
+const TABS=[{id:"home",icon:"🏠",label:"Home"},{id:"teams",icon:"🏆",label:"Equipos"},{id:"players",icon:"⭐",label:"Jugadores"},{id:"pickem",icon:"👥",label:"Grupos"},{id:"bracket",icon:"🏅",label:"Playoffs"},{id:"settings",icon:"⚙️",label:"Config"}];
 export default function App(){
   const [tab,setTab]=useState("home");const [games,setGames]=useState([]);const [standings,setStandings]=useState(FB_ST);const [players,setPlayers]=useState(FB_PL);
   const [live,setLive]=useState({games:false,standings:false,players:false});const [loading,setLoading]=useState(false);const [lastUpd,setLastUpd]=useState(null);
@@ -1237,6 +1282,7 @@ export default function App(){
       {tab==="players"&&<PlayersTab players={players} live={live}/>}
       {tab==="pickem"&&<PickemTab games={games} userCtx={userCtx}/>}
       {tab==="bracket"&&<BracketTab userCtx={userCtx} standings={standings}/>}
+      {tab==="settings"&&<SettingsTab userCtx={userCtx}/>}
     </div>
   </div>);
 }
