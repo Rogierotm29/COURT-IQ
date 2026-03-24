@@ -357,6 +357,17 @@ const PlayersTab=({players,live})=>{
 
 /* ═══ PICK'EM TAB v2 ═══ */
 const VAPID_KEY="BJwfMQ-4x5AHR8IEbABZl2kqdbvwANMQsg0QMLw3o0vbx2oc4LYc6fIKMLYzQDlRwsfl-BUaT-1ktJ1qtXcUsAU";
+
+async function autoSubscribePush(userId){
+  try{
+    if(!("Notification" in window)||!("serviceWorker" in navigator)) return;
+    const perm=await Notification.requestPermission();
+    if(perm!=="granted") return;
+    const reg=await navigator.serviceWorker.ready;
+    const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:VAPID_KEY});
+    await pickemAPI("subscribePush",{body:{userId,subscription:sub.toJSON()}});
+  }catch(_){}
+}
 const PickemTab=({games,userCtx})=>{
   const {user,save}=userCtx;
   const [name,setName]=useState("");const [groups,setGroups]=useState([]);const [selGroup,setSelGroup]=useState(null);
@@ -445,7 +456,7 @@ const PickemTab=({games,userCtx})=>{
     if(!name.trim()) return;
     setLoading(true);
     const d=await pickemAPI("register",{body:{name:name.trim(),pin:pin.join("")}});
-    if(d.ok){save(d.user);}else setMsg(d.error||"Error");
+    if(d.ok){save(d.user);autoSubscribePush(d.user.id);}else setMsg(d.error||"Error");
     setLoading(false);
   };
 
@@ -1158,13 +1169,24 @@ const SettingsTab=({userCtx})=>{
   const subscribePush=async()=>{
     setNotifLoading(true);
     try{
-      const perm=await Notification.requestPermission();
-      if(perm!=="granted"){setMsg("Notificaciones bloqueadas por el navegador");setNotifLoading(false);return;}
-      setNotifGranted(true);
+      await autoSubscribePush(user.id);
+      const granted=typeof Notification!=="undefined"&&Notification.permission==="granted";
+      setNotifGranted(granted);
+      if(granted) setMsg("🔔 ¡Notificaciones activadas!");
+      else setMsg("Notificaciones bloqueadas por el navegador");
+    }catch(e){setMsg("Error: "+e.message);}
+    setNotifLoading(false);
+  };
+
+  const unsubscribePush=async()=>{
+    setNotifLoading(true);
+    try{
       const reg=await navigator.serviceWorker.ready;
-      const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:VAPID_KEY});
-      await pickemAPI("subscribePush",{body:{userId:user.id,subscription:sub.toJSON()}});
-      setMsg("🔔 ¡Notificaciones activadas!");
+      const sub=await reg.pushManager.getSubscription();
+      if(sub) await sub.unsubscribe();
+      await pickemAPI("unsubscribePush",{body:{userId:user.id}});
+      setNotifGranted(false);
+      setMsg("🔕 Notificaciones desactivadas");
     }catch(e){setMsg("Error: "+e.message);}
     setNotifLoading(false);
   };
@@ -1209,7 +1231,10 @@ const SettingsTab=({userCtx})=>{
           <button className="btn" onClick={subscribePush} disabled={notifLoading} style={{width:"100%",padding:"13px",borderRadius:10,background:`linear-gradient(135deg,${C.accent},#0066ff)`,color:"#07090f",fontSize:13,fontWeight:900}}>{notifLoading?<Spin s={13}/>:"🔔 Activar notificaciones"}</button>
         </>
         :<>
-          <div style={{fontSize:11,color:"#00FF9D",marginBottom:14}}>✅ Activas — elige cuáles quieres recibir:</div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+            <div style={{fontSize:11,color:"#00FF9D"}}>✅ Activas — elige cuáles recibir:</div>
+            <button className="btn" onClick={unsubscribePush} disabled={notifLoading} style={{padding:"6px 12px",borderRadius:8,background:"#ff444422",border:"1px solid #ff444444",color:"#ff6666",fontSize:11,fontWeight:700}}>{notifLoading?<Spin s={11}/>:"🔕 Apagar"}</button>
+          </div>
           {[["picks_reminder","⏰ Recordatorio de picks","30 min antes del primer partido"],["win_notify","🎉 Cuando aciertes","Celebra cada predicción correcta"],["loss_notify","😅 Cuando falles","Para que aprendas jeje"],["daily_summary","📊 Resumen del día","Precisión y puntos al final del día"]].map(([key,label,desc])=>
             <div key={key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 0",borderBottom:`1px solid ${C.border}`}}>
               <div><div style={{fontSize:13,fontWeight:700,color:C.text}}>{label}</div><div style={{fontSize:10,color:C.dim}}>{desc}</div></div>

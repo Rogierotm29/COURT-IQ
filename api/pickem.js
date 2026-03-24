@@ -587,6 +587,13 @@ export default async function handler(req, res) {
         return res.json({ ok: true });
       }
 
+      case "unsubscribePush": {
+        const { userId } = body;
+        if (!userId) return res.json({ ok: false, error: "userId requerido" });
+        await supabase(`push_subscriptions?user_id=eq.${userId}`, { method: "DELETE" });
+        return res.json({ ok: true });
+      }
+
       // ─── NOTIFICATION PREFS ────────────────────────────────
       case "getNotifPrefs": {
         const { userId } = req.query;
