@@ -172,7 +172,7 @@ function useUser() {
 }
 
 /* ═══ HOME TAB ═══ */
-const HomeTab=({games,live,userCtx})=>{
+const HomeTab=({games,live,userCtx,standings})=>{
   const {user}=userCtx||{};
   const [picks,setPicks]=useState({});
   const [group,setGroup]=useState(null);
@@ -193,6 +193,8 @@ const HomeTab=({games,live,userCtx})=>{
       } else setLoaded(true);
     });
   },[user,games]);
+
+  const winPct=abbr=>{const t=standings.find(s=>s.abbr===abbr);return t&&(t.w+t.l)>0?+(t.w/(t.w+t.l)*100).toFixed(0):50;};
 
   const makePick=async(gameId,team,home,away)=>{
     if(!group||!user)return;
@@ -246,6 +248,11 @@ const HomeTab=({games,live,userCtx})=>{
                 {(isFinal||isLive)&&<div style={{fontSize:22,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:isFinal&&item[1]===winner?"#00FF9D":C.text,marginTop:4}}>{item[2]}</div>}
               </div>
           )}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8,fontSize:9}}>
+          <span style={{color:tm(g.away).color,fontWeight:700,minWidth:28}}>{winPct(g.away)}%</span>
+          <div style={{flex:1,height:4,borderRadius:2,background:C.border,overflow:"hidden"}}><div style={{width:`${winPct(g.away)}%`,height:"100%",background:`linear-gradient(90deg,${tm(g.away).color},${tm(g.home).color})`}}/></div>
+          <span style={{color:tm(g.home).color,fontWeight:700,minWidth:28,textAlign:"right"}}>{winPct(g.home)}%</span>
         </div>
       </Card>;})}
     </div>
@@ -390,6 +397,11 @@ const PickemTab=({games,userCtx})=>{
   const [betTeam,setBetTeam]=useState(null);
   const [betLoading,setBetLoading]=useState(false);
   const [periodLb,setPeriodLb]=useState([]);
+  const [betOpponent,setBetOpponent]=useState(null);
+  const [chat,setChat]=useState([]);const [chatInput,setChatInput]=useState("");const [chatLoading,setChatLoading]=useState(false);
+  const [h2hUser,setH2hUser]=useState(null);const [h2hData,setH2hData]=useState(null);
+  const [streaks,setStreaks]=useState({});
+  const [achievements,setAchievements]=useState([]);
   const [lbPeriod,setLbPeriod]=useState("season");
   const [dailyWinner,setDailyWinner]=useState(null);
   const upcoming=games.filter(g=>g.status==="Upcoming");const finished=games.filter(g=>g.status==="Final");const liveGames=games.filter(g=>g.status==="LIVE");
@@ -418,6 +430,7 @@ const PickemTab=({games,userCtx})=>{
         setSelGroup(found||d.groups[0]);
       }
     });
+    pickemAPI("getAchievements",{params:{userId:user.id}}).then(d=>{if(d.ok)setAchievements(d.achievements||[]);});
   },[user]);
 
   // Save last selected group
@@ -430,7 +443,17 @@ const PickemTab=({games,userCtx})=>{
     pickemAPI("myPicks",{params:{userId:user.id,groupId:selGroup.id,date:today}}).then(d=>{
       if(d.ok){const map={};(d.picks||[]).forEach(p=>{map[p.game_id]=p.picked_team;});setPicks(map);}
     });
-    pickemAPI("leaderboard",{params:{groupId:selGroup.id}}).then(d=>{if(d.ok)setLeaderboard(d.leaderboard||[]);});
+    pickemAPI("leaderboard",{params:{groupId:selGroup.id}}).then(d=>{
+      if(d.ok){
+        const lb=d.leaderboard||[];
+        setLeaderboard(lb);
+        lb.forEach(r=>{
+          pickemAPI("getStreak",{params:{userId:r.user_id,groupId:selGroup.id}}).then(s=>{
+            if(s.ok)setStreaks(prev=>({...prev,[r.user_id]:s.streak}));
+          });
+        });
+      }
+    });
     pickemAPI("wildcardStatus",{params:{userId:user.id,groupId:selGroup.id}}).then(d=>{if(d.ok)setWildcardUsed(d.used);});
     pickemAPI("dailyWinner",{params:{groupId:selGroup.id}}).then(d=>{if(d.ok)setDailyWinner(d.winner);});
   },[user,selGroup]);
@@ -450,6 +473,7 @@ const PickemTab=({games,userCtx})=>{
       pickemAPI("getBalance",{params:{userId:user.id,groupId:selGroup.id}}).then(d=>{if(d.ok)setBalance(d.balance);});
       pickemAPI("groupBets",{params:{groupId:selGroup.id}}).then(d=>{if(d.ok)setBets(d.bets||[]);});
     }
+    if(subTab==="chat") pickemAPI("getChat",{params:{groupId:selGroup.id}}).then(d=>{if(d.ok)setChat(d.messages||[]);});
   },[subTab,user,selGroup]);
 
   const register=async()=>{
@@ -527,6 +551,28 @@ const PickemTab=({games,userCtx})=>{
     const d=await pickemAPI("cancelBet",{body:{userId:user.id,betId:bet.id}});
     if(d.ok){setBets(prev=>prev.filter(b=>b.id!==bet.id));setBalance(b=>b+bet.amount);setMsg("Apuesta cancelada");}
     else setMsg(d.error);
+  };
+
+  const sendChat=async()=>{
+    if(!chatInput.trim()||!selGroup) return;
+    setChatLoading(true);
+    const content=chatInput.trim();setChatInput("");
+    const d=await pickemAPI("sendChat",{body:{userId:user.id,groupId:selGroup.id,content}});
+    if(d.ok) setChat(prev=>[...prev,{user_id:user.id,content,users:{name:user.name,avatar_emoji:user.avatar_emoji||"🏀"},created_at:new Date().toISOString()}]);
+    setChatLoading(false);
+  };
+  const loadH2H=async(r)=>{
+    setH2hUser(r);setH2hData(null);
+    const d=await pickemAPI("headToHead",{params:{userId:user.id,opponentId:r.user_id,groupId:selGroup.id}});
+    if(d.ok) setH2hData(d);
+  };
+  const doChallengeBet=async()=>{
+    if(!betGame||!betTeam||betAmt<10||!betOpponent) return;
+    setBetLoading(true);
+    const d=await pickemAPI("challengeBet",{body:{userId:user.id,groupId:selGroup.id,gameId:betGame.id,amount:betAmt,pickedTeam:betTeam,homeTeam:betGame.home,awayTeam:betGame.away,opponentId:betOpponent.userId}});
+    if(d.ok){setBalance(b=>b-betAmt);setBetGame(null);setBetTeam(null);setBetOpponent(null);setMsg(`⚡ ¡Reto enviado a ${betOpponent.name}!`);pickemAPI("groupBets",{params:{groupId:selGroup.id}}).then(r=>{if(r.ok)setBets(r.bets||[]);});}
+    else setMsg(d.error);
+    setBetLoading(false);
   };
 
   const myRank=leaderboard.findIndex(r=>r.user_id===user?.id);
@@ -642,7 +688,7 @@ const PickemTab=({games,userCtx})=>{
 
       {/* Sub-tabs */}
       <div style={{display:"flex",gap:0,marginBottom:14,overflowX:"auto",borderBottom:`1px solid ${C.border}`}}>
-        {[["picks","🎯 Picks"],["ranking","🏆 Ranking"],["historial","📅 Historial"],["grupo","👥 Grupo"],["apuestas","🪙 Apuestas"]].map(([id,label])=><button key={id} className="btn" onClick={()=>setSubTab(id)} style={{padding:"9px 12px",background:"transparent",borderBottom:subTab===id?`2px solid ${C.accent}`:"2px solid transparent",color:subTab===id?C.accent:C.dim,fontSize:11,fontWeight:subTab===id?700:500,whiteSpace:"nowrap"}}>{label}</button>)}
+        {[["picks","🎯 Picks"],["ranking","🏆 Ranking"],["historial","📅 Historial"],["grupo","👥 Grupo"],["apuestas","🪙 Apuestas"],["chat","💬 Chat"]].map(([id,label])=><button key={id} className="btn" onClick={()=>setSubTab(id)} style={{padding:"9px 12px",background:"transparent",borderBottom:subTab===id?`2px solid ${C.accent}`:"2px solid transparent",color:subTab===id?C.accent:C.dim,fontSize:11,fontWeight:subTab===id?700:500,whiteSpace:"nowrap"}}>{label}</button>)}
       </div>
 
       {/* ─── PICKS ─── */}
@@ -694,12 +740,31 @@ const PickemTab=({games,userCtx})=>{
               <div style={{width:32,height:32,borderRadius:"50%",background:i<3?`${mc[i]}22`:"#0a1018",border:`2px solid ${i<3?mc[i]:C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:i<3?14:12,fontWeight:900,color:i<3?mc[i]:C.dim,flexShrink:0}}>{i<3?["🥇","🥈","🥉"][i]:i+1}</div>
               <div style={{flex:1}}>
                 <div style={{fontSize:13,fontWeight:isMe?800:600,color:isMe?C.accent:C.text}}>{r.avatar_emoji||"🏀"} {r.name||r.user_name}{isMe?" (tú)":""}</div>
-                <div style={{fontSize:10,color:C.dim}}>{r.correct_picks??r.correct??0} aciertos · {r.accuracy}% precisión</div>
+                <div style={{fontSize:10,color:C.dim}}>{r.correct_picks??r.correct??0} aciertos · {r.accuracy}% precisión{(streaks[r.user_id]||0)>=3&&<span style={{fontSize:9,color:"#FF6B35",fontWeight:700}}> 🔥{streaks[r.user_id]} en racha</span>}</div>
               </div>
-              <div style={{textAlign:"right"}}><div style={{fontSize:22,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800"}}>{r.total_points??r.points??0}</div><div style={{fontSize:8,color:C.muted,letterSpacing:1}}>PTS</div></div>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2}}>
+                <div style={{textAlign:"right"}}><div style={{fontSize:22,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800"}}>{r.total_points??r.points??0}</div><div style={{fontSize:8,color:C.muted,letterSpacing:1}}>PTS</div></div>
+                {!isMe&&<button className="btn" onClick={()=>loadH2H(r)} style={{padding:"5px 9px",borderRadius:8,background:"#00C2FF11",border:"1px solid #00C2FF33",color:C.accent,fontSize:9,fontWeight:700,marginTop:2}}>H2H</button>}
+              </div>
             </div>;
           })}
         </Card>
+        {h2hUser&&<Card style={{marginTop:10,borderColor:`${C.accent}44`}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+            <div style={{fontSize:13,fontWeight:800,color:C.text}}>⚡ H2H vs {h2hUser.name||h2hUser.user_name}</div>
+            <button className="btn" onClick={()=>{setH2hUser(null);setH2hData(null);}} style={{background:"none",color:C.muted,fontSize:20}}>×</button>
+          </div>
+          {!h2hData?<div style={{textAlign:"center",padding:20}}><Spin/></div>
+          :<><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6,textAlign:"center",marginBottom:10}}>
+            {[["🏆 Tú","#00FF9D",h2hData.iWon],["👥 Ambos","#00C2FF",h2hData.bothCorrect],["😅 Ellos","#ff6666",h2hData.theyWon],["❌ Nadie",C.muted,h2hData.neither]].map(([l,c,v])=>(
+              <div key={l} style={{background:"#0a1018",borderRadius:10,padding:"10px 4px"}}>
+                <div style={{fontSize:22,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:c}}>{v}</div>
+                <div style={{fontSize:9,color:C.muted,marginTop:2}}>{l}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{fontSize:10,color:C.dim,textAlign:"center"}}>{h2hData.total} picks comparados</div></>}
+        </Card>}
       </>}
 
       {/* ─── HISTORIAL ─── */}
@@ -777,14 +842,24 @@ const PickemTab=({games,userCtx})=>{
               {[25,50,100,200].map(a=><button key={a} className="btn" onClick={()=>setBetAmt(a)} style={{padding:"6px 14px",borderRadius:20,background:betAmt===a?"#FFB80022":"#0a1018",border:`1px solid ${betAmt===a?"#FFB800":C.border}`,color:betAmt===a?"#FFB800":C.dim,fontSize:12,fontWeight:700}}>🪙{a}</button>)}
             </div>
           </div>
+          <div style={{marginBottom:12}}>
+            <div style={{fontSize:11,color:C.dim,marginBottom:8}}>⚡ Retar a (opcional):</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              <button className="btn" onClick={()=>setBetOpponent(null)} style={{padding:"5px 12px",borderRadius:20,background:!betOpponent?`${C.accent}22`:"#0a1018",border:`1px solid ${!betOpponent?C.accent:C.border}`,color:!betOpponent?C.accent:C.dim,fontSize:11,fontWeight:700}}>🌍 Abierta</button>
+              {(selGroup?.members||[]).filter(m=>m.userId!==user.id).map(m=>(
+                <button key={m.userId} className="btn" onClick={()=>setBetOpponent(m)} style={{padding:"5px 12px",borderRadius:20,background:betOpponent?.userId===m.userId?`${C.accent}22`:"#0a1018",border:`1px solid ${betOpponent?.userId===m.userId?C.accent:C.border}`,color:betOpponent?.userId===m.userId?C.accent:C.dim,fontSize:11,fontWeight:700}}>{m.avatar_emoji||"🏀"} {m.name}</button>
+              ))}
+            </div>
+          </div>
           <div style={{display:"flex",gap:8}}>
-            <button className="btn" onClick={()=>{setBetGame(null);setBetTeam(null);}} style={{flex:1,padding:"12px",borderRadius:10,background:"#0a1018",border:`1px solid ${C.border}`,color:C.dim,fontSize:13,fontWeight:700}}>Cancelar</button>
-            <button className="btn" onClick={doBet} disabled={!betTeam||betLoading||(balance!==null&&betAmt>balance)} style={{flex:2,padding:"12px",borderRadius:10,background:betTeam&&!betLoading?"linear-gradient(135deg,#FFB800,#ff9500)":"#0a1018",color:betTeam&&!betLoading?"#07090f":C.muted,fontSize:13,fontWeight:900}}>{betLoading?<Spin s={13}/>:`Apostar 🪙${betAmt} por ${betTeam||"..."}`}</button>
+            <button className="btn" onClick={()=>{setBetGame(null);setBetTeam(null);setBetOpponent(null);}} style={{flex:1,padding:"12px",borderRadius:10,background:"#0a1018",border:`1px solid ${C.border}`,color:C.dim,fontSize:13,fontWeight:700}}>Cancelar</button>
+            <button className="btn" onClick={betOpponent?doChallengeBet:doBet} disabled={!betTeam||betLoading||(balance!==null&&betAmt>balance)} style={{flex:2,padding:"12px",borderRadius:10,background:betTeam&&!betLoading?"linear-gradient(135deg,#FFB800,#ff9500)":"#0a1018",color:betTeam&&!betLoading?"#07090f":C.muted,fontSize:13,fontWeight:900}}>{betLoading?<Spin s={13}/>:betOpponent?`⚡ Retar a ${betOpponent.name} 🪙${betAmt}`:`Apostar 🪙${betAmt} por ${betTeam||"..."}`}</button>
           </div>
         </Card>}
         {bets.length>0&&<><div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>Apuestas del grupo</div>
-        {bets.map(b=>{const isMe=b.requester_id===user.id;const canAccept=!isMe&&b.status==="open";
-          return <Card key={b.id} style={{marginBottom:8,borderColor:b.status==="active"?"#00FF9D33":C.border}}>
+        {bets.map(b=>{const isMe=b.requester_id===user.id;const canAccept=!isMe&&b.status==="open";const isChallenge=b.status==="pending"&&b.opponent_id===user.id;
+          return <Card key={b.id} style={{marginBottom:8,borderColor:isChallenge?"#FFB80066":b.status==="active"?"#00FF9D33":C.border,background:isChallenge?"linear-gradient(135deg,#FFB80008,#0d1117)":undefined}}>
+            {isChallenge&&<div style={{fontSize:10,color:"#FFB800",fontWeight:700,marginBottom:6}}>⚡ ¡Te retaron!</div>}
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
               <div style={{flex:1}}>
                 <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>{logo(b.picked_team,22)}<span style={{fontSize:13,fontWeight:800,color:tm(b.picked_team).color}}>{b.picked_team} gana</span></div>
@@ -792,13 +867,37 @@ const PickemTab=({games,userCtx})=>{
               </div>
               <div style={{display:"flex",gap:6}}>
                 {canAccept&&<button className="btn" onClick={()=>doAcceptBet(b)} disabled={betLoading||(balance!==null&&b.amount>balance)} style={{padding:"8px 14px",borderRadius:10,background:"#00FF9D22",border:"1px solid #00FF9D44",color:"#00FF9D",fontSize:12,fontWeight:700}}>Aceptar 🤝</button>}
-                {isMe&&b.status==="open"&&<button className="btn" onClick={()=>doCancelBet(b)} style={{padding:"8px 14px",borderRadius:10,background:"#ff444422",border:"1px solid #ff444444",color:"#ff6666",fontSize:12,fontWeight:700}}>Cancelar</button>}
+                {isChallenge&&<button className="btn" onClick={()=>doAcceptBet(b)} disabled={betLoading||(balance!==null&&b.amount>balance)} style={{padding:"8px 14px",borderRadius:10,background:"#FFB80022",border:"1px solid #FFB80044",color:"#FFB800",fontSize:12,fontWeight:700}}>⚡ Aceptar reto</button>}
+                {isMe&&(b.status==="open"||b.status==="pending")&&<button className="btn" onClick={()=>doCancelBet(b)} style={{padding:"8px 14px",borderRadius:10,background:"#ff444422",border:"1px solid #ff444444",color:"#ff6666",fontSize:12,fontWeight:700}}>Cancelar</button>}
                 {b.status==="active"&&<Tag c="#00FF9D">✓ Activa</Tag>}
               </div>
             </div>
           </Card>;
         })}</>}
         {bets.length===0&&upcoming.length===0&&!betGame&&<Card style={{textAlign:"center",padding:30}}><div style={{fontSize:36,marginBottom:8}}>🌙</div><div style={{fontSize:14,color:C.dim}}>No hay partidos para apostar hoy</div></Card>}
+      </>}
+
+      {/* ─── CHAT ─── */}
+      {subTab==="chat"&&<>
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14,maxHeight:380,overflowY:"auto"}}>
+          {chat.length===0
+          ?<Card style={{textAlign:"center",padding:30}}><div style={{fontSize:36}}>💬</div><div style={{fontSize:14,color:C.dim,marginTop:8}}>Sin mensajes aún</div></Card>
+          :chat.map((m,i)=>{
+            const isMe=m.user_id===user.id;
+            return<div key={i} style={{display:"flex",gap:8,alignItems:"flex-end",flexDirection:isMe?"row-reverse":"row"}}>
+              <div style={{width:28,height:28,borderRadius:"50%",background:`${C.accent}20`,border:`1px solid ${C.accent}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>{m.users?.avatar_emoji||"🏀"}</div>
+              <div style={{maxWidth:"75%"}}>
+                {!isMe&&<div style={{fontSize:9,color:C.muted,marginBottom:2}}>{m.users?.name}</div>}
+                <div style={{background:isMe?`${C.accent}22`:"#131d29",border:`1px solid ${isMe?C.accent+"44":C.border}`,borderRadius:isMe?"14px 14px 4px 14px":"14px 14px 14px 4px",padding:"8px 12px",fontSize:13,color:C.text}}>{m.content}</div>
+                <div style={{fontSize:8,color:C.muted,marginTop:2,textAlign:isMe?"right":"left"}}>{new Date(m.created_at).toLocaleTimeString("es",{hour:"2-digit",minute:"2-digit"})}</div>
+              </div>
+            </div>;
+          })}
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <input value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendChat()} placeholder="Mensaje..." style={{flex:1,background:"#0a1018",border:`1px solid ${chatInput?C.accent:C.border}`,borderRadius:12,padding:"11px 14px",color:C.text,fontSize:13}}/>
+          <button className="btn" onClick={sendChat} disabled={!chatInput.trim()||chatLoading} style={{padding:"11px 16px",borderRadius:12,background:chatInput.trim()?C.accent:"#0a1018",color:chatInput.trim()?"#07090f":C.muted,fontSize:14,fontWeight:900}}>→</button>
+        </div>
       </>}
 
       {/* ─── AJUSTES ─── */}
@@ -1153,6 +1252,191 @@ const BracketTab=({userCtx,standings})=>{
   </div>);
 };
 
+/* ═══ ACHIEVEMENT DEFS ═══ */
+const ACHIEVEMENT_DEFS=[
+  {key:"first_pick",emoji:"🎯",name:"Primer Pick",desc:"Hiciste tu primera predicción"},
+  {key:"first_win",emoji:"✅",name:"Primer Acierto",desc:"Atinaste una predicción"},
+  {key:"streak_3",emoji:"🔥",name:"En Racha",desc:"3 picks correctos seguidos"},
+  {key:"streak_5",emoji:"🔥🔥",name:"En Llamas",desc:"5 picks correctos seguidos"},
+  {key:"perfect_day",emoji:"💎",name:"Día Perfecto",desc:"100% en un día (mín. 3 picks)"},
+  {key:"wildcard_used",emoji:"🃏",name:"Comodín",desc:"Usaste tu primer comodín"},
+  {key:"bet_won",emoji:"🪙",name:"Apostador",desc:"Ganaste tu primera apuesta"},
+  {key:"joined_group",emoji:"👥",name:"Social",desc:"Te uniste a un grupo"},
+  {key:"challenge_sent",emoji:"⚡",name:"Retador",desc:"Enviaste un reto de apuesta"},
+];
+
+/* ═══ MINI GAMES TAB ═══ */
+const TRIVIA=[
+  {q:"¿Cuántos equipos hay en la NBA?",opts:["28","30","32","29"],a:1},
+  {q:"¿Cuántos puntos vale un triple?",opts:["1","2","3","4"],a:2},
+  {q:"¿Quién tiene más anillos históricos?",opts:["LeBron James","Michael Jordan","Bill Russell","Kareem Abdul-Jabbar"],a:2},
+  {q:"¿Cuántos cuartos tiene un partido?",opts:["2","3","4","5"],a:2},
+  {q:"¿Cuántos minutos dura cada cuarto?",opts:["10","12","15","8"],a:1},
+  {q:"¿Qué equipo tiene más campeonatos?",opts:["Los Angeles Lakers","Boston Celtics","Chicago Bulls","Golden State Warriors"],a:1},
+  {q:"¿Qué significa NBA?",opts:["National Basketball Association","North Basketball America","National Basketball Academy","North American Basketball"],a:0},
+  {q:"¿Quién es el máximo anotador histórico?",opts:["Michael Jordan","Kareem Abdul-Jabbar","LeBron James","Kobe Bryant"],a:2},
+  {q:"¿En qué año se fundó la NBA?",opts:["1946","1950","1960","1936"],a:0},
+  {q:"¿Cuántos jugadores hay en cancha por equipo?",opts:["4","5","6","7"],a:1},
+];
+
+const MiniGamesTab=({players,userCtx})=>{
+  const {user}=userCtx||{};
+  const [screen,setScreen]=useState("menu");
+  const [game,setGame]=useState(null);
+  // Scorer state
+  const [scorerRound,setScorerRound]=useState(0);
+  const [scorerScore,setScorerScore]=useState(0);
+  const [scorerPair,setScorerPair]=useState(null);
+  const [scorerDone,setScorerDone]=useState(false);
+  const [scorerFeedback,setScorerFeedback]=useState(null);
+  // Trivia state
+  const [triviaQ,setTriviaQ]=useState(0);
+  const [triviaScore,setTriviaScore]=useState(0);
+  const [triviaDone,setTriviaDone]=useState(false);
+  const [triviaFeedback,setTriviaFeedback]=useState(null);
+  // Leaderboard
+  const [scores,setScores]=useState([]);
+
+  const pickPair=()=>{
+    if(!players||players.length<2) return null;
+    const idx1=Math.floor(Math.random()*players.length);
+    let idx2=Math.floor(Math.random()*players.length);
+    while(idx2===idx1)idx2=Math.floor(Math.random()*players.length);
+    return [players[idx1],players[idx2]];
+  };
+
+  const startScorer=()=>{
+    setScorerRound(0);setScorerScore(0);setScorerDone(false);setScorerFeedback(null);
+    setScorerPair(pickPair());
+    setGame("scorer");setScreen("game");
+  };
+
+  const startTrivia=()=>{
+    setTriviaQ(0);setTriviaScore(0);setTriviaDone(false);setTriviaFeedback(null);
+    setGame("trivia");setScreen("game");
+  };
+
+  const answerScorer=(chosen)=>{
+    if(scorerFeedback!==null) return;
+    const [p1,p2]=scorerPair;
+    const correct=(chosen===0&&p1.pts>=p2.pts)||(chosen===1&&p2.pts>=p1.pts);
+    setScorerFeedback(correct);
+    if(correct) setScorerScore(s=>s+1);
+    setTimeout(()=>{
+      const nextRound=scorerRound+1;
+      if(nextRound>=10){
+        setScorerDone(true);
+        const finalScore=correct?scorerScore+1:scorerScore;
+        if(user) pickemAPI("saveMiniScore",{body:{userId:user.id,gameType:"scorer",score:finalScore}});
+        pickemAPI("getMiniScores",{params:{gameType:"scorer"}}).then(d=>{if(d.ok)setScores(d.scores||[]);});
+      } else {
+        setScorerRound(nextRound);setScorerPair(pickPair());setScorerFeedback(null);
+      }
+    },700);
+  };
+
+  const answerTrivia=(idx)=>{
+    if(triviaFeedback!==null) return;
+    const q=TRIVIA[triviaQ];
+    const correct=idx===q.a;
+    setTriviaFeedback(correct);
+    if(correct) setTriviaScore(s=>s+1);
+    setTimeout(()=>{
+      const nextQ=triviaQ+1;
+      if(nextQ>=TRIVIA.length){
+        setTriviaDone(true);
+        const finalScore=correct?triviaScore+1:triviaScore;
+        if(user) pickemAPI("saveMiniScore",{body:{userId:user.id,gameType:"trivia",score:finalScore}});
+        pickemAPI("getMiniScores",{params:{gameType:"trivia"}}).then(d=>{if(d.ok)setScores(d.scores||[]);});
+      } else {
+        setTriviaQ(nextQ);setTriviaFeedback(null);
+      }
+    },700);
+  };
+
+  if(screen==="menu") return(<div className="fade-up">
+    <ST sub="Mini Juegos">Juegos NBA 🎮</ST>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      <Card style={{textAlign:"center",padding:24,cursor:"pointer",borderColor:`${C.accent}33`}} onClick={startScorer}>
+        <div style={{fontSize:40,marginBottom:10}}>📊</div>
+        <div style={{fontSize:15,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,marginBottom:4}}>¿Quién anota más?</div>
+        <div style={{fontSize:11,color:C.dim,marginBottom:12}}>Adivina qué jugador tiene más PPG · 10 rondas</div>
+        <button className="btn" style={{width:"100%",padding:"10px",borderRadius:10,background:`linear-gradient(135deg,${C.accent},#0066ff)`,color:"#07090f",fontWeight:900,fontSize:13}}>Jugar</button>
+      </Card>
+      <Card style={{textAlign:"center",padding:24,cursor:"pointer",borderColor:"#FFB80033"}} onClick={startTrivia}>
+        <div style={{fontSize:40,marginBottom:10}}>🧠</div>
+        <div style={{fontSize:15,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,marginBottom:4}}>NBA Trivia</div>
+        <div style={{fontSize:11,color:C.dim,marginBottom:12}}>10 preguntas sobre la NBA · ¿Cuántas aciertas?</div>
+        <button className="btn" style={{width:"100%",padding:"10px",borderRadius:10,background:"linear-gradient(135deg,#FFB800,#ff9500)",color:"#07090f",fontWeight:900,fontSize:13}}>Jugar</button>
+      </Card>
+    </div>
+  </div>);
+
+  if(screen==="game"&&game==="scorer") {
+    if(scorerDone) return(<div className="fade-up">
+      <ST sub="¿Quién anota más?">Resultado</ST>
+      <Card style={{textAlign:"center",padding:30,marginBottom:14}}>
+        <div style={{fontSize:56,marginBottom:8}}>📊</div>
+        <div style={{fontSize:36,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.accent}}>{scorerScore}/10</div>
+        <div style={{fontSize:14,color:C.dim,marginTop:4}}>{scorerScore>=8?"¡Experto NBA! 🏆":scorerScore>=5?"¡Buen intento! 💪":"Sigue practicando 📚"}</div>
+      </Card>
+      {scores.length>0&&<Card style={{marginBottom:14}}><div style={{fontSize:11,color:C.muted,marginBottom:10,textTransform:"uppercase",letterSpacing:2}}>🏆 Top Puntuaciones</div>
+        {scores.map((s,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<scores.length-1?`1px solid ${C.border}`:"none"}}><span style={{fontSize:11,color:C.muted,width:16}}>{i+1}</span><span style={{fontSize:13}}>{s.users?.avatar_emoji||"🏀"}</span><span style={{flex:1,fontSize:12,color:C.text}}>{s.users?.name}</span><span style={{fontSize:14,fontWeight:900,color:C.accent}}>{s.score}</span></div>)}
+      </Card>}
+      <button className="btn" onClick={()=>setScreen("menu")} style={{width:"100%",padding:"13px",borderRadius:10,background:C.accent,color:"#07090f",fontWeight:900,fontSize:14}}>← Volver</button>
+    </div>);
+    if(!scorerPair) return <div style={{color:C.dim,textAlign:"center",padding:40}}>Cargando jugadores...</div>;
+    const [p1,p2]=scorerPair;
+    return(<div className="fade-up">
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <ST sub="¿Quién anota más?">Ronda {scorerRound+1}/10</ST>
+        <div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.accent}}>{scorerScore} pts</div>
+      </div>
+      <Card style={{marginBottom:10,textAlign:"center"}}><div style={{fontSize:12,color:C.dim}}>¿Quién tiene más PPG esta temporada?</div></Card>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        {[p1,p2].map((p,i)=><button key={p.id} className="btn" onClick={()=>answerScorer(i)} style={{padding:20,borderRadius:14,background:scorerFeedback!==null?(i===(p1.pts>=p2.pts?0:1)?"#00FF9D22":"#ff444422"):"#0a1018",border:`2px solid ${scorerFeedback!==null?(i===(p1.pts>=p2.pts?0:1)?"#00FF9D":"#ff4444"):C.border}`,textAlign:"center",transition:"all .2s"}}>
+          {logo(p.teamAbbr,40)}
+          <div style={{fontSize:14,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,marginTop:8}}>{p.name}</div>
+          <div style={{fontSize:11,color:C.dim}}>{p.teamAbbr} · {p.pos}</div>
+          {scorerFeedback!==null&&<div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800",marginTop:6}}>{p.pts} PPG</div>}
+        </button>)}
+      </div>
+      {scorerFeedback!==null&&<div style={{textAlign:"center",marginTop:10,fontSize:16,fontWeight:700,color:scorerFeedback?"#00FF9D":"#ff6666"}}>{scorerFeedback?"✅ ¡Correcto!":"❌ Incorrecto"}</div>}
+      <button className="btn" onClick={()=>setScreen("menu")} style={{width:"100%",marginTop:14,padding:"10px",borderRadius:10,background:"#0a1018",border:`1px solid ${C.border}`,color:C.dim,fontSize:12}}>Salir</button>
+    </div>);
+  }
+
+  if(screen==="game"&&game==="trivia") {
+    if(triviaDone) return(<div className="fade-up">
+      <ST sub="NBA Trivia">Resultado</ST>
+      <Card style={{textAlign:"center",padding:30,marginBottom:14}}>
+        <div style={{fontSize:56,marginBottom:8}}>🧠</div>
+        <div style={{fontSize:36,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800"}}>{triviaScore}/10</div>
+        <div style={{fontSize:14,color:C.dim,marginTop:4}}>{triviaScore>=8?"¡Experto NBA! 🏆":triviaScore>=5?"¡Buen intento! 💪":"Sigue aprendiendo 📚"}</div>
+      </Card>
+      {scores.length>0&&<Card style={{marginBottom:14}}><div style={{fontSize:11,color:C.muted,marginBottom:10,textTransform:"uppercase",letterSpacing:2}}>🏆 Top Puntuaciones</div>
+        {scores.map((s,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<scores.length-1?`1px solid ${C.border}`:"none"}}><span style={{fontSize:11,color:C.muted,width:16}}>{i+1}</span><span style={{fontSize:13}}>{s.users?.avatar_emoji||"🏀"}</span><span style={{flex:1,fontSize:12,color:C.text}}>{s.users?.name}</span><span style={{fontSize:14,fontWeight:900,color:"#FFB800"}}>{s.score}</span></div>)}
+      </Card>}
+      <button className="btn" onClick={()=>setScreen("menu")} style={{width:"100%",padding:"13px",borderRadius:10,background:"#FFB800",color:"#07090f",fontWeight:900,fontSize:14}}>← Volver</button>
+    </div>);
+    const q=TRIVIA[triviaQ];
+    return(<div className="fade-up">
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <ST sub="NBA Trivia">Pregunta {triviaQ+1}/10</ST>
+        <div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800"}}>{triviaScore} pts</div>
+      </div>
+      <Card style={{marginBottom:14,textAlign:"center",padding:20}}><div style={{fontSize:15,fontWeight:700,color:C.text,lineHeight:1.4}}>{q.q}</div></Card>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        {q.opts.map((opt,i)=><button key={i} className="btn" onClick={()=>answerTrivia(i)} style={{padding:"14px 10px",borderRadius:12,background:triviaFeedback!==null?(i===q.a?"#00FF9D22":triviaFeedback===false&&i!==q.a?"#ff444411":"#0a1018"):"#0a1018",border:`2px solid ${triviaFeedback!==null?(i===q.a?"#00FF9D":triviaFeedback===false&&i!==q.a?"#ff4444":C.border):C.border}`,color:triviaFeedback!==null?(i===q.a?"#00FF9D":C.dim):C.text,fontSize:13,fontWeight:600,textAlign:"center",transition:"all .2s"}}>{opt}</button>)}
+      </div>
+      {triviaFeedback!==null&&<div style={{textAlign:"center",marginTop:10,fontSize:16,fontWeight:700,color:triviaFeedback?"#00FF9D":"#ff6666"}}>{triviaFeedback?"✅ ¡Correcto!":"❌ Incorrecto — era: "+q.opts[q.a]}</div>}
+      <button className="btn" onClick={()=>setScreen("menu")} style={{width:"100%",marginTop:14,padding:"10px",borderRadius:10,background:"#0a1018",border:`1px solid ${C.border}`,color:C.dim,fontSize:12}}>Salir</button>
+    </div>);
+  }
+
+  return null;
+};
+
 /* ═══ SETTINGS TAB ═══ */
 const SettingsTab=({userCtx})=>{
   const {user,logout}=userCtx||{};
@@ -1160,10 +1444,12 @@ const SettingsTab=({userCtx})=>{
   const [notifPrefs,setNotifPrefs]=useState({picks_reminder:true,win_notify:true,loss_notify:true,daily_summary:true});
   const [notifLoading,setNotifLoading]=useState(false);
   const [msg,setMsg]=useState("");
+  const [achievements,setAchievements]=useState([]);
 
   useEffect(()=>{
     if(!user) return;
     pickemAPI("getNotifPrefs",{params:{userId:user.id}}).then(d=>{if(d.ok)setNotifPrefs(d.prefs);});
+    pickemAPI("getAchievements",{params:{userId:user.id}}).then(d=>{if(d.ok)setAchievements(d.achievements||[]);});
   },[user]);
 
   const subscribePush=async()=>{
@@ -1249,7 +1535,7 @@ const SettingsTab=({userCtx})=>{
 
     {/* Puntuación */}
     <ST sub="Cómo funciona">Sistema de Puntos</ST>
-    <Card>
+    <Card style={{marginBottom:18}}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
         {[["✅ Acierto","10 pts","#00FF9D"],["🃏 Comodín","1 / día","#FFB800"],["🪙 Apuestas","vs grupo",C.accent]].map(([l,v,c])=>
           <div key={l} style={{background:"#0a1018",borderRadius:10,padding:"12px 8px",textAlign:"center"}}>
@@ -1260,11 +1546,25 @@ const SettingsTab=({userCtx})=>{
         )}
       </div>
     </Card>
+
+    {/* Logros */}
+    <ST sub="Logros">Mis Badges</ST>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:8}}>
+      {ACHIEVEMENT_DEFS.map(a=>{
+        const unlocked=achievements.some(x=>x.achievement_key===a.key);
+        return<Card key={a.key} style={{textAlign:"center",padding:"14px 10px",opacity:unlocked?1:0.4,borderColor:unlocked?`${C.accent}44`:C.border}}>
+          <div style={{fontSize:28,marginBottom:6}}>{a.emoji}</div>
+          <div style={{fontSize:11,fontWeight:800,color:unlocked?C.text:C.muted}}>{a.name}</div>
+          <div style={{fontSize:9,color:C.dim,marginTop:2}}>{a.desc}</div>
+          {unlocked&&<div style={{fontSize:8,color:C.accent,marginTop:4}}>✅ Desbloqueado</div>}
+        </Card>;
+      })}
+    </div>
   </div>);
 };
 
 /* ═══ APP ROOT ═══ */
-const TABS=[{id:"home",icon:"🏠",label:"Home"},{id:"teams",icon:"🏆",label:"Equipos"},{id:"players",icon:"⭐",label:"Jugadores"},{id:"pickem",icon:"👥",label:"Grupos"},{id:"bracket",icon:"🏅",label:"Playoffs"},{id:"settings",icon:"⚙️",label:"Config"}];
+const TABS=[{id:"home",icon:"🏠",label:"Home"},{id:"teams",icon:"🏆",label:"Equipos"},{id:"players",icon:"⭐",label:"Jugadores"},{id:"pickem",icon:"👥",label:"Grupos"},{id:"bracket",icon:"🏅",label:"Playoffs"},{id:"games",icon:"🎮",label:"Juegos"},{id:"settings",icon:"⚙️",label:"Config"}];
 export default function App(){
   const [tab,setTab]=useState("home");const [games,setGames]=useState([]);const [standings,setStandings]=useState(FB_ST);const [players,setPlayers]=useState(FB_PL);
   const [live,setLive]=useState({games:false,standings:false,players:false});const [loading,setLoading]=useState(false);const [lastUpd,setLastUpd]=useState(null);
@@ -1302,11 +1602,12 @@ export default function App(){
       {TABS.map(n=><button key={n.id} className="btn" onClick={()=>setTab(n.id)} style={{padding:"11px 14px",background:"transparent",border:"none",borderBottom:`2px solid ${tab===n.id?C.accent:"transparent"}`,color:tab===n.id?C.accent:C.muted,fontSize:12,fontWeight:tab===n.id?700:500,whiteSpace:"nowrap"}}>{n.icon} {n.label}</button>)}
     </div>
     <div style={{maxWidth:1000,margin:"0 auto",padding:"22px 18px"}}>
-      {tab==="home"&&<HomeTab games={games} live={live} userCtx={userCtx}/>}
+      {tab==="home"&&<HomeTab games={games} live={live} userCtx={userCtx} standings={standings}/>}
       {tab==="teams"&&<TeamsTab standings={standings} live={live}/>}
       {tab==="players"&&<PlayersTab players={players} live={live}/>}
       {tab==="pickem"&&<PickemTab games={games} userCtx={userCtx}/>}
       {tab==="bracket"&&<BracketTab userCtx={userCtx} standings={standings}/>}
+      {tab==="games"&&<MiniGamesTab players={players} userCtx={userCtx}/>}
       {tab==="settings"&&<SettingsTab userCtx={userCtx}/>}
     </div>
   </div>);

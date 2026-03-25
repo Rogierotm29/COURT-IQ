@@ -659,6 +659,159 @@ export default async function handler(req, res) {
         return res.json({ ok: true, sent });
       }
 
+      // ─── GET STREAK ────────────────────────────────────────
+      case "getStreak": {
+        const { userId, groupId } = req.query;
+        if (!userId || !groupId) return res.json({ ok: false, error: "Faltan datos" });
+        const picks = await supabase("picks", {
+          filters: `?user_id=eq.${userId}&group_id=eq.${groupId}&scored=eq.true&select=correct,game_date&order=game_date.desc,created_at.desc`,
+        });
+        let streak = 0;
+        for (const p of (picks || [])) {
+          if (p.correct) streak++;
+          else break;
+        }
+        return res.json({ ok: true, streak });
+      }
+
+      // ─── CHALLENGE BET ─────────────────────────────────────
+      case "challengeBet": {
+        const { userId, groupId, gameId, amount, pickedTeam, homeTeam, awayTeam, opponentId } = body;
+        if (!userId || !groupId || !gameId || !amount || !pickedTeam || !opponentId) return res.json({ ok: false, error: "Faltan datos" });
+        const rows = await supabase("coin_balances", { filters: `?user_id=eq.${userId}&group_id=eq.${groupId}&limit=1` });
+        if (!rows?.length || rows[0].balance < amount) return res.json({ ok: false, error: "Saldo insuficiente" });
+        await supabase(`coin_balances?user_id=eq.${userId}&group_id=eq.${groupId}`, {
+          method: "PATCH", body: { balance: rows[0].balance - amount },
+        });
+        await supabase("bets", {
+          method: "POST",
+          body: { requester_id: userId, opponent_id: opponentId, group_id: groupId, game_id: gameId, amount: parseInt(amount), picked_team: pickedTeam, home_team: homeTeam, away_team: awayTeam, status: "pending" },
+        });
+        // Get requester name
+        const requesterRows = await supabase("users", { filters: `?id=eq.${userId}&limit=1` });
+        const requesterName = requesterRows?.[0]?.name || "Alguien";
+        // Send push notification to opponent
+        try {
+          const webpush = await import("web-push");
+          const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
+          const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
+          if (VAPID_PUBLIC && VAPID_PRIVATE) {
+            webpush.default.setVapidDetails("mailto:courtiq@app.com", VAPID_PUBLIC, VAPID_PRIVATE);
+            const subs = await supabase("push_subscriptions", { filters: `?user_id=eq.${opponentId}&limit=1` });
+            if (subs?.length) {
+              const sub = { endpoint: subs[0].endpoint, keys: { p256dh: subs[0].p256dh, auth: subs[0].auth } };
+              await webpush.default.sendNotification(sub, JSON.stringify({
+                title: "🪙 ¡Reto de apuesta!",
+                body: `${requesterName} te reta: 🪙${amount} en ${homeTeam} vs ${awayTeam}`,
+                tag: "bet_challenge",
+              }));
+            }
+          }
+        } catch (_) {}
+        return res.json({ ok: true });
+      }
+
+      // ─── GET CHAT ──────────────────────────────────────────
+      case "getChat": {
+        const { groupId } = req.query;
+        if (!groupId) return res.json({ ok: false, error: "groupId requerido" });
+        const messages = await supabase("chat_messages", {
+          filters: `?group_id=eq.${groupId}&select=*,users(name,avatar_emoji)&order=created_at.desc&limit=40`,
+        });
+        return res.json({ ok: true, messages: (messages || []).reverse() });
+      }
+
+      // ─── SEND CHAT ─────────────────────────────────────────
+      case "sendChat": {
+        const { userId, groupId, content } = body;
+        if (!userId || !groupId || !content) return res.json({ ok: false, error: "Faltan datos" });
+        await supabase("chat_messages", {
+          method: "POST",
+          body: { user_id: userId, group_id: groupId, content },
+        });
+        return res.json({ ok: true });
+      }
+
+      // ─── GET ACHIEVEMENTS ──────────────────────────────────
+      case "getAchievements": {
+        const { userId } = req.query;
+        if (!userId) return res.json({ ok: false, error: "userId requerido" });
+        const achievements = await supabase("user_achievements", {
+          filters: `?user_id=eq.${userId}&select=achievement_key,unlocked_at`,
+        });
+        return res.json({ ok: true, achievements: achievements || [] });
+      }
+
+      // ─── UNLOCK ACHIEVEMENT ────────────────────────────────
+      case "unlockAchievement": {
+        const { userId, key } = body;
+        if (!userId || !key) return res.json({ ok: false, error: "Faltan datos" });
+        try {
+          await supabase("user_achievements", {
+            method: "POST",
+            body: { user_id: userId, achievement_key: key },
+          });
+        } catch (_) {}
+        return res.json({ ok: true });
+      }
+
+      // ─── HEAD TO HEAD ──────────────────────────────────────
+      case "headToHead": {
+        const { userId, opponentId, groupId } = req.query;
+        if (!userId || !opponentId || !groupId) return res.json({ ok: false, error: "Faltan datos" });
+        const myPicks = await supabase("picks", {
+          filters: `?user_id=eq.${userId}&group_id=eq.${groupId}&scored=eq.true&select=game_id,correct`,
+        });
+        const theirPicks = await supabase("picks", {
+          filters: `?user_id=eq.${opponentId}&group_id=eq.${groupId}&scored=eq.true&select=game_id,correct`,
+        });
+        const theirMap = {};
+        for (const p of (theirPicks || [])) theirMap[p.game_id] = p.correct;
+        let bothCorrect = 0, iWon = 0, theyWon = 0, neither = 0, total = 0;
+        for (const p of (myPicks || [])) {
+          if (!(p.game_id in theirMap)) continue;
+          total++;
+          const me = p.correct, them = theirMap[p.game_id];
+          if (me && them) bothCorrect++;
+          else if (me && !them) iWon++;
+          else if (!me && them) theyWon++;
+          else neither++;
+        }
+        return res.json({ ok: true, bothCorrect, iWon, theyWon, neither, total });
+      }
+
+      // ─── SAVE MINI SCORE ───────────────────────────────────
+      case "saveMiniScore": {
+        const { userId, gameType, score } = body;
+        if (!userId || !gameType || score === undefined) return res.json({ ok: false, error: "Faltan datos" });
+        const existing = await supabase("mini_game_scores", {
+          filters: `?user_id=eq.${userId}&game_type=eq.${gameType}&limit=1`,
+        });
+        if (existing?.length) {
+          if (score > existing[0].score) {
+            await supabase(`mini_game_scores?id=eq.${existing[0].id}`, {
+              method: "PATCH", body: { score, updated_at: new Date().toISOString() },
+            });
+          }
+        } else {
+          await supabase("mini_game_scores", {
+            method: "POST",
+            body: { user_id: userId, game_type: gameType, score },
+          });
+        }
+        return res.json({ ok: true });
+      }
+
+      // ─── GET MINI SCORES ───────────────────────────────────
+      case "getMiniScores": {
+        const { gameType } = req.query;
+        if (!gameType) return res.json({ ok: false, error: "gameType requerido" });
+        const scores = await supabase("mini_game_scores", {
+          filters: `?game_type=eq.${gameType}&select=score,users(name,avatar_emoji)&order=score.desc&limit=10`,
+        });
+        return res.json({ ok: true, scores: scores || [] });
+      }
+
       default:
         return res.json({ ok: false, error: `Acción desconocida: ${action}` });
     }
