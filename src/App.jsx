@@ -177,6 +177,7 @@ const HomeTab=({games,live,userCtx,standings})=>{
   const [picks,setPicks]=useState({});
   const [group,setGroup]=useState(null);
   const [loaded,setLoaded]=useState(false);
+  const [wildcardUsed,setWildcardUsed]=useState(false);
 
   useEffect(()=>{
     if(!user)return;
@@ -190,17 +191,30 @@ const HomeTab=({games,live,userCtx,standings})=>{
           if(r.ok){const m={};(r.picks||[]).forEach(p=>{m[p.game_id]=p.picked_team;});setPicks(m);}
           setLoaded(true);
         });
+        pickemAPI("wildcardStatus",{params:{userId:user.id,groupId:g.id}}).then(r=>{if(r.ok)setWildcardUsed(r.used);});
       } else setLoaded(true);
     });
   },[user,games]);
 
-  const winPct=abbr=>{const t=standings.find(s=>s.abbr===abbr);return t&&(t.w+t.l)>0?+(t.w/(t.w+t.l)*100).toFixed(0):50;};
+  const anyStarted=games.some(g=>g.status==="LIVE"||g.status==="Final");
+  const seasonWinPct=abbr=>{const t=standings.find(s=>s.abbr===abbr);return t&&(t.w+t.l)>0?+(t.w/(t.w+t.l)*100).toFixed(0):50;};
+  const winPct=(g,side)=>{
+    if(g.status==="Final") return side==="away"?(g.awayScore>g.homeScore?100:0):(g.homeScore>g.awayScore?100:0);
+    if(g.status==="LIVE"){const diff=side==="away"?g.awayScore-g.homeScore:g.homeScore-g.awayScore;return Math.min(95,Math.max(5,50+diff*2.5));}
+    return seasonWinPct(side==="away"?g.away:g.home);
+  };
 
   const makePick=async(gameId,team,home,away)=>{
     if(!group||!user)return;
     setPicks(p=>({...p,[gameId]:team}));
     const today=new Date().toISOString().split("T")[0];
     await pickemAPI("makePick",{body:{userId:user.id,groupId:group.id,gameId,gameDate:today,pickedTeam:team,homeTeam:home,awayTeam:away}});
+  };
+
+  const doWildcard=async(gameId,team,home,away)=>{
+    if(!group||!user||wildcardUsed) return;
+    const d=await pickemAPI("useWildcard",{body:{userId:user.id,groupId:group.id,gameId,pickedTeam:team,homeTeam:home,awayTeam:away}});
+    if(d.ok){setPicks(p=>({...p,[gameId]:team}));setWildcardUsed(true);}
   };
 
   return(<div className="fade-up">
@@ -218,22 +232,27 @@ const HomeTab=({games,live,userCtx,standings})=>{
       </div>
     </Card>}
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><ST sub="NBA 2025-26 · Hoy">Partidos del Día</ST><LiveBadge live={live.games}/></div>
+    {user&&group&&anyStarted&&games.some(g=>g.status==="Upcoming")&&<div style={{marginBottom:12,padding:"10px 14px",background:"#00C2FF11",border:"1px solid #00C2FF33",borderRadius:10,fontSize:11,color:C.accent,display:"flex",alignItems:"center",gap:8}}>🎯 Algunos partidos ya empezaron — todavía puedes elegir en los que <b>aún no han iniciado</b></div>}
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:10,marginBottom:28}}>
       {games.length===0?<div style={{color:C.muted,fontSize:13}}>No hay partidos programados.</div>
       :games.map(g=>{
         const picked=picks[g.id];const isFinal=g.status==="Final";const isLive=g.status==="LIVE";
+        const isUpcoming=g.status!=="Final"&&g.status!=="LIVE";
         const winner=isFinal?(g.homeScore>g.awayScore?g.home:g.away):null;
         const correct=isFinal&&picked===winner;
+        const awayPct=winPct(g,"away");const homePct=winPct(g,"home");
         return <Card key={g.id} style={{padding:14,borderColor:isFinal&&picked?(correct?"#00FF9D33":"#ff444433"):picked?`${tm(picked).color}33`:C.border}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-          {isLive?<Tag c="#ff4444">● LIVE {g.detail}</Tag>:isFinal?<Tag c={C.muted}>Final</Tag>:<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>}
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            {isLive?<Tag c="#ff4444">● LIVE {g.detail}</Tag>:isFinal?<Tag c={C.muted}>Final</Tag>:<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>}
+          </div>
           {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?"✅ +10":"❌"}</Tag>}
           {!isFinal&&!isLive&&picked&&<Tag c="#00FF9D">✓ Pick</Tag>}
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:8,alignItems:"center"}}>
           {[["away",g.away,g.awayScore],["vs"],["home",g.home,g.homeScore]].map((item,idx)=>
             idx===1?<div key="vs" style={{textAlign:"center",fontSize:12,color:C.muted,fontWeight:800}}>VS</div>
-            :user&&group&&!isFinal&&!isLive&&!games.some(x=>x.status==="LIVE"||x.status==="Final")?
+            :(user&&group&&isUpcoming)?
               <button key={item[1]} className="btn" onClick={()=>makePick(g.id,item[1],g.home,g.away)} style={{padding:"12px 8px",borderRadius:12,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:4,
                 background:picked===item[1]?`${tm(item[1]).color}18`:"transparent",
                 border:`2px solid ${picked===item[1]?tm(item[1]).color:C.border}`,
@@ -250,10 +269,13 @@ const HomeTab=({games,live,userCtx,standings})=>{
           )}
         </div>
         <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8,fontSize:9}}>
-          <span style={{color:tm(g.away).color,fontWeight:700,minWidth:28}}>{winPct(g.away)}%</span>
-          <div style={{flex:1,height:4,borderRadius:2,background:C.border,overflow:"hidden"}}><div style={{width:`${winPct(g.away)}%`,height:"100%",background:`linear-gradient(90deg,${tm(g.away).color},${tm(g.home).color})`}}/></div>
-          <span style={{color:tm(g.home).color,fontWeight:700,minWidth:28,textAlign:"right"}}>{winPct(g.home)}%</span>
+          <span style={{color:tm(g.away).color,fontWeight:700,minWidth:28}}>{awayPct}%</span>
+          <div style={{flex:1,height:4,borderRadius:2,background:C.border,overflow:"hidden",position:"relative"}}>
+            <div style={{width:`${awayPct}%`,height:"100%",background:`linear-gradient(90deg,${tm(g.away).color},${tm(g.home).color})`,transition:"width .6s ease"}}/>
+          </div>
+          <span style={{color:tm(g.home).color,fontWeight:700,minWidth:28,textAlign:"right"}}>{homePct}%</span>
         </div>
+        {isLive&&<div style={{fontSize:8,color:"#ff4444",textAlign:"center",marginTop:3,letterSpacing:.5}}>● Probabilidad en vivo basada en el marcador</div>}
       </Card>;})}
     </div>
   </div>);
@@ -363,7 +385,7 @@ const PlayersTab=({players,live})=>{
 };
 
 /* ═══ PICK'EM TAB v2 ═══ */
-const VAPID_KEY="BJwfMQ-4x5AHR8IEbABZl2kqdbvwANMQsg0QMLw3o0vbx2oc4LYc6fIKMLYzQDlRwsfl-BUaT-1ktJ1qtXcUsAU";
+const VAPID_KEY="BKMJ55qDz8klBdhztjHMlXcXAWbF1FecmMqFzq2j6XbFotJUe_Cwdx-WMKERkQ51qv4X_DrFjsK1wP8LFpIjz_k";
 
 async function autoSubscribePush(userId){
   try{
@@ -406,7 +428,7 @@ const PickemTab=({games,userCtx})=>{
   const [dailyWinner,setDailyWinner]=useState(null);
   const upcoming=games.filter(g=>g.status==="Upcoming");const finished=games.filter(g=>g.status==="Final");const liveGames=games.filter(g=>g.status==="LIVE");
   const allGames=[...liveGames,...upcoming,...finished];
-  const picksLocked=liveGames.length>0||finished.length>0;
+  const anyStarted=liveGames.length>0||finished.length>0;
 
   // Check username availability (debounced)
   useEffect(()=>{
@@ -693,27 +715,26 @@ const PickemTab=({games,userCtx})=>{
 
       {/* ─── PICKS ─── */}
       {subTab==="picks"&&<>
-        {!picksLocked&&<div style={{padding:"10px 14px",background:"#00C2FF11",border:"1px solid #00C2FF33",borderRadius:10,marginBottom:14,fontSize:11,color:C.accent}}>🎯 Toca un equipo para hacer tu pick antes de que empiece el partido</div>}
-        {picksLocked&&!wildcardUsed&&upcoming.length>0&&<div style={{padding:"10px 14px",background:"#a78bfa11",border:"1px solid #a78bfa44",borderRadius:10,marginBottom:14,fontSize:11,color:"#a78bfa"}}>🃏 Picks cerrados — tienes 1 <b>comodín</b> disponible para cambiar un pick en un partido que aún no empiezca</div>}
-        {picksLocked&&wildcardUsed&&<div style={{padding:"10px 14px",background:"#FFB80011",border:"1px solid #FFB80033",borderRadius:10,marginBottom:14,fontSize:11,color:"#FFB800"}}>🃏 Comodín usado hoy · Vuelve mañana</div>}
+        {upcoming.length>0&&<div style={{padding:"10px 14px",background:"#00C2FF11",border:"1px solid #00C2FF33",borderRadius:10,marginBottom:14,fontSize:11,color:C.accent}}>🎯 {upcoming.length} partido{upcoming.length!==1?"s":""} abierto{upcoming.length!==1?"s":""} — toca un equipo para elegir ganador</div>}
+        {anyStarted&&upcoming.length===0&&<div style={{padding:"10px 14px",background:"#ff444411",border:"1px solid #ff444433",borderRadius:10,marginBottom:14,fontSize:11,color:"#ff6666"}}>🔒 Todos los partidos de hoy ya empezaron · Los picks están cerrados</div>}
         {allGames.length===0?<Card style={{textAlign:"center",padding:40}}><div style={{fontSize:36,marginBottom:8}}>🌙</div><div style={{fontSize:15,fontWeight:700,color:C.text}}>No hay partidos hoy</div></Card>
         :allGames.map(g=>{
           const picked=picks[g.id];const isFinal=g.status==="Final";const isLive=g.status==="LIVE";const isUpcoming=g.status==="Upcoming";
           const winner=isFinal?(g.homeScore>g.awayScore?g.home:g.away):null;
           const correct=isFinal&&picked===winner;
-          const canWildcard=picksLocked&&!wildcardUsed&&isUpcoming;
-          return <Card key={g.id} style={{marginBottom:10,borderColor:isFinal?(correct?"#00FF9D33":"#ff444433"):isLive?"#ff444433":canWildcard?"#a78bfa44":picked?`${tm(picked).color}33`:C.border}}>
+          return <Card key={g.id} style={{marginBottom:10,borderColor:isFinal?(correct?"#00FF9D33":"#ff444433"):isLive?"#ff444433":picked?`${tm(picked).color}33`:C.border}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-              <div style={{display:"flex",gap:6}}>{isLive?<Tag c="#ff4444">● LIVE {g.detail}</Tag>:isFinal?<Tag c={C.muted}>Final</Tag>:<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>}{canWildcard&&<Tag c="#a78bfa">🃏</Tag>}</div>
+              <div style={{display:"flex",gap:6}}>{isLive?<Tag c="#ff4444">● LIVE {g.detail}</Tag>:isFinal?<Tag c={C.muted}>Final</Tag>:<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>}</div>
               {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?"✅ +10":"❌"}</Tag>}
-              {!isFinal&&!isLive&&picked&&<Tag c="#00FF9D">✓ Pick</Tag>}
-              {!isFinal&&!isLive&&!picked&&!canWildcard&&picksLocked&&<Tag c="#ff6666">Sin pick</Tag>}
+              {isUpcoming&&picked&&<Tag c="#00FF9D">✓ Pick</Tag>}
+              {isUpcoming&&!picked&&<Tag c={C.accent}>Elige</Tag>}
+              {isLive&&!picked&&<Tag c="#ff6666">Sin pick</Tag>}
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:10,alignItems:"center"}}>
               {[["away",g.away,g.awayScore],["vs"],["home",g.home,g.homeScore]].map((item,idx)=>
                 idx===1?<div key="vs" style={{textAlign:"center",fontSize:12,color:C.muted,fontWeight:800}}>VS</div>
-                :(!isFinal&&!isLive&&(!picksLocked||canWildcard))?
-                  <button key={item[1]} className="btn" onClick={()=>canWildcard?doWildcard(g.id,item[1],g.home,g.away):makePick(g.id,item[1],g.home,g.away)} style={{padding:"12px 8px",borderRadius:12,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:picked===item[1]?`${tm(item[1]).color}18`:"transparent",border:`2px solid ${picked===item[1]?tm(item[1]).color:canWildcard?"#a78bfa44":C.border}`,color:picked===item[1]?tm(item[1]).color:C.text,width:"100%"}}>
+                :isUpcoming?
+                  <button key={item[1]} className="btn" onClick={()=>makePick(g.id,item[1],g.home,g.away)} style={{padding:"12px 8px",borderRadius:12,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:picked===item[1]?`${tm(item[1]).color}18`:"transparent",border:`2px solid ${picked===item[1]?tm(item[1]).color:C.border}`,color:picked===item[1]?tm(item[1]).color:C.text,width:"100%"}}>
                     {logo(item[1],36)}<span style={{fontSize:13,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif"}}>{item[1]}</span><span style={{fontSize:10,color:C.dim}}>{tm(item[1]).name}</span>
                   </button>
                 :<div key={item[1]} style={{textAlign:"center",padding:"12px 8px",opacity:picked&&picked!==item[1]?0.4:1}}>
@@ -1297,6 +1318,47 @@ const MiniGamesTab=({players,userCtx})=>{
   // Leaderboard
   const [scores,setScores]=useState([]);
 
+  // Guess player state
+  const [guessRound,setGuessRound]=useState(0);
+  const [guessScore,setGuessScore]=useState(0);
+  const [guessQ,setGuessQ]=useState(null);
+  const [guessDone,setGuessDone]=useState(false);
+  const [guessFeedback,setGuessFeedback]=useState(null);
+
+  const buildGuessQ=(pool)=>{
+    const idx=Math.floor(Math.random()*pool.length);
+    const correct=pool[idx];
+    const others=[...pool].filter((_,i)=>i!==idx).sort(()=>Math.random()-.5).slice(0,3);
+    const opts=[correct,...others].sort(()=>Math.random()-.5);
+    return{correct,opts};
+  };
+
+  const startGuess=()=>{
+    const pool=players.filter(p=>+p.pts>8).slice(0,40);
+    if(pool.length<4){alert("No hay suficientes jugadores cargados todavía");return;}
+    setGuessRound(0);setGuessScore(0);setGuessDone(false);setGuessFeedback(null);
+    setGuessQ(buildGuessQ(pool));setGame("guess");setScreen("game");
+  };
+
+  const answerGuess=(p)=>{
+    if(guessFeedback!==null) return;
+    const correct=p.id===guessQ.correct.id;
+    setGuessFeedback(correct);
+    if(correct) setGuessScore(s=>s+1);
+    setTimeout(()=>{
+      const next=guessRound+1;
+      const pool=players.filter(x=>+x.pts>8).slice(0,40);
+      if(next>=8){
+        setGuessDone(true);
+        const final=correct?guessScore+1:guessScore;
+        if(user) pickemAPI("saveMiniScore",{body:{userId:user.id,gameType:"guess",score:final}});
+        pickemAPI("getMiniScores",{params:{gameType:"guess"}}).then(d=>{if(d.ok)setScores(d.scores||[]);});
+      } else {
+        setGuessRound(next);setGuessQ(buildGuessQ(pool));setGuessFeedback(null);
+      }
+    },900);
+  };
+
   const pickPair=()=>{
     if(!players||players.length<2) return null;
     const idx1=Math.floor(Math.random()*players.length);
@@ -1357,17 +1419,23 @@ const MiniGamesTab=({players,userCtx})=>{
   if(screen==="menu") return(<div className="fade-up">
     <ST sub="Mini Juegos">Juegos NBA 🎮</ST>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-      <Card style={{textAlign:"center",padding:24,cursor:"pointer",borderColor:`${C.accent}33`}} onClick={startScorer}>
+      <Card style={{textAlign:"center",padding:24,borderColor:`${C.accent}33`}}>
         <div style={{fontSize:40,marginBottom:10}}>📊</div>
         <div style={{fontSize:15,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,marginBottom:4}}>¿Quién anota más?</div>
         <div style={{fontSize:11,color:C.dim,marginBottom:12}}>Adivina qué jugador tiene más PPG · 10 rondas</div>
-        <button className="btn" style={{width:"100%",padding:"10px",borderRadius:10,background:`linear-gradient(135deg,${C.accent},#0066ff)`,color:"#07090f",fontWeight:900,fontSize:13}}>Jugar</button>
+        <button className="btn" onClick={startScorer} style={{width:"100%",padding:"10px",borderRadius:10,background:`linear-gradient(135deg,${C.accent},#0066ff)`,color:"#07090f",fontWeight:900,fontSize:13}}>Jugar</button>
       </Card>
-      <Card style={{textAlign:"center",padding:24,cursor:"pointer",borderColor:"#FFB80033"}} onClick={startTrivia}>
+      <Card style={{textAlign:"center",padding:24,borderColor:"#FFB80033"}}>
         <div style={{fontSize:40,marginBottom:10}}>🧠</div>
         <div style={{fontSize:15,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,marginBottom:4}}>NBA Trivia</div>
         <div style={{fontSize:11,color:C.dim,marginBottom:12}}>10 preguntas sobre la NBA · ¿Cuántas aciertas?</div>
-        <button className="btn" style={{width:"100%",padding:"10px",borderRadius:10,background:"linear-gradient(135deg,#FFB800,#ff9500)",color:"#07090f",fontWeight:900,fontSize:13}}>Jugar</button>
+        <button className="btn" onClick={startTrivia} style={{width:"100%",padding:"10px",borderRadius:10,background:"linear-gradient(135deg,#FFB800,#ff9500)",color:"#07090f",fontWeight:900,fontSize:13}}>Jugar</button>
+      </Card>
+      <Card style={{textAlign:"center",padding:24,borderColor:"#00FF9D33",gridColumn:"1/-1"}}>
+        <div style={{fontSize:40,marginBottom:10}}>🕵️</div>
+        <div style={{fontSize:15,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,marginBottom:4}}>Adivina el Jugador</div>
+        <div style={{fontSize:11,color:C.dim,marginBottom:12}}>Te damos las stats · Tú adivinas quién es · 8 rondas</div>
+        <button className="btn" onClick={startGuess} style={{width:"100%",padding:"10px",borderRadius:10,background:"linear-gradient(135deg,#00FF9D,#00aa66)",color:"#07090f",fontWeight:900,fontSize:13}}>Jugar</button>
       </Card>
     </div>
   </div>);
@@ -1431,6 +1499,53 @@ const MiniGamesTab=({players,userCtx})=>{
       </div>
       {triviaFeedback!==null&&<div style={{textAlign:"center",marginTop:10,fontSize:16,fontWeight:700,color:triviaFeedback?"#00FF9D":"#ff6666"}}>{triviaFeedback?"✅ ¡Correcto!":"❌ Incorrecto — era: "+q.opts[q.a]}</div>}
       <button className="btn" onClick={()=>setScreen("menu")} style={{width:"100%",marginTop:14,padding:"10px",borderRadius:10,background:"#0a1018",border:`1px solid ${C.border}`,color:C.dim,fontSize:12}}>Salir</button>
+    </div>);
+  }
+
+  if(screen==="game"&&game==="guess"){
+    if(guessDone) return(<div className="fade-up">
+      <ST sub="Adivina el Jugador">Resultado</ST>
+      <Card style={{textAlign:"center",padding:30,marginBottom:14}}>
+        <div style={{fontSize:56,marginBottom:8}}>🕵️</div>
+        <div style={{fontSize:36,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#00FF9D"}}>{guessScore}/8</div>
+        <div style={{fontSize:14,color:C.dim,marginTop:4}}>{guessScore>=7?"¡Sabes quiénes son todos! 🏆":guessScore>=5?"¡Buen ojo! 👀":"¿Ves los partidos? 😅"}</div>
+      </Card>
+      {scores.length>0&&<Card style={{marginBottom:14}}><div style={{fontSize:11,color:C.muted,marginBottom:10,textTransform:"uppercase",letterSpacing:2}}>🏆 Top Puntuaciones</div>
+        {scores.map((s,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<scores.length-1?`1px solid ${C.border}`:"none"}}><span style={{fontSize:11,color:C.muted,width:16}}>{i+1}</span><span style={{fontSize:13}}>{s.users?.avatar_emoji||"🏀"}</span><span style={{flex:1,fontSize:12,color:C.text}}>{s.users?.name}</span><span style={{fontSize:14,fontWeight:900,color:"#00FF9D"}}>{s.score}/8</span></div>)}
+      </Card>}
+      <button className="btn" onClick={()=>setScreen("menu")} style={{width:"100%",padding:"13px",borderRadius:10,background:"#00FF9D",color:"#07090f",fontWeight:900,fontSize:14}}>← Volver</button>
+    </div>);
+    if(!guessQ) return null;
+    const{correct,opts}=guessQ;
+    return(<div className="fade-up">
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <ST sub="Adivina el Jugador">Ronda {guessRound+1}/8</ST>
+        <div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#00FF9D"}}>{guessScore} pts</div>
+      </div>
+      <Card style={{marginBottom:14,background:"linear-gradient(135deg,#00FF9D08,#0d1117)",borderColor:"#00FF9D33",padding:"18px 20px"}}>
+        <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:12}}>¿De quién son estas stats?</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,textAlign:"center",marginBottom:8}}>
+          {[["PTS",correct.pts,"#FFB800"],["AST",correct.ast,C.accent],["REB",correct.reb,"#00FF9D"]].map(([l,v,c])=>(
+            <div key={l} style={{background:"#0a1018",borderRadius:10,padding:"10px 4px"}}>
+              <div style={{fontSize:26,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:c}}>{v}</div>
+              <div style={{fontSize:9,color:C.muted,letterSpacing:1}}>{l}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{textAlign:"center",fontSize:11,color:C.dim}}>{correct.teamAbbr} · {correct.pos}</div>
+      </Card>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        {opts.map((p,i)=>{
+          const isCorrect=p.id===correct.id;const isChosen=guessFeedback!==null&&p.id===opts[i].id;
+          return<button key={p.id} className="btn" onClick={()=>answerGuess(p)} style={{padding:"14px 10px",borderRadius:12,textAlign:"center",background:guessFeedback!==null?(isCorrect?"#00FF9D22":p.id===opts[i]?.id&&guessFeedback===false?"#ff444411":"#0a1018"):"#0a1018",border:`2px solid ${guessFeedback!==null?(isCorrect?"#00FF9D":C.border):C.border}`,transition:"all .2s"}}>
+            {logo(p.teamAbbr,28)}
+            <div style={{fontSize:12,fontWeight:700,color:guessFeedback!==null&&isCorrect?"#00FF9D":C.text,marginTop:6}}>{p.name}</div>
+            <div style={{fontSize:9,color:C.dim}}>{p.teamAbbr}</div>
+          </button>;
+        })}
+      </div>
+      {guessFeedback!==null&&<div style={{textAlign:"center",marginTop:10,fontSize:15,fontWeight:700,color:guessFeedback?"#00FF9D":"#ff6666"}}>{guessFeedback?"✅ ¡Correcto!":"❌ Era "+correct.name}</div>}
+      <div style={{height:5,borderRadius:3,background:C.border,overflow:"hidden",marginTop:14}}><div style={{width:`${(guessRound/8)*100}%`,height:"100%",background:"#00FF9D",transition:"width .4s"}}/></div>
     </div>);
   }
 
