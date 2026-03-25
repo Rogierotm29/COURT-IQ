@@ -124,8 +124,8 @@ async function loadGames() {
   return (d.events||[]).map(e=>{
     const comp=e.competitions?.[0],home=comp?.competitors?.find(c=>c.homeAway==="home"),away=comp?.competitors?.find(c=>c.homeAway==="away"),st=comp?.status?.type;
     return{id:e.id,home:fix(home?.team?.abbreviation),away:fix(away?.team?.abbreviation),homeScore:parseInt(home?.score||0),awayScore:parseInt(away?.score||0),
-      status:st?.completed?"Final":st?.name==="STATUS_IN_PROGRESS"?"LIVE":"Upcoming",
-      detail:st?.name==="STATUS_IN_PROGRESS"?`Q${comp?.status?.period||"?"} ${comp?.status?.displayClock||""}`:st?.shortDetail||""};
+      status:st?.completed||st?.state==="post"?"Final":st?.state==="in"?"LIVE":"Upcoming",
+      detail:st?.state==="in"?`Q${comp?.status?.period||"?"} ${comp?.status?.displayClock||""}`:(st?.state==="post"?"Final":st?.shortDetail||"")};
   });
 }
 
@@ -908,7 +908,7 @@ const PickemTab=({games,userCtx})=>{
             return<div key={i} style={{display:"flex",gap:8,alignItems:"flex-end",flexDirection:isMe?"row-reverse":"row"}}>
               <div style={{width:28,height:28,borderRadius:"50%",background:`${C.accent}20`,border:`1px solid ${C.accent}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>{m.users?.avatar_emoji||"🏀"}</div>
               <div style={{maxWidth:"75%"}}>
-                {!isMe&&<div style={{fontSize:9,color:C.muted,marginBottom:2}}>{m.users?.name}</div>}
+                <div style={{fontSize:9,color:isMe?C.accent:C.muted,marginBottom:2,textAlign:isMe?"right":"left",fontWeight:700}}>{isMe?"Tú":m.users?.name}</div>
                 <div style={{background:isMe?`${C.accent}22`:"#131d29",border:`1px solid ${isMe?C.accent+"44":C.border}`,borderRadius:isMe?"14px 14px 4px 14px":"14px 14px 14px 4px",padding:"8px 12px",fontSize:13,color:C.text}}>{m.content}</div>
                 <div style={{fontSize:8,color:C.muted,marginTop:2,textAlign:isMe?"right":"left"}}>{new Date(m.created_at).toLocaleTimeString("es",{hour:"2-digit",minute:"2-digit"})}</div>
               </div>
@@ -1693,7 +1693,14 @@ export default function App(){
     setLastUpd(new Date());setLoading(false);
   },[]);
 
-  useEffect(()=>{refreshAll();const t=setInterval(refreshAll,120000);return()=>clearInterval(t);},[]);
+  useEffect(()=>{refreshAll();},[]);
+
+  // Refresca cada 30s si hay juego en vivo, cada 90s si no
+  useEffect(()=>{
+    const hasLive=games.some(g=>g.status==="LIVE");
+    const t=setInterval(refreshAll,hasLive?30000:90000);
+    return()=>clearInterval(t);
+  },[games.map(g=>g.status).join(","),refreshAll]);
 
   // Auto-score picks on load
   useEffect(()=>{pickemAPI("scoreGames").catch(()=>{});},[]);
