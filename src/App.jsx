@@ -177,8 +177,6 @@ const HomeTab=({games,live,userCtx,standings})=>{
   const [picks,setPicks]=useState({});
   const [group,setGroup]=useState(null);
   const [loaded,setLoaded]=useState(false);
-  const [wildcardUsed,setWildcardUsed]=useState(false);
-
   useEffect(()=>{
     if(!user)return;
     pickemAPI("myGroups",{params:{userId:user.id}}).then(d=>{
@@ -191,7 +189,6 @@ const HomeTab=({games,live,userCtx,standings})=>{
           if(r.ok){const m={};(r.picks||[]).forEach(p=>{m[p.game_id]=p.picked_team;});setPicks(m);}
           setLoaded(true);
         });
-        pickemAPI("wildcardStatus",{params:{userId:user.id,groupId:g.id}}).then(r=>{if(r.ok)setWildcardUsed(r.used);});
       } else setLoaded(true);
     });
   },[user,games]);
@@ -211,11 +208,6 @@ const HomeTab=({games,live,userCtx,standings})=>{
     await pickemAPI("makePick",{body:{userId:user.id,groupId:group.id,gameId,gameDate:today,pickedTeam:team,homeTeam:home,awayTeam:away}});
   };
 
-  const doWildcard=async(gameId,team,home,away)=>{
-    if(!group||!user||wildcardUsed) return;
-    const d=await pickemAPI("useWildcard",{body:{userId:user.id,groupId:group.id,gameId,pickedTeam:team,homeTeam:home,awayTeam:away}});
-    if(d.ok){setPicks(p=>({...p,[gameId]:team}));setWildcardUsed(true);}
-  };
 
   return(<div className="fade-up">
     {!user&&<Card style={{marginBottom:22,background:"linear-gradient(135deg,#00C2FF11,#0d1117)",borderColor:"#00C2FF44",textAlign:"center",padding:"30px 20px"}}>
@@ -411,7 +403,6 @@ const PickemTab=({games,userCtx})=>{
   // New features state
   const [history,setHistory]=useState([]);
   const [grpPicks,setGrpPicks]=useState([]);
-  const [wildcardUsed,setWildcardUsed]=useState(false);
   const [balance,setBalance]=useState(null);
   const [bets,setBets]=useState([]);
   const [betGame,setBetGame]=useState(null);
@@ -476,7 +467,6 @@ const PickemTab=({games,userCtx})=>{
         });
       }
     });
-    pickemAPI("wildcardStatus",{params:{userId:user.id,groupId:selGroup.id}}).then(d=>{if(d.ok)setWildcardUsed(d.used);});
     pickemAPI("dailyWinner",{params:{groupId:selGroup.id}}).then(d=>{if(d.ok)setDailyWinner(d.winner);});
   },[user,selGroup]);
 
@@ -539,12 +529,6 @@ const PickemTab=({games,userCtx})=>{
     navigator.clipboard?.writeText(selGroup.code).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);}).catch(()=>{});
   };
 
-  const doWildcard=async(gameId,team,homeTeam,awayTeam)=>{
-    if(wildcardUsed||!selGroup) return;
-    const d=await pickemAPI("useWildcard",{body:{userId:user.id,groupId:selGroup.id,gameId,pickedTeam:team,homeTeam,awayTeam}});
-    if(d.ok){setPicks(p=>({...p,[gameId]:team}));setWildcardUsed(true);setMsg("🃏 ¡Comodín usado!");}
-    else setMsg(d.error);
-  };
 
   const doBet=async()=>{
     if(!betGame||!betTeam||betAmt<10) return;
@@ -800,7 +784,7 @@ const PickemTab=({games,userCtx})=>{
               <div style={{display:"flex",gap:8}}><Tag c={correct===dayPicks.length&&dayPicks.length>0?"#00FF9D":"#FFB800"}>{correct}/{dayPicks.length} ✅</Tag><Tag c={C.accent}>+{pts} pts</Tag></div>
             </div>
             {dayPicks.map(p=><div key={p.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderBottom:`1px solid ${C.border}`}}>
-              {logo(p.picked_team,20)}<span style={{flex:1,fontSize:12,color:C.text}}>{p.picked_team}{p.is_wildcard&&<span style={{fontSize:10,color:"#a78bfa"}}> 🃏</span>}</span>
+              {logo(p.picked_team,20)}<span style={{flex:1,fontSize:12,color:C.text}}>{p.picked_team}</span>
               <span style={{fontSize:11,color:C.dim}}>vs {p.picked_team===p.home_team?p.away_team:p.home_team}</span>
               {p.scored?<Tag c={p.correct?"#00FF9D":"#ff6666"}>{p.correct?"✅":"❌"}</Tag>:<Tag c={C.muted}>Pend.</Tag>}
             </div>)}
@@ -830,7 +814,7 @@ const PickemTab=({games,userCtx})=>{
             </>}
             <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
               {gp.map((p,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:4,background:`${tm(p.picked_team).color}18`,border:`1px solid ${tm(p.picked_team).color}44`,borderRadius:20,padding:"3px 8px"}}>
-                <span style={{fontSize:11}}>{p.users?.avatar_emoji||"🏀"}</span><span style={{fontSize:10,color:C.text,fontWeight:600}}>{p.users?.name||"?"}</span>{p.is_wildcard&&<span style={{fontSize:10}}>🃏</span>}
+                <span style={{fontSize:11}}>{p.users?.avatar_emoji||"🏀"}</span><span style={{fontSize:10,color:C.text,fontWeight:600}}>{p.users?.name||"?"}</span>
               </div>)}
             </div>
           </Card>;
@@ -928,7 +912,7 @@ const PickemTab=({games,userCtx})=>{
     <Card style={{marginTop:18,background:"#0a1018"}}>
       <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>Sistema de Puntos</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-        {[["✅ Acierto","10 pts"],["🃏 Comodín","1/día"],["🪙 Apuestas","vs grupo"]].map(([l,v])=><div key={l} style={{background:C.card,borderRadius:9,padding:"10px",textAlign:"center"}}><div style={{fontSize:10,color:C.dim,marginBottom:4}}>{l}</div><div style={{fontSize:15,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.accent}}>{v}</div></div>)}
+        {[["✅ Acierto","10 pts"],["🪙 Apuestas","vs grupo"],["🔥 Racha","bonus"]].map(([l,v])=><div key={l} style={{background:C.card,borderRadius:9,padding:"10px",textAlign:"center"}}><div style={{fontSize:10,color:C.dim,marginBottom:4}}>{l}</div><div style={{fontSize:15,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.accent}}>{v}</div></div>)}
       </div>
     </Card>
   </div>);
@@ -1280,7 +1264,6 @@ const ACHIEVEMENT_DEFS=[
   {key:"streak_3",emoji:"🔥",name:"En Racha",desc:"3 picks correctos seguidos"},
   {key:"streak_5",emoji:"🔥🔥",name:"En Llamas",desc:"5 picks correctos seguidos"},
   {key:"perfect_day",emoji:"💎",name:"Día Perfecto",desc:"100% en un día (mín. 3 picks)"},
-  {key:"wildcard_used",emoji:"🃏",name:"Comodín",desc:"Usaste tu primer comodín"},
   {key:"bet_won",emoji:"🪙",name:"Apostador",desc:"Ganaste tu primera apuesta"},
   {key:"joined_group",emoji:"👥",name:"Social",desc:"Te uniste a un grupo"},
   {key:"challenge_sent",emoji:"⚡",name:"Retador",desc:"Enviaste un reto de apuesta"},
@@ -1652,7 +1635,7 @@ const SettingsTab=({userCtx})=>{
     <ST sub="Cómo funciona">Sistema de Puntos</ST>
     <Card style={{marginBottom:18}}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-        {[["✅ Acierto","10 pts","#00FF9D"],["🃏 Comodín","1 / día","#FFB800"],["🪙 Apuestas","vs grupo",C.accent]].map(([l,v,c])=>
+        {[["✅ Acierto","10 pts","#00FF9D"],["🔥 Racha","bonus","#FF6B35"],["🪙 Apuestas","vs grupo",C.accent]].map(([l,v,c])=>
           <div key={l} style={{background:"#0a1018",borderRadius:10,padding:"12px 8px",textAlign:"center"}}>
             <div style={{fontSize:18,marginBottom:4}}>{l.split(" ")[0]}</div>
             <div style={{fontSize:10,color:C.dim,marginBottom:4}}>{l.split(" ").slice(1).join(" ")}</div>
