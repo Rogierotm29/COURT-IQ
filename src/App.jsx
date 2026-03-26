@@ -234,10 +234,13 @@ const HomeTab=({games,live,userCtx,standings})=>{
         const winner=isFinal?(g.homeScore>g.awayScore?g.home:g.away):null;
         const correct=isFinal&&picked===winner;
         const awayPct=winPct(g,"away");const homePct=winPct(g,"home");
+        const minsLeft=g.startTime&&isUpcoming?Math.max(0,Math.round((new Date(g.startTime)-new Date())/60000)):null;
         return <Card key={g.id} style={{padding:14,borderColor:isFinal&&picked?(correct?"#00FF9D33":"#ff444433"):picked?`${tm(picked).color}33`:C.border}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
           <div style={{display:"flex",gap:6,alignItems:"center"}}>
-            {isLive?<Tag c="#ff4444">● LIVE {g.detail}</Tag>:isFinal?<Tag c={C.muted}>Final</Tag>:<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>}
+            {isLive?<Tag c="#ff4444">● LIVE {g.detail}</Tag>:isFinal?<Tag c={C.muted}>Final</Tag>
+            :minsLeft!==null?(minsLeft<=1?<Tag c="#ff4444">⏱ Iniciando...</Tag>:minsLeft<=60?<Tag c={minsLeft<=15?"#ff6666":"#FF6B35"}>⏱ {minsLeft} min</Tag>:<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>)
+            :<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>}
           </div>
           {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?"✅ +10":"❌"}</Tag>}
           {!isFinal&&!isLive&&picked&&<Tag c="#00FF9D">✓ Pick</Tag>}
@@ -716,9 +719,14 @@ const PickemTab=({games,userCtx})=>{
           const isUpcoming=g.startTime?new Date()<new Date(g.startTime):g.status==="Upcoming";
           const winner=isFinal?(g.homeScore>g.awayScore?g.home:g.away):null;
           const correct=isFinal&&picked===winner;
+          const minsLeft=g.startTime&&isUpcoming?Math.max(0,Math.round((new Date(g.startTime)-new Date())/60000)):null;
           return <Card key={g.id} style={{marginBottom:10,borderColor:isFinal?(correct?"#00FF9D33":"#ff444433"):isLive?"#ff444433":picked?`${tm(picked).color}33`:C.border}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-              <div style={{display:"flex",gap:6}}>{isLive?<Tag c="#ff4444">● LIVE {g.detail}</Tag>:isFinal?<Tag c={C.muted}>Final</Tag>:<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>}</div>
+              <div style={{display:"flex",gap:6}}>
+                {isLive?<Tag c="#ff4444">● LIVE {g.detail}</Tag>:isFinal?<Tag c={C.muted}>Final</Tag>
+                :minsLeft!==null?(minsLeft<=1?<Tag c="#ff4444">⏱ Iniciando...</Tag>:minsLeft<=60?<Tag c={minsLeft<=15?"#ff6666":"#FF6B35"}>⏱ {minsLeft} min</Tag>:<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>)
+                :<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>}
+              </div>
               {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?"✅ +10":"❌"}</Tag>}
               {isUpcoming&&picked&&<Tag c="#00FF9D">✓ Pick</Tag>}
               {isUpcoming&&!picked&&<Tag c={C.accent}>Elige</Tag>}
@@ -1281,16 +1289,42 @@ const ACHIEVEMENT_DEFS=[
 
 /* ═══ MINI GAMES TAB ═══ */
 const TRIVIA=[
-  {q:"¿Cuántos equipos hay en la NBA?",opts:["28","30","32","29"],a:1},
-  {q:"¿Cuántos puntos vale un triple?",opts:["1","2","3","4"],a:2},
-  {q:"¿Quién tiene más anillos históricos?",opts:["LeBron James","Michael Jordan","Bill Russell","Kareem Abdul-Jabbar"],a:2},
-  {q:"¿Cuántos cuartos tiene un partido?",opts:["2","3","4","5"],a:2},
-  {q:"¿Cuántos minutos dura cada cuarto?",opts:["10","12","15","8"],a:1},
-  {q:"¿Qué equipo tiene más campeonatos?",opts:["Los Angeles Lakers","Boston Celtics","Chicago Bulls","Golden State Warriors"],a:1},
-  {q:"¿Qué significa NBA?",opts:["National Basketball Association","North Basketball America","National Basketball Academy","North American Basketball"],a:0},
-  {q:"¿Quién es el máximo anotador histórico?",opts:["Michael Jordan","Kareem Abdul-Jabbar","LeBron James","Kobe Bryant"],a:2},
-  {q:"¿En qué año se fundó la NBA?",opts:["1946","1950","1960","1936"],a:0},
-  {q:"¿Cuántos jugadores hay en cancha por equipo?",opts:["4","5","6","7"],a:1},
+  {q:"¿Quién ganó las Finales NBA 2023?",opts:["Miami Heat","Denver Nuggets","Boston Celtics","LA Lakers"],a:1},
+  {q:"¿Quién ganó las Finales NBA 2021?",opts:["LA Lakers","Miami Heat","Milwaukee Bucks","Phoenix Suns"],a:2},
+  {q:"¿Quién fue el único MVP unánime en la historia NBA?",opts:["LeBron James","Michael Jordan","Stephen Curry","Shaquille O'Neal"],a:2},
+  {q:"¿Cuántos MVPs de temporada tiene Nikola Jokić?",opts:["1","2","3","4"],a:2},
+  {q:"¿Cuántos puntos anotó Kobe Bryant en su juego récord vs Toronto?",opts:["71","81","73","76"],a:1},
+  {q:"¿Quién tiene el récord histórico de triple-dobles?",opts:["Magic Johnson","Oscar Robertson","Russell Westbrook","LeBron James"],a:2},
+  {q:"¿En qué pick del Draft 2014 fue seleccionado Nikola Jokić?",opts:["#15","#27","#35","#41"],a:3},
+  {q:"¿Quién tiene más anillos como jugador en la historia NBA?",opts:["Michael Jordan","Magic Johnson","Bill Russell","Kareem Abdul-Jabbar"],a:2},
+  {q:"¿Cuántos campeonatos tiene Boston Celtics?",opts:["15","17","18","20"],a:2},
+  {q:"¿Qué equipo fue el primero en ganar 70+ partidos en temporada regular?",opts:["LA Lakers 1972","Chicago Bulls 1996","Golden State 2016","Boston 1986"],a:1},
+  {q:"¿Quién fue Rookie del Año 2023-24?",opts:["Chet Holmgren","Victor Wembanyama","Scoot Henderson","Brandon Miller"],a:1},
+  {q:"¿En qué año entró LeBron James a la NBA?",opts:["2001","2002","2003","2004"],a:2},
+  {q:"¿Cuántos puntos anotó Wilt Chamberlain en su partido récord?",opts:["81","92","100","73"],a:2},
+  {q:"¿Cuántas veces ganó Michael Jordan el MVP de las Finales?",opts:["4","5","6","7"],a:2},
+  {q:"¿Qué equipo ganó el campeonato NBA 2024?",opts:["Dallas Mavericks","Miami Heat","Boston Celtics","Indiana Pacers"],a:2},
+].sort(()=>Math.random()-.5).slice(0,10);
+
+const PLAYER_CLUES=[
+  {name:"LeBron James",team:"LAL",clues:["1er pick del Draft 2003","Jugó para Cavaliers, Heat y Lakers","4 campeonatos de la NBA","4 veces MVP de la temporada regular"]},
+  {name:"Stephen Curry",team:"GSW",clues:["7mo pick del Draft 2009","Ha jugado toda su carrera con Golden State Warriors","Récord de triples en una temporada (402)","El único MVP unánime en la historia de la NBA"]},
+  {name:"Kevin Durant",team:"HOU",clues:["2do pick del Draft 2007","Jugó en OKC, Golden State, Brooklyn y Phoenix","Ganó 2 campeonatos con Golden State (2017, 2018)","MVP de la NBA en 2014"]},
+  {name:"Giannis Antetokounmpo",team:"MIL",clues:["15vo pick del Draft 2013","Nació en Atenas, Grecia, de padres nigerianos","Campeón con Milwaukee Bucks en 2021","Doble MVP de la NBA (2019, 2020)"]},
+  {name:"Nikola Jokić",team:"DEN",clues:["Pick #41 del Draft 2014 — el más bajo en ganar MVP","Ha jugado toda su carrera con Denver Nuggets","Campeón con Denver en 2023","3 veces MVP de la NBA (2021, 2022, 2024)"]},
+  {name:"Michael Jordan",team:"CHI",clues:["3er pick del Draft 1984","6 campeonatos con Chicago Bulls","6 veces MVP de las Finales — todos los títulos que ganó","5 veces MVP de la temporada regular"]},
+  {name:"Kobe Bryant",team:"LAL",clues:["13vo pick del Draft 1996","Jugó toda su carrera con Los Angeles Lakers","5 campeonatos con los Lakers","Anotó 81 puntos contra Toronto — 2do mayor en la historia"]},
+  {name:"Shaquille O'Neal",team:"LAL",clues:["1er pick del Draft 1992","Jugó para Orlando, Lakers, Miami, Phoenix y otros","4 campeonatos — 3 con Lakers y 1 con Miami Heat","MVP de la NBA en 2000"]},
+  {name:"Tim Duncan",team:"SAS",clues:["1er pick del Draft 1997","Jugó toda su carrera con San Antonio Spurs","5 campeonatos — el mayor total en la era moderna","2 veces MVP de la NBA (2002, 2003)"]},
+  {name:"Dirk Nowitzki",team:"DAL",clues:["9no pick del Draft 1998 — nació en Alemania","Jugó toda su carrera con Dallas Mavericks","Campeón con Dallas en 2011 eliminando a LeBron en las Finales","MVP de la NBA en 2007 — el primero europeo en ganarlo"]},
+  {name:"Magic Johnson",team:"LAL",clues:["1er pick del Draft 1979","Jugó toda su carrera con Los Angeles Lakers","5 campeonatos con los Lakers","3 veces MVP de la NBA y 3 veces MVP de las Finales"]},
+  {name:"Larry Bird",team:"BOS",clues:["6to pick del Draft 1978","Jugó toda su carrera con Boston Celtics","3 campeonatos con los Celtics","3 MVPs de la NBA consecutivos (1984, 1985, 1986)"]},
+  {name:"Charles Barkley",team:"PHX",clues:["5to pick del Draft 1984","Jugó para Philadelphia, Phoenix y Houston — nunca ganó un título","MVP de la NBA en 1993 sin ser el jugador más dominante físicamente","Declaró famosamente: 'I am not a role model'"]},
+  {name:"Allen Iverson",team:"PHI",clues:["1er pick del Draft 1996","Jugó principalmente para Philadelphia 76ers","MVP de la NBA en 2001 — el jugador más bajo en ganarlo (183 cm)","Su apodo era 'The Answer' y popularizó el estilo streetball en la NBA"]},
+  {name:"Russell Westbrook",team:"OKC",clues:["4to pick del Draft 2008","Jugó para OKC, Houston, LA Lakers, Washington y otros","Récord histórico de triple-dobles en la NBA","MVP de la NBA en 2017 con 42 triple-dobles en una temporada"]},
+  {name:"Victor Wembanyama",team:"SAS",clues:["1er pick del Draft 2023 — nació en Francia","Solo ha jugado para San Antonio Spurs","Rookie del Año 2023-24 de forma unánime","Mide 2.24m con envergadura de 2.38m — considerado el más alto en talento en décadas"]},
+  {name:"Luka Dončić",team:"DAL",clues:["3er pick del Draft 2018 — nació en Eslovenia","Jugó para Dallas Mavericks antes de ser tradeado a LA Lakers","Fue a las Finales NBA con Dallas en 2024","Ganó el Rookie del Año 2018-19 y fue All-Star desde su primera temporada"]},
+  {name:"Kareem Abdul-Jabbar",team:"LAL",clues:["Fue elegido 1er pick en 1969 como 'Lew Alcindor'","Jugó para Milwaukee Bucks y Los Angeles Lakers","6 campeonatos de la NBA","6 veces MVP — el récord absoluto de la historia de la NBA"]},
 ];
 
 const MiniGamesTab=({players,userCtx})=>{
@@ -1317,37 +1351,35 @@ const MiniGamesTab=({players,userCtx})=>{
   const [guessQ,setGuessQ]=useState(null);
   const [guessDone,setGuessDone]=useState(false);
   const [guessFeedback,setGuessFeedback]=useState(null);
+  const [guessPool,setGuessPool]=useState([]);
 
-  const buildGuessQ=(pool)=>{
-    const idx=Math.floor(Math.random()*pool.length);
-    const correct=pool[idx];
-    const others=[...pool].filter((_,i)=>i!==idx).sort(()=>Math.random()-.5).slice(0,3);
+  const buildClueQ=(pool,round)=>{
+    const correct=pool[round];
+    const others=[...PLAYER_CLUES].filter(p=>p.name!==correct.name).sort(()=>Math.random()-.5).slice(0,3);
     const opts=[correct,...others].sort(()=>Math.random()-.5);
     return{correct,opts};
   };
 
   const startGuess=()=>{
-    const pool=players.filter(p=>+p.pts>8).slice(0,40);
-    if(pool.length<4){alert("No hay suficientes jugadores cargados todavía");return;}
+    const pool=[...PLAYER_CLUES].sort(()=>Math.random()-.5);
     setGuessRound(0);setGuessScore(0);setGuessDone(false);setGuessFeedback(null);
-    setGuessQ(buildGuessQ(pool));setGame("guess");setScreen("game");
+    setGuessPool(pool);setGuessQ(buildClueQ(pool,0));setGame("guess");setScreen("game");
   };
 
   const answerGuess=(p)=>{
     if(guessFeedback!==null) return;
-    const correct=p.id===guessQ.correct.id;
-    setGuessFeedback(correct);
-    if(correct) setGuessScore(s=>s+1);
+    const isCorrect=p.name===guessQ.correct.name;
+    setGuessFeedback(isCorrect);
+    if(isCorrect) setGuessScore(s=>s+1);
     setTimeout(()=>{
       const next=guessRound+1;
-      const pool=players.filter(x=>+x.pts>8).slice(0,40);
       if(next>=8){
         setGuessDone(true);
-        const final=correct?guessScore+1:guessScore;
+        const final=isCorrect?guessScore+1:guessScore;
         if(user) pickemAPI("saveMiniScore",{body:{userId:user.id,gameType:"guess",score:final}});
         pickemAPI("getMiniScores",{params:{gameType:"guess"}}).then(d=>{if(d.ok)setScores(d.scores||[]);});
       } else {
-        setGuessRound(next);setGuessQ(buildGuessQ(pool));setGuessFeedback(null);
+        setGuessRound(next);setGuessQ(buildClueQ(guessPool,next));setGuessFeedback(null);
       }
     },900);
   };
@@ -1427,7 +1459,7 @@ const MiniGamesTab=({players,userCtx})=>{
       <Card style={{textAlign:"center",padding:24,borderColor:"#00FF9D33",gridColumn:"1/-1"}}>
         <div style={{fontSize:40,marginBottom:10}}>🕵️</div>
         <div style={{fontSize:15,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,marginBottom:4}}>Adivina el Jugador</div>
-        <div style={{fontSize:11,color:C.dim,marginBottom:12}}>Te damos las stats · Tú adivinas quién es · 8 rondas</div>
+        <div style={{fontSize:11,color:C.dim,marginBottom:12}}>4 pistas de su carrera · Tú adivinas quién es · 8 rondas</div>
         <button className="btn" onClick={startGuess} style={{width:"100%",padding:"10px",borderRadius:10,background:"linear-gradient(135deg,#00FF9D,#00aa66)",color:"#07090f",fontWeight:900,fontSize:13}}>Jugar</button>
       </Card>
     </div>
@@ -1516,24 +1548,20 @@ const MiniGamesTab=({players,userCtx})=>{
         <div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#00FF9D"}}>{guessScore} pts</div>
       </div>
       <Card style={{marginBottom:14,background:"linear-gradient(135deg,#00FF9D08,#0d1117)",borderColor:"#00FF9D33",padding:"18px 20px"}}>
-        <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:12}}>¿De quién son estas stats?</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,textAlign:"center",marginBottom:8}}>
-          {[["PTS",correct.pts,"#FFB800"],["AST",correct.ast,C.accent],["REB",correct.reb,"#00FF9D"]].map(([l,v,c])=>(
-            <div key={l} style={{background:"#0a1018",borderRadius:10,padding:"10px 4px"}}>
-              <div style={{fontSize:26,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:c}}>{v}</div>
-              <div style={{fontSize:9,color:C.muted,letterSpacing:1}}>{l}</div>
-            </div>
-          ))}
-        </div>
-        <div style={{textAlign:"center",fontSize:11,color:C.dim}}>{correct.teamAbbr} · {correct.pos}</div>
+        <div style={{fontSize:10,color:"#00FF9D",textTransform:"uppercase",letterSpacing:2,marginBottom:12}}>🕵️ ¿Quién es este jugador?</div>
+        {correct.clues.map((clue,i)=>(
+          <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"8px 0",borderBottom:i<correct.clues.length-1?`1px solid ${C.border}`:"none"}}>
+            <span style={{color:"#00FF9D",fontSize:11,fontWeight:900,minWidth:18}}>{i+1}.</span>
+            <span style={{fontSize:12,color:C.text,lineHeight:1.4}}>{clue}</span>
+          </div>
+        ))}
       </Card>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        {opts.map((p,i)=>{
-          const isCorrect=p.id===correct.id;const isChosen=guessFeedback!==null&&p.id===opts[i].id;
-          return<button key={p.id} className="btn" onClick={()=>answerGuess(p)} style={{padding:"14px 10px",borderRadius:12,textAlign:"center",background:guessFeedback!==null?(isCorrect?"#00FF9D22":p.id===opts[i]?.id&&guessFeedback===false?"#ff444411":"#0a1018"):"#0a1018",border:`2px solid ${guessFeedback!==null?(isCorrect?"#00FF9D":C.border):C.border}`,transition:"all .2s"}}>
-            {logo(p.teamAbbr,28)}
+        {opts.map((p)=>{
+          const isCorrect=p.name===correct.name;
+          return<button key={p.name} className="btn" onClick={()=>answerGuess(p)} style={{padding:"14px 10px",borderRadius:12,textAlign:"center",background:guessFeedback!==null?(isCorrect?"#00FF9D22":"#0a1018"):"#0a1018",border:`2px solid ${guessFeedback!==null?isCorrect?"#00FF9D":C.border:C.border}`,transition:"all .2s"}}>
+            {logo(p.team,28)}
             <div style={{fontSize:12,fontWeight:700,color:guessFeedback!==null&&isCorrect?"#00FF9D":C.text,marginTop:6}}>{p.name}</div>
-            <div style={{fontSize:9,color:C.dim}}>{p.teamAbbr}</div>
           </button>;
         })}
       </div>
