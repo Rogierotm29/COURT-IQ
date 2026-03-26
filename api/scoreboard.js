@@ -20,8 +20,8 @@ export default async function handler(req, res) {
       const home = comp?.competitors?.find((c) => c.homeAway === "home");
       const away = comp?.competitors?.find((c) => c.homeAway === "away");
       const st = comp?.status?.type;
-      const live = st?.name === "STATUS_IN_PROGRESS";
-      const done = st?.completed;
+      const done = st?.completed || st?.state === "post";
+      const live = st?.state === "in";
 
       return {
         id: e.id,
@@ -30,9 +30,10 @@ export default async function handler(req, res) {
         homeScore: parseInt(home?.score || 0),
         awayScore: parseInt(away?.score || 0),
         status: done ? "Final" : live ? "LIVE" : "Upcoming",
+        startTime: e.date || null,
         detail: live
           ? `Q${comp?.status?.period || "?"} ${comp?.status?.displayClock || ""}`
-          : st?.shortDetail || "",
+          : (done ? "Final" : st?.shortDetail || ""),
       };
     });
 

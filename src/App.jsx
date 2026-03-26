@@ -125,6 +125,7 @@ async function loadGames() {
     const comp=e.competitions?.[0],home=comp?.competitors?.find(c=>c.homeAway==="home"),away=comp?.competitors?.find(c=>c.homeAway==="away"),st=comp?.status?.type;
     return{id:e.id,home:fix(home?.team?.abbreviation),away:fix(away?.team?.abbreviation),homeScore:parseInt(home?.score||0),awayScore:parseInt(away?.score||0),
       status:st?.completed||st?.state==="post"?"Final":st?.state==="in"?"LIVE":"Upcoming",
+      startTime:e.date||null,
       detail:st?.state==="in"?`Q${comp?.status?.period||"?"} ${comp?.status?.displayClock||""}`:(st?.state==="post"?"Final":st?.shortDetail||"")};
   });
 }
@@ -229,7 +230,7 @@ const HomeTab=({games,live,userCtx,standings})=>{
       {games.length===0?<div style={{color:C.muted,fontSize:13}}>No hay partidos programados.</div>
       :games.map(g=>{
         const picked=picks[g.id];const isFinal=g.status==="Final";const isLive=g.status==="LIVE";
-        const isUpcoming=g.status!=="Final"&&g.status!=="LIVE";
+        const isUpcoming=g.startTime?new Date()<new Date(g.startTime):g.status==="Upcoming";
         const winner=isFinal?(g.homeScore>g.awayScore?g.home:g.away):null;
         const correct=isFinal&&picked===winner;
         const awayPct=winPct(g,"away");const homePct=winPct(g,"home");
@@ -417,7 +418,9 @@ const PickemTab=({games,userCtx})=>{
   const [achievements,setAchievements]=useState([]);
   const [lbPeriod,setLbPeriod]=useState("season");
   const [dailyWinner,setDailyWinner]=useState(null);
-  const upcoming=games.filter(g=>g.status==="Upcoming");const finished=games.filter(g=>g.status==="Final");const liveGames=games.filter(g=>g.status==="LIVE");
+  const now=new Date();
+  const upcoming=games.filter(g=>g.startTime?now<new Date(g.startTime):g.status==="Upcoming");
+  const finished=games.filter(g=>g.status==="Final");const liveGames=games.filter(g=>g.status==="LIVE");
   const allGames=[...liveGames,...upcoming,...finished];
   const anyStarted=liveGames.length>0||finished.length>0;
 
@@ -487,6 +490,12 @@ const PickemTab=({games,userCtx})=>{
     }
     if(subTab==="chat") pickemAPI("getChat",{params:{groupId:selGroup.id}}).then(d=>{if(d.ok)setChat(d.messages||[]);});
   },[subTab,user,selGroup]);
+
+  // Refrescar grupo picks cuando cambia el status de los juegos (para que no desaparezcan los % al iniciar un partido)
+  useEffect(()=>{
+    if(!user||!selGroup||subTab!=="grupo") return;
+    pickemAPI("groupPicks",{params:{groupId:selGroup.id}}).then(d=>{if(d.ok)setGrpPicks(d.picks||[]);});
+  },[games.map(g=>g.status).join(",")]);
 
   const register=async()=>{
     if(!name.trim()) return;
@@ -685,8 +694,8 @@ const PickemTab=({games,userCtx})=>{
         </div>}
       </Card>
 
-      {/* Daily winner */}
-      {dailyWinner&&<Card style={{marginBottom:14,background:"linear-gradient(135deg,#FFB80012,#0d1117)",borderColor:"#FFB80044",textAlign:"center",padding:"12px 18px"}}>
+      {/* Daily winner — solo cuando todos los partidos del día terminaron */}
+      {dailyWinner&&games.length>0&&games.every(g=>g.status==="Final")&&<Card style={{marginBottom:14,background:"linear-gradient(135deg,#FFB80012,#0d1117)",borderColor:"#FFB80044",textAlign:"center",padding:"12px 18px"}}>
         <div style={{fontSize:9,color:"#FFB800",textTransform:"uppercase",letterSpacing:2,marginBottom:3}}>👑 Ganador del día</div>
         <div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text}}>{dailyWinner.avatar_emoji||"🏀"} {dailyWinner.name}</div>
         <div style={{fontSize:11,color:C.dim}}>{dailyWinner.correct}/{dailyWinner.total} aciertos · {dailyWinner.points} pts</div>
@@ -703,7 +712,8 @@ const PickemTab=({games,userCtx})=>{
         {anyStarted&&upcoming.length===0&&<div style={{padding:"10px 14px",background:"#ff444411",border:"1px solid #ff444433",borderRadius:10,marginBottom:14,fontSize:11,color:"#ff6666"}}>🔒 Todos los partidos de hoy ya empezaron · Los picks están cerrados</div>}
         {allGames.length===0?<Card style={{textAlign:"center",padding:40}}><div style={{fontSize:36,marginBottom:8}}>🌙</div><div style={{fontSize:15,fontWeight:700,color:C.text}}>No hay partidos hoy</div></Card>
         :allGames.map(g=>{
-          const picked=picks[g.id];const isFinal=g.status==="Final";const isLive=g.status==="LIVE";const isUpcoming=g.status==="Upcoming";
+          const picked=picks[g.id];const isFinal=g.status==="Final";const isLive=g.status==="LIVE";
+          const isUpcoming=g.startTime?new Date()<new Date(g.startTime):g.status==="Upcoming";
           const winner=isFinal?(g.homeScore>g.awayScore?g.home:g.away):null;
           const correct=isFinal&&picked===winner;
           return <Card key={g.id} style={{marginBottom:10,borderColor:isFinal?(correct?"#00FF9D33":"#ff444433"):isLive?"#ff444433":picked?`${tm(picked).color}33`:C.border}}>
@@ -1717,5 +1727,5 @@ export default function App(){
     </div>
   </div>);
 }
-
+//
 //mejora
