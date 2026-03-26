@@ -541,6 +541,14 @@ const PickemTab=({games,userCtx})=>{
     navigator.clipboard?.writeText(selGroup.code).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);}).catch(()=>{});
   };
 
+  const shareGroup=()=>{
+    if(!selGroup) return;
+    const url=`${window.location.origin}?join=${selGroup.code}`;
+    const text=`¡Únete a mi grupo "${selGroup.name}" en Court IQ y compite conmigo en los picks de la NBA! 🏀`;
+    if(navigator.share){navigator.share({title:"Court IQ — "+selGroup.name,text,url}).catch(()=>{});}
+    else{navigator.clipboard?.writeText(`${text}\n${url}`).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);}).catch(()=>{});}
+  };
+
 
   const doBet=async()=>{
     if(!betGame||!betTeam||betAmt<10) return;
@@ -689,6 +697,7 @@ const PickemTab=({games,userCtx})=>{
             <div style={{background:"#0a1018",borderRadius:8,padding:"8px 14px",display:"flex",alignItems:"center",gap:8}}>
               <span style={{fontSize:14,fontWeight:900,letterSpacing:3,color:"#FFB800",fontFamily:"'Bebas Neue',sans-serif"}}>{selGroup.code}</span>
               <button className="btn" onClick={copyCode} style={{background:copied?"#00FF9D22":"#ffffff11",borderRadius:6,padding:"4px 10px",color:copied?"#00FF9D":C.dim,fontSize:10,fontWeight:700,border:`1px solid ${copied?"#00FF9D44":"#ffffff11"}`}}>{copied?"✓":"📋"}</button>
+              <button className="btn" onClick={shareGroup} style={{background:"#ffffff11",borderRadius:6,padding:"4px 10px",color:C.dim,fontSize:10,fontWeight:700,border:"1px solid #ffffff11"}}>🔗</button>
             </div>
           </div>
         </div>
@@ -792,6 +801,25 @@ const PickemTab=({games,userCtx})=>{
 
       {/* ─── HISTORIAL ─── */}
       {subTab==="historial"&&<>
+        {Object.keys(histByDate).length>0&&(()=>{
+          const chartData=Object.entries(histByDate).slice(-7).map(([date,dp])=>({
+            day:new Date(date+"T12:00:00").toLocaleDateString("es",{weekday:"short",day:"numeric"}),
+            pct:dp.length?Math.round(dp.filter(p=>p.correct).length/dp.length*100):0,
+            pts:dp.reduce((s,p)=>s+(p.points||0),0),
+          }));
+          return <Card style={{marginBottom:14}}>
+            <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:1.5,marginBottom:10}}>Precisión últimos días</div>
+            <ResponsiveContainer width="100%" height={110}>
+              <BarChart data={chartData} margin={{top:4,right:4,left:-24,bottom:0}}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border}/>
+                <XAxis dataKey="day" tick={{fill:C.muted,fontSize:9}} axisLine={false} tickLine={false}/>
+                <YAxis domain={[0,100]} tick={{fill:C.muted,fontSize:9}} axisLine={false} tickLine={false}/>
+                <Tooltip content={({active,payload,label})=>active&&payload?.length?<div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px"}}><p style={{color:C.muted,fontSize:9,marginBottom:2}}>{label}</p><p style={{color:C.accent,fontSize:12,fontWeight:700}}>{payload[0].value}% precisión</p></div>:null}/>
+                <Bar dataKey="pct" fill={C.accent} radius={[4,4,0,0]} maxBarSize={32}/>
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>;
+        })()}
         {Object.keys(histByDate).length===0?<Card style={{textAlign:"center",padding:40}}><div style={{fontSize:36,marginBottom:8}}>📅</div><div style={{fontSize:15,fontWeight:700,color:C.text}}>Sin historial aún</div><div style={{fontSize:12,color:C.dim,marginTop:6}}>Tus picks de los últimos 7 días aparecerán aquí</div></Card>
         :Object.entries(histByDate).map(([date,dayPicks])=>{
           const correct=dayPicks.filter(p=>p.correct).length;
@@ -1306,6 +1334,19 @@ const TRIVIA=[
   {q:"¿Qué equipo ganó el campeonato NBA 2024?",opts:["Dallas Mavericks","Miami Heat","Boston Celtics","Indiana Pacers"],a:2},
 ].sort(()=>Math.random()-.5).slice(0,10);
 
+const CHAMPS=[
+  {year:1985,team:"LAL"},{year:1986,team:"BOS"},{year:1987,team:"LAL"},{year:1988,team:"LAL"},
+  {year:1989,team:"DET"},{year:1990,team:"DET"},{year:1991,team:"CHI"},{year:1992,team:"CHI"},
+  {year:1993,team:"CHI"},{year:1994,team:"HOU"},{year:1995,team:"HOU"},{year:1996,team:"CHI"},
+  {year:1997,team:"CHI"},{year:1998,team:"CHI"},{year:1999,team:"SAS"},{year:2000,team:"LAL"},
+  {year:2001,team:"LAL"},{year:2002,team:"LAL"},{year:2003,team:"SAS"},{year:2004,team:"DET"},
+  {year:2005,team:"SAS"},{year:2006,team:"MIA"},{year:2007,team:"SAS"},{year:2008,team:"BOS"},
+  {year:2009,team:"LAL"},{year:2010,team:"LAL"},{year:2011,team:"DAL"},{year:2012,team:"MIA"},
+  {year:2013,team:"MIA"},{year:2014,team:"SAS"},{year:2015,team:"GSW"},{year:2016,team:"CLE"},
+  {year:2017,team:"GSW"},{year:2018,team:"GSW"},{year:2019,team:"TOR"},{year:2020,team:"LAL"},
+  {year:2021,team:"MIL"},{year:2022,team:"GSW"},{year:2023,team:"DEN"},{year:2024,team:"BOS"},
+];
+
 const PLAYER_CLUES=[
   {name:"LeBron James",team:"LAL",clues:["1er pick del Draft 2003","Jugó para Cavaliers, Heat y Lakers","4 campeonatos de la NBA","4 veces MVP de la temporada regular"]},
   {name:"Stephen Curry",team:"GSW",clues:["7mo pick del Draft 2009","Ha jugado toda su carrera con Golden State Warriors","Récord de triples en una temporada (402)","El único MVP unánime en la historia de la NBA"]},
@@ -1352,6 +1393,13 @@ const MiniGamesTab=({players,userCtx})=>{
   const [guessDone,setGuessDone]=useState(false);
   const [guessFeedback,setGuessFeedback]=useState(null);
   const [guessPool,setGuessPool]=useState([]);
+  // Champs game state
+  const [champsRound,setChampsRound]=useState(0);
+  const [champsScore,setChampsScore]=useState(0);
+  const [champsQ,setChampsQ]=useState(null);
+  const [champsDone,setChampsDone]=useState(false);
+  const [champsFeedback,setChampsFeedback]=useState(null);
+  const [champsPool,setChampsPool]=useState([]);
 
   const buildClueQ=(pool,round)=>{
     const correct=pool[round];
@@ -1380,6 +1428,35 @@ const MiniGamesTab=({players,userCtx})=>{
         pickemAPI("getMiniScores",{params:{gameType:"guess"}}).then(d=>{if(d.ok)setScores(d.scores||[]);});
       } else {
         setGuessRound(next);setGuessQ(buildClueQ(guessPool,next));setGuessFeedback(null);
+      }
+    },900);
+  };
+
+  const buildChampsQ=(pool,round)=>{
+    const correct=pool[round];
+    const others=[...CHAMPS].filter(c=>c.team!==correct.team).sort(()=>Math.random()-.5).slice(0,3);
+    const opts=[correct,...others].sort(()=>Math.random()-.5);
+    return{correct,opts};
+  };
+  const startChamps=()=>{
+    const pool=[...CHAMPS].sort(()=>Math.random()-.5).slice(0,10);
+    setChampsRound(0);setChampsScore(0);setChampsDone(false);setChampsFeedback(null);
+    setChampsPool(pool);setChampsQ(buildChampsQ(pool,0));setGame("champs");setScreen("game");
+  };
+  const answerChamps=(team)=>{
+    if(champsFeedback!==null) return;
+    const isCorrect=team===champsQ.correct.team;
+    setChampsFeedback(isCorrect);
+    if(isCorrect) setChampsScore(s=>s+1);
+    setTimeout(()=>{
+      const next=champsRound+1;
+      if(next>=10){
+        setChampsDone(true);
+        const final=isCorrect?champsScore+1:champsScore;
+        if(user) pickemAPI("saveMiniScore",{body:{userId:user.id,gameType:"champs",score:final}});
+        pickemAPI("getMiniScores",{params:{gameType:"champs"}}).then(d=>{if(d.ok)setScores(d.scores||[]);});
+      } else {
+        setChampsRound(next);setChampsQ(buildChampsQ(champsPool,next));setChampsFeedback(null);
       }
     },900);
   };
@@ -1456,11 +1533,17 @@ const MiniGamesTab=({players,userCtx})=>{
         <div style={{fontSize:11,color:C.dim,marginBottom:12}}>10 preguntas sobre la NBA · ¿Cuántas aciertas?</div>
         <button className="btn" onClick={startTrivia} style={{width:"100%",padding:"10px",borderRadius:10,background:"linear-gradient(135deg,#FFB800,#ff9500)",color:"#07090f",fontWeight:900,fontSize:13}}>Jugar</button>
       </Card>
-      <Card style={{textAlign:"center",padding:24,borderColor:"#00FF9D33",gridColumn:"1/-1"}}>
+      <Card style={{textAlign:"center",padding:24,borderColor:"#00FF9D33"}}>
         <div style={{fontSize:40,marginBottom:10}}>🕵️</div>
         <div style={{fontSize:15,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,marginBottom:4}}>Adivina el Jugador</div>
-        <div style={{fontSize:11,color:C.dim,marginBottom:12}}>4 pistas de su carrera · Tú adivinas quién es · 8 rondas</div>
+        <div style={{fontSize:11,color:C.dim,marginBottom:12}}>4 pistas de carrera · 8 rondas</div>
         <button className="btn" onClick={startGuess} style={{width:"100%",padding:"10px",borderRadius:10,background:"linear-gradient(135deg,#00FF9D,#00aa66)",color:"#07090f",fontWeight:900,fontSize:13}}>Jugar</button>
+      </Card>
+      <Card style={{textAlign:"center",padding:24,borderColor:"#E03A3E33"}}>
+        <div style={{fontSize:40,marginBottom:10}}>🏆</div>
+        <div style={{fontSize:15,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,marginBottom:4}}>Campeones NBA</div>
+        <div style={{fontSize:11,color:C.dim,marginBottom:12}}>¿Quién ganó en ese año? · 1985–2024 · 10 rondas</div>
+        <button className="btn" onClick={startChamps} style={{width:"100%",padding:"10px",borderRadius:10,background:"linear-gradient(135deg,#E03A3E,#a00000)",color:"#fff",fontWeight:900,fontSize:13}}>Jugar</button>
       </Card>
     </div>
   </div>);
@@ -1570,12 +1653,52 @@ const MiniGamesTab=({players,userCtx})=>{
     </div>);
   }
 
+  if(screen==="game"&&game==="champs"){
+    if(champsDone) return(<div className="fade-up">
+      <ST sub="Campeones NBA">Resultado</ST>
+      <Card style={{textAlign:"center",padding:30,marginBottom:14}}>
+        <div style={{fontSize:56,marginBottom:8}}>🏆</div>
+        <div style={{fontSize:36,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#E03A3E"}}>{champsScore}/10</div>
+        <div style={{fontSize:14,color:C.dim,marginTop:4}}>{champsScore>=9?"¡Eres un historiador NBA! 🏆":champsScore>=6?"¡Buen conocimiento! 💪":"A repasar la historia 📚"}</div>
+      </Card>
+      {scores.length>0&&<Card style={{marginBottom:14}}><div style={{fontSize:11,color:C.muted,marginBottom:10,textTransform:"uppercase",letterSpacing:2}}>🏆 Top Puntuaciones</div>
+        {scores.map((s,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<scores.length-1?`1px solid ${C.border}`:"none"}}><span style={{fontSize:11,color:C.muted,width:16}}>{i+1}</span><span style={{fontSize:13}}>{s.users?.avatar_emoji||"🏀"}</span><span style={{flex:1,fontSize:12,color:C.text}}>{s.users?.name}</span><span style={{fontSize:14,fontWeight:900,color:"#E03A3E"}}>{s.score}/10</span></div>)}
+      </Card>}
+      <button className="btn" onClick={()=>setScreen("menu")} style={{width:"100%",padding:"13px",borderRadius:10,background:"#E03A3E",color:"#fff",fontWeight:900,fontSize:14}}>← Volver</button>
+    </div>);
+    if(!champsQ) return null;
+    const{correct,opts}=champsQ;
+    return(<div className="fade-up">
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <ST sub="Campeones NBA">Ronda {champsRound+1}/10</ST>
+        <div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#E03A3E"}}>{champsScore} pts</div>
+      </div>
+      <Card style={{marginBottom:20,background:"linear-gradient(135deg,#E03A3E11,#0d1117)",borderColor:"#E03A3E44",textAlign:"center",padding:"28px 20px"}}>
+        <div style={{fontSize:11,color:"#E03A3E",textTransform:"uppercase",letterSpacing:2,marginBottom:8}}>🏆 ¿Quién fue campeón en...?</div>
+        <div style={{fontSize:72,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text}}>{correct.year}</div>
+      </Card>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        {opts.map((o)=>{
+          const isCorrect=o.team===correct.team;
+          return<button key={o.team+o.year} className="btn" onClick={()=>answerChamps(o.team)} style={{padding:"16px 10px",borderRadius:12,textAlign:"center",background:champsFeedback!==null?(isCorrect?"#E03A3E22":"#0a1018"):"#0a1018",border:`2px solid ${champsFeedback!==null?isCorrect?"#E03A3E":C.border:C.border}`,transition:"all .2s"}}>
+            {logo(o.team,36)}
+            <div style={{fontSize:12,fontWeight:700,color:champsFeedback!==null&&isCorrect?"#E03A3E":C.text,marginTop:6}}>{tm(o.team).name}</div>
+          </button>;
+        })}
+      </div>
+      {champsFeedback!==null&&<div style={{textAlign:"center",marginTop:10,fontSize:15,fontWeight:700,color:champsFeedback?"#E03A3E":"#ff6666"}}>{champsFeedback?"🏆 ¡Correcto!":"❌ Fue "+tm(correct.team).name}</div>}
+      <div style={{height:5,borderRadius:3,background:C.border,overflow:"hidden",marginTop:14}}><div style={{width:`${(champsRound/10)*100}%`,height:"100%",background:"#E03A3E",transition:"width .4s"}}/></div>
+    </div>);
+  }
+
   return null;
 };
 
 /* ═══ SETTINGS TAB ═══ */
+const EMOJI_OPTS=["🏀","🏆","🔥","⭐","💎","👑","🦁","🐺","🦅","🐯","💪","🎯","🚀","✨","🌟","🎮","🃏","🥇","🎖️","🏅","🧠","💫","⚡","🎪","🦎","🐻","🏟️","🔮","🎲","🌊"];
 const SettingsTab=({userCtx})=>{
-  const {user,logout}=userCtx||{};
+  const {user,logout,save}=userCtx||{};
+  const [showEmojiPicker,setShowEmojiPicker]=useState(false);
   const [notifGranted,setNotifGranted]=useState(typeof Notification!=="undefined"&&Notification.permission==="granted");
   const [notifPrefs,setNotifPrefs]=useState({picks_reminder:true,win_notify:true,loss_notify:true,daily_summary:true});
   const [notifLoading,setNotifLoading]=useState(false);
@@ -1619,6 +1742,12 @@ const SettingsTab=({userCtx})=>{
     pickemAPI("setNotifPrefs",{body:{userId:user.id,...next}});
   };
 
+  const saveEmoji=async(emoji)=>{
+    setShowEmojiPicker(false);
+    save({...user,avatar_emoji:emoji});
+    await pickemAPI("updateProfile",{body:{userId:user.id,avatar_emoji:emoji}});
+  };
+
   if(!user) return(
     <div className="fade-up">
       <Card style={{textAlign:"center",padding:"40px 20px"}}>
@@ -1634,13 +1763,19 @@ const SettingsTab=({userCtx})=>{
     <ST sub="Cuenta">Mi Perfil</ST>
     <Card style={{marginBottom:18,background:`linear-gradient(135deg,${C.accent}11,${C.card})`,borderColor:`${C.accent}33`}}>
       <div style={{display:"flex",alignItems:"center",gap:14}}>
-        <div style={{width:56,height:56,borderRadius:"50%",background:`${C.accent}20`,border:`2px solid ${C.accent}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26}}>{user.avatar_emoji||"🏀"}</div>
+        <button className="btn" onClick={()=>setShowEmojiPicker(p=>!p)} style={{width:56,height:56,borderRadius:"50%",background:`${C.accent}20`,border:`2px solid ${showEmojiPicker?C.accent:C.accent+"44"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,flexShrink:0}} title="Cambiar avatar">{user.avatar_emoji||"🏀"}</button>
         <div style={{flex:1}}>
           <div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text}}>{user.name}</div>
-          <div style={{fontSize:10,color:C.muted,letterSpacing:1}}>ID: {user.id?.slice(0,8)}...</div>
+          <div style={{fontSize:10,color:C.muted,letterSpacing:1}}>Toca el emoji para cambiar avatar</div>
         </div>
         <button className="btn" onClick={logout} style={{padding:"8px 16px",borderRadius:8,background:"#ff444422",border:"1px solid #ff444444",color:"#ff6666",fontSize:12,fontWeight:700}}>Salir</button>
       </div>
+      {showEmojiPicker&&<div style={{marginTop:14,paddingTop:12,borderTop:`1px solid ${C.border}`}}>
+        <div style={{fontSize:10,color:C.muted,marginBottom:8,letterSpacing:1}}>ELIGE TU AVATAR</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+          {EMOJI_OPTS.map(e=><button key={e} className="btn" onClick={()=>saveEmoji(e)} style={{width:40,height:40,borderRadius:10,background:user.avatar_emoji===e?`${C.accent}22`:"#0a1018",border:`1px solid ${user.avatar_emoji===e?C.accent:C.border}`,fontSize:20}}>{e}</button>)}
+        </div>
+      </div>}
     </Card>
 
     {/* Notificaciones */}

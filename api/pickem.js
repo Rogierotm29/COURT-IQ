@@ -208,6 +208,7 @@ export default async function handler(req, res) {
         });
 
         let scored = 0;
+        const correctPicks = [];
         for (const pick of unscored) {
           const winner = finishedGames[pick.game_id];
           if (!winner) continue;
@@ -216,7 +217,31 @@ export default async function handler(req, res) {
             method: "PATCH",
             body: { correct, scored: true, points: correct ? 10 : 0 },
           });
+          if (correct) correctPicks.push(pick);
           scored++;
+        }
+
+        // Push notifications for correct picks
+        if (correctPicks.length > 0) {
+          try {
+            const webpush = await import("web-push");
+            const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
+            const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
+            if (VAPID_PUBLIC && VAPID_PRIVATE) {
+              webpush.default.setVapidDetails("mailto:courtiq@app.com", VAPID_PUBLIC, VAPID_PRIVATE);
+              for (const pick of correctPicks) {
+                const subs = await supabase("push_subscriptions", { filters: `?user_id=eq.${pick.user_id}&limit=1` });
+                if (!subs?.length) continue;
+                const sub = { endpoint: subs[0].endpoint, keys: { p256dh: subs[0].p256dh, auth: subs[0].auth } };
+                await webpush.default.sendNotification(sub, JSON.stringify({
+                  title: "✅ ¡Acertaste!",
+                  body: `Tu pick de ${pick.picked_team} fue correcto — +10 puntos 🏀`,
+                  tag: "pick-correct-" + pick.id,
+                  url: "/"
+                })).catch(() => {});
+              }
+            }
+          } catch (_) {}
         }
 
         return res.json({ ok: true, scored, gamesChecked: Object.keys(finishedGames).length });
@@ -564,6 +589,32 @@ export default async function handler(req, res) {
           settled++;
         }
         return res.json({ ok: true, settled });
+      }
+
+      // ─── UPDATE PROFILE ────────────────────────────────────
+      case "updateProfile": {
+        const { userId, avatarEmoji } = body;
+        if (!userId) return res.json({ ok: false, error: "userId requerido" });
+        await supabase(`users?id=eq.${userId}`, { method: "PATCH", body: { avatar_emoji: avatarEmoji } });
+        return res.json({ ok: true });
+      }
+
+      // ─── GLOBAL LEADERBOARD ────────────────────────────────
+      case "globalLeaderboard": {
+        const today = new Date().toISOString().split("T")[0];
+        const picks = await supabase("picks", {
+          filters: `?game_date=eq.${today}&scored=eq.true&select=user_id,correct,points,users(name,avatar_emoji)`,
+        });
+        const agg = {};
+        for (const p of (picks || [])) {
+          if (!agg[p.user_id]) agg[p.user_id] = { user_id: p.user_id, name: p.users?.name, avatar_emoji: p.users?.avatar_emoji, correct: 0, total: 0, points: 0 };
+          agg[p.user_id].total++;
+          if (p.correct) { agg[p.user_id].correct++; agg[p.user_id].points += p.points || 10; }
+        }
+        const sorted = Object.values(agg)
+          .sort((a, b) => b.points - a.points || b.correct - a.correct)
+          .map(u => ({ ...u, accuracy: u.total > 0 ? Math.round(u.correct / u.total * 100) : 0 }));
+        return res.json({ ok: true, leaderboard: sorted });
       }
 
       // ─── SUBSCRIBE PUSH ────────────────────────────────────
