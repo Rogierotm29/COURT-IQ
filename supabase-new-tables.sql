@@ -37,3 +37,30 @@ create table if not exists mini_game_scores (
 alter table mini_game_scores enable row level security;
 create policy "public_mini_scores" on mini_game_scores for all using (true) with check (true);
 grant all on mini_game_scores to anon, authenticated;
+
+-- ─── PUSH SUBSCRIPTIONS ─────────────────────────────
+create table if not exists push_subscriptions (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references users(id) on delete cascade unique,
+  endpoint text not null,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz default now()
+);
+alter table push_subscriptions enable row level security;
+create policy "public_push_subs" on push_subscriptions for all using (true) with check (true);
+grant all on push_subscriptions to anon, authenticated;
+
+-- ─── NOTIFICATION PREFS ─────────────────────────────
+create table if not exists notification_prefs (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references users(id) on delete cascade unique,
+  picks_reminder boolean default true,
+  win_notify boolean default true,
+  loss_notify boolean default false,
+  daily_summary boolean default true,
+  updated_at timestamptz default now()
+);
+alter table notification_prefs enable row level security;
+create policy "public_notif_prefs" on notification_prefs for all using (true) with check (true);
+grant all on notification_prefs to anon, authenticated;
