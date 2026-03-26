@@ -771,7 +771,7 @@ const PickemTab=({games,userCtx})=>{
             return <div key={r.user_id||i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 8px",marginBottom:4,borderRadius:10,background:isMe?`${C.accent}11`:i<3?"#FFB80008":"transparent",border:isMe?`1px solid ${C.accent}33`:"1px solid transparent"}}>
               <div style={{width:32,height:32,borderRadius:"50%",background:i<3?`${mc[i]}22`:"#0a1018",border:`2px solid ${i<3?mc[i]:C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:i<3?14:12,fontWeight:900,color:i<3?mc[i]:C.dim,flexShrink:0}}>{i<3?["🥇","🥈","🥉"][i]:i+1}</div>
               <div style={{flex:1}}>
-                <div style={{fontSize:13,fontWeight:isMe?800:600,color:isMe?C.accent:C.text}}>{r.avatar_emoji||"🏀"} {r.name||r.user_name}{isMe?" (tú)":""}</div>
+                <div style={{fontSize:13,fontWeight:isMe?800:600,color:isMe?C.accent:C.text}}>{isMe?(user.avatar_emoji||"🏀"):(r.avatar_emoji||"🏀")} {r.name||r.user_name}{isMe?" (tú)":""}</div>
                 <div style={{fontSize:10,color:C.dim}}>{r.correct_picks??r.correct??0} aciertos · {r.accuracy}% precisión{(streaks[r.user_id]||0)>=3&&<span style={{fontSize:9,color:"#FF6B35",fontWeight:700}}> 🔥{streaks[r.user_id]} en racha</span>}</div>
               </div>
               <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2}}>
@@ -860,7 +860,7 @@ const PickemTab=({games,userCtx})=>{
             </>}
             <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
               {gp.map((p,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:4,background:`${tm(p.picked_team).color}18`,border:`1px solid ${tm(p.picked_team).color}44`,borderRadius:20,padding:"3px 8px"}}>
-                <span style={{fontSize:11}}>{p.users?.avatar_emoji||"🏀"}</span><span style={{fontSize:10,color:C.text,fontWeight:600}}>{p.users?.name||"?"}</span>
+                <span style={{fontSize:11}}>{p.user_id===user.id?(user.avatar_emoji||"🏀"):(p.users?.avatar_emoji||"🏀")}</span><span style={{fontSize:10,color:C.text,fontWeight:600}}>{p.users?.name||"?"}</span>
               </div>)}
             </div>
           </Card>;
@@ -936,7 +936,7 @@ const PickemTab=({games,userCtx})=>{
           :chat.map((m,i)=>{
             const isMe=m.user_id===user.id;
             return<div key={i} style={{display:"flex",gap:8,alignItems:"flex-end",flexDirection:isMe?"row-reverse":"row"}}>
-              <div style={{width:28,height:28,borderRadius:"50%",background:`${C.accent}20`,border:`1px solid ${C.accent}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>{m.users?.avatar_emoji||"🏀"}</div>
+              <div style={{width:28,height:28,borderRadius:"50%",background:`${C.accent}20`,border:`1px solid ${C.accent}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>{isMe?(user.avatar_emoji||"🏀"):(m.users?.avatar_emoji||"🏀")}</div>
               <div style={{maxWidth:"75%"}}>
                 <div style={{fontSize:9,color:isMe?C.accent:C.muted,marginBottom:2,textAlign:isMe?"right":"left",fontWeight:700}}>{isMe?"Tú":m.users?.name}</div>
                 <div style={{background:isMe?`${C.accent}22`:"#131d29",border:`1px solid ${isMe?C.accent+"44":C.border}`,borderRadius:isMe?"14px 14px 4px 14px":"14px 14px 14px 4px",padding:"8px 12px",fontSize:13,color:C.text}}>{m.content}</div>
@@ -1745,7 +1745,7 @@ const SettingsTab=({userCtx})=>{
   const saveEmoji=async(emoji)=>{
     setShowEmojiPicker(false);
     save({...user,avatar_emoji:emoji});
-    await pickemAPI("updateProfile",{body:{userId:user.id,avatar_emoji:emoji}});
+    await pickemAPI("updateProfile",{body:{userId:user.id,avatarEmoji:emoji}});
   };
 
   if(!user) return(
