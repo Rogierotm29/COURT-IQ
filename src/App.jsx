@@ -627,8 +627,13 @@ const PickemTab=({games,userCtx,initSubTab})=>{
     pickemAPI("getAchievements",{params:{userId:user.id}}).then(d=>{if(d.ok)setAchievements(d.achievements||[]);});
   },[user]);
 
-  // Save last selected group
-  useEffect(()=>{if(selGroup)localStorage.setItem("courtiq_lastgroup",selGroup.id);},[selGroup]);
+  // Save last selected group and notify FloatingChat
+  useEffect(()=>{
+    if(selGroup){
+      localStorage.setItem("courtiq_lastgroup",selGroup.id);
+      window.dispatchEvent(new CustomEvent("courtiq_group_changed",{detail:selGroup}));
+    }
+  },[selGroup]);
 
   // Load picks, leaderboard, wildcard, daily winner when group changes
   useEffect(()=>{
@@ -2242,6 +2247,12 @@ const FloatingChat=({userCtx})=>{
     });
   };
 
+  const switchGroup=(g)=>{
+    setGroup(g);groupRef.current=g;
+    setUnread(0);setMsgs([]);
+    loadMsgs(g,open);
+  };
+
   // Load group on mount and start polling (even when chat is closed)
   useEffect(()=>{
     if(!user) return;
@@ -2250,11 +2261,21 @@ const FloatingChat=({userCtx})=>{
     pickemAPI("myGroups",{params:{userId:user.id}}).then(d=>{
       if(d.ok&&d.groups?.length){
         const g=d.groups.find(x=>x.id===gid)||d.groups[0];
-        setGroup(g);groupRef.current=g;
-        loadMsgs(g,false);
+        switchGroup(g);
       }
     });
   },[user]);
+
+  // React to group changes from PickemTab
+  useEffect(()=>{
+    if(!user) return;
+    const handler=(e)=>{
+      const g=e.detail;
+      if(g&&g.id!==groupRef.current?.id) switchGroup(g);
+    };
+    window.addEventListener("courtiq_group_changed",handler);
+    return()=>window.removeEventListener("courtiq_group_changed",handler);
+  },[user,open]);
 
   // Poll every 20s for new messages
   useEffect(()=>{
