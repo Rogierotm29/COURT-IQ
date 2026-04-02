@@ -173,7 +173,7 @@ function useUser() {
 }
 
 /* ═══ HOME TAB ═══ */
-const HomeTab=({games,live,userCtx,standings,goToChat,goToBets})=>{
+const HomeTab=({games,live,userCtx,standings,goToBets})=>{
   const {user}=userCtx||{};
   const [picks,setPicks]=useState({});
   const [group,setGroup]=useState(null);
@@ -234,7 +234,6 @@ const HomeTab=({games,live,userCtx,standings,goToChat,goToBets})=>{
         <div><div style={{fontSize:10,color:"#00FF9D",fontWeight:700,letterSpacing:2}}>PICK'EM ACTIVO</div><div style={{fontSize:14,fontWeight:700,color:C.text,marginTop:2}}>👋 {user.name} — Toca un equipo para elegir ganador</div></div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
           {group?<Tag c="#00FF9D">Grupo: {group.name}</Tag>:<Tag c="#FFB800">Ve a Grupos para crear uno</Tag>}
-          {group&&<button className="btn" onClick={goToChat} style={{padding:"6px 10px",borderRadius:10,background:"#00C2FF18",border:"1px solid #00C2FF44",color:"#00C2FF",fontSize:13}}>💬</button>}
         </div>
       </div>
     </Card>}
@@ -260,63 +259,77 @@ const HomeTab=({games,live,userCtx,standings,goToChat,goToBets})=>{
         const gp=grpPicks.filter(p=>p.game_id===g.id);
         const forAway=gp.filter(p=>p.picked_team===g.away);
         const forHome=gp.filter(p=>p.picked_team===g.home);
-        return <Card key={g.id} style={{padding:14,borderColor:isFinal&&picked?(correct?"#00FF9D33":"#ff444433"):isLive&&picked?`${tm(picked).color}44`:picked?`${tm(picked).color}33`:C.border}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        return <Card key={g.id} style={{padding:16,borderColor:isFinal&&picked?(correct?"#00FF9D55":"#ff444455"):isLive&&picked?`${tm(picked).color}55`:picked?`${tm(picked).color}44`:C.border,borderWidth:picked?2:1}}>
+        {/* Header: estado + resultado */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
           <div style={{display:"flex",gap:6,alignItems:"center"}}>
-            {isLive?<Tag c="#ff4444">● LIVE {g.detail}</Tag>:isFinal?<Tag c={C.muted}>Final</Tag>
-            :minsLeft!==null?(minsLeft<=1?<Tag c="#ff4444">⏱ Iniciando...</Tag>:minsLeft<=60?<Tag c={minsLeft<=15?"#ff6666":"#FF6B35"}>⏱ {minsLeft} min</Tag>:<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>)
-            :<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>}
+            {isLive?<Tag c="#ff4444">● EN VIVO {g.detail}</Tag>:isFinal?<Tag c={C.muted}>Terminado</Tag>
+            :minsLeft!==null?(minsLeft<=1?<Tag c="#ff4444">⏱ Iniciando...</Tag>:minsLeft<=60?<Tag c={minsLeft<=15?"#ff6666":"#FF6B35"}>⏱ {minsLeft} min</Tag>:<Tag c={C.accent}>{g.detail||"Hoy"}</Tag>)
+            :<Tag c={C.accent}>{g.detail||"Hoy"}</Tag>}
           </div>
-          <div style={{display:"flex",gap:5,alignItems:"center"}}>
-            {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?"✅ +10":"❌"}</Tag>}
-            {isLive&&picked&&<Tag c={tm(picked).color}>● {picked}</Tag>}
-            {!isFinal&&!isLive&&picked&&<Tag c="#00FF9D">✓ {picked}</Tag>}
-            {group&&<button className="btn" onClick={()=>setExpandedCard(isExpanded?null:g.id)} style={{padding:"3px 7px",borderRadius:8,background:isExpanded?`${C.accent}22`:"#0a1018",border:`1px solid ${isExpanded?C.accent:C.border}`,color:isExpanded?C.accent:C.muted,fontSize:11}}>👥</button>}
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?"✅ Correcto +10 pts":"❌ Incorrecto"}</Tag>}
+            {isLive&&picked&&<Tag c={tm(picked).color}>● Tu pick: {picked}</Tag>}
+            {!isFinal&&!isLive&&picked&&<Tag c="#00FF9D">✓ Elegiste: {picked}</Tag>}
           </div>
         </div>
-        {!isExpanded&&<div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:8,alignItems:"center"}}>
-          {[["away",g.away,g.awayScore],["vs"],["home",g.home,g.homeScore]].map((item,idx)=>
-            idx===1?<div key="vs" style={{textAlign:"center",fontSize:12,color:C.muted,fontWeight:800}}>VS</div>
-            :(user&&group&&isUpcoming)?
-              <button key={item[1]} className="btn" onClick={()=>makePick(g.id,item[1],g.home,g.away)} style={{padding:"12px 8px",borderRadius:12,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:4,
-                background:picked===item[1]?`${tm(item[1]).color}18`:"transparent",
-                border:`2px solid ${picked===item[1]?tm(item[1]).color:C.border}`,
-                color:picked===item[1]?tm(item[1]).color:C.text,width:"100%"}}>
-                {logo(item[1],36)}
-                <span style={{fontSize:13,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif"}}>{item[1]}</span>
-                <span style={{fontSize:10,color:C.dim}}>{tm(item[1]).name}</span>
-              </button>
-            :<div key={item[1]} style={{textAlign:"center",padding:"12px 8px",opacity:picked&&picked!==item[1]?0.4:1}}>
-                {logo(item[1],36)}
-                <div style={{fontSize:13,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:picked===item[1]?tm(item[1]).color:C.text,marginTop:4}}>{item[1]}</div>
-                {(isFinal||isLive)&&<div style={{fontSize:22,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:isFinal&&item[1]===winner?"#00FF9D":C.text,marginTop:4}}>{item[2]}</div>}
-              </div>
-          )}
-        </div>}
-        {isExpanded&&<div>
-          {gp.length===0?<div style={{textAlign:"center",padding:"16px 0",color:C.muted,fontSize:12}}>Nadie ha hecho pick aún</div>:<>
-            <div style={{display:"flex",height:8,borderRadius:4,overflow:"hidden",marginBottom:6}}>
-              <div style={{flex:forAway.length||0.01,background:tm(g.away).color}}/><div style={{flex:forHome.length||0.01,background:tm(g.home).color}}/>
-            </div>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.dim,marginBottom:8}}>
-              <span style={{color:tm(g.away).color}}>{g.away} {gp.length?Math.round(forAway.length/gp.length*100):0}%</span>
-              <span style={{color:tm(g.home).color}}>{gp.length?Math.round(forHome.length/gp.length*100):0}% {g.home}</span>
-            </div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-              {gp.map((p,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:4,background:`${tm(p.picked_team).color}18`,border:`1px solid ${tm(p.picked_team).color}44`,borderRadius:20,padding:"3px 8px"}}>
-                <span style={{fontSize:10}}>{p.users?.avatar_emoji||"🏀"}</span><span style={{fontSize:10,color:C.text,fontWeight:600}}>{p.users?.name||"?"}</span>{logo(p.picked_team,14)}
-              </div>)}
-            </div>
-          </>}
-        </div>}
-        <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8,fontSize:9}}>
-          <span style={{color:tm(g.away).color,fontWeight:700,minWidth:28}}>{awayPct}%</span>
-          <div style={{flex:1,height:4,borderRadius:2,background:C.border,overflow:"hidden",position:"relative"}}>
+
+        {/* Vista picks o grupo */}
+        {!isExpanded
+          ?<div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:10,alignItems:"center"}}>
+            {[["away",g.away,g.awayScore],["vs"],["home",g.home,g.homeScore]].map((item,idx)=>
+              idx===1?<div key="vs" style={{textAlign:"center",fontSize:14,color:C.muted,fontWeight:900}}>VS</div>
+              :(user&&group&&isUpcoming)
+                ?<button key={item[1]} className="btn" onClick={()=>makePick(g.id,item[1],g.home,g.away)} style={{padding:"14px 8px",borderRadius:14,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:5,background:picked===item[1]?`${tm(item[1]).color}22`:"#0a1018",border:`2.5px solid ${picked===item[1]?tm(item[1]).color:C.border}`,color:picked===item[1]?tm(item[1]).color:C.text,width:"100%",position:"relative"}}>
+                    {picked===item[1]&&<div style={{position:"absolute",top:6,right:6,width:18,height:18,borderRadius:"50%",background:tm(item[1]).color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:"#07090f",fontWeight:900}}>✓</div>}
+                    {logo(item[1],44)}
+                    <span style={{fontSize:15,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif"}}>{item[1]}</span>
+                    <span style={{fontSize:10,color:picked===item[1]?tm(item[1]).color:C.dim}}>{tm(item[1]).name}</span>
+                    {!picked&&<span style={{fontSize:9,color:C.muted,marginTop:2}}>Toca para elegir</span>}
+                  </button>
+                :<div key={item[1]} style={{textAlign:"center",padding:"12px 8px",opacity:picked&&picked!==item[1]?0.35:1}}>
+                    {logo(item[1],44)}
+                    <div style={{fontSize:15,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:picked===item[1]?tm(item[1]).color:C.text,marginTop:5}}>{item[1]}</div>
+                    {(isFinal||isLive)&&<div style={{fontSize:26,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:isFinal&&item[1]===winner?"#00FF9D":C.text,marginTop:4}}>{item[2]}</div>}
+                  </div>
+            )}
+          </div>
+          :<div>
+            {gp.length===0
+              ?<div style={{textAlign:"center",padding:"20px 0",color:C.muted,fontSize:13}}>Nadie en el grupo ha hecho pick aún</div>
+              :<>
+                <div style={{display:"flex",height:10,borderRadius:5,overflow:"hidden",marginBottom:8}}>
+                  <div style={{flex:forAway.length||0.01,background:tm(g.away).color}}/><div style={{flex:forHome.length||0.01,background:tm(g.home).color}}/>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11,fontWeight:700,marginBottom:10}}>
+                  <span style={{color:tm(g.away).color}}>{logo(g.away,16)} {g.away} — {gp.length?Math.round(forAway.length/gp.length*100):0}%</span>
+                  <span style={{color:tm(g.home).color}}>{gp.length?Math.round(forHome.length/gp.length*100):0}% {g.home} {logo(g.home,16)}</span>
+                </div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                  {gp.map((p,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:5,background:`${tm(p.picked_team).color}20`,border:`1.5px solid ${tm(p.picked_team).color}55`,borderRadius:22,padding:"4px 10px"}}>
+                    <span style={{fontSize:14}}>{p.users?.avatar_emoji||"🏀"}</span>
+                    <span style={{fontSize:11,color:C.text,fontWeight:700}}>{p.users?.name||"?"}</span>
+                    {logo(p.picked_team,16)}
+                  </div>)}
+                </div>
+              </>}
+          </div>}
+
+        {/* Botón toggle picks ↔ grupo */}
+        {group&&<button className="btn" onClick={()=>setExpandedCard(isExpanded?null:g.id)} style={{width:"100%",marginTop:12,padding:"9px",borderRadius:10,background:isExpanded?"#0a1018":`${C.accent}11`,border:`1px solid ${isExpanded?C.border:C.accent+"44"}`,color:isExpanded?C.muted:C.accent,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+          {isExpanded?"🎯 Volver a los picks":"👥 Ver quién eligió qué en el grupo"}
+        </button>}
+
+        {/* Barra de probabilidad */}
+        <div style={{display:"flex",alignItems:"center",gap:6,marginTop:10,fontSize:10}}>
+          <span style={{color:tm(g.away).color,fontWeight:700,minWidth:34}}>{awayPct}%</span>
+          <div style={{flex:1,height:5,borderRadius:3,background:C.border,overflow:"hidden"}}>
             <div style={{width:`${awayPct}%`,height:"100%",background:`linear-gradient(90deg,${tm(g.away).color},${tm(g.home).color})`,transition:"width .6s ease"}}/>
           </div>
-          <span style={{color:tm(g.home).color,fontWeight:700,minWidth:28,textAlign:"right"}}>{homePct}%</span>
+          <span style={{color:tm(g.home).color,fontWeight:700,minWidth:34,textAlign:"right"}}>{homePct}%</span>
         </div>
-        {isLive&&<div style={{fontSize:8,color:"#ff4444",textAlign:"center",marginTop:3,letterSpacing:.5}}>● Probabilidad en vivo basada en el marcador</div>}
+        {isLive&&<div style={{fontSize:9,color:"#ff4444",textAlign:"center",marginTop:4,letterSpacing:.5}}>● Probabilidad basada en el marcador actual</div>}
+        {!isLive&&!isFinal&&<div style={{fontSize:9,color:C.muted,textAlign:"center",marginTop:4}}>Probabilidad estimada de ganar</div>}
       </Card>;})}
     </div>
   </div>);
@@ -1997,6 +2010,74 @@ const SettingsTab=({userCtx})=>{
   </div>);
 };
 
+/* ═══ FLOATING CHAT ═══ */
+const FloatingChat=({userCtx})=>{
+  const {user}=userCtx||{};
+  const [open,setOpen]=useState(false);
+  const [msgs,setMsgs]=useState([]);
+  const [input,setInput]=useState("");
+  const [sending,setSending]=useState(false);
+  const [group,setGroup]=useState(null);
+  const endRef=useRef(null);
+
+  useEffect(()=>{
+    if(!user||!open) return;
+    const gid=localStorage.getItem("courtiq_lastgroup");
+    if(!gid) return;
+    pickemAPI("myGroups",{params:{userId:user.id}}).then(d=>{
+      if(d.ok&&d.groups?.length){
+        const g=d.groups.find(x=>x.id===gid)||d.groups[0];
+        setGroup(g);
+        pickemAPI("getChat",{params:{groupId:g.id}}).then(r=>{if(r.ok)setMsgs(r.messages||[]);});
+      }
+    });
+  },[user,open]);
+
+  useEffect(()=>{if(open)endRef.current?.scrollIntoView({behavior:"smooth"});},[msgs,open]);
+
+  const send=async()=>{
+    if(!input.trim()||!group||!user||sending) return;
+    setSending(true);
+    const text=input.trim();setInput("");
+    await pickemAPI("sendChat",{body:{groupId:group.id,userId:user.id,content:text}});
+    pickemAPI("getChat",{params:{groupId:group.id}}).then(r=>{if(r.ok)setMsgs(r.messages||[]);});
+    setSending(false);
+  };
+
+  if(!user) return null;
+  return(<>
+    {open&&<div style={{position:"fixed",bottom:82,right:16,width:Math.min(340,window.innerWidth-32),height:440,background:C.card,border:`1.5px solid ${C.border}`,borderRadius:18,zIndex:1500,display:"flex",flexDirection:"column",boxShadow:"0 12px 48px #00000099",overflow:"hidden"}}>
+      <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",background:"#0a0f17"}}>
+        <div><div style={{fontSize:14,fontWeight:800,color:C.text}}>💬 {group?.name||"Chat del grupo"}</div><div style={{fontSize:9,color:C.muted}}>Chat en tiempo real</div></div>
+        <button className="btn" onClick={()=>setOpen(false)} style={{width:32,height:32,borderRadius:"50%",background:"#131d29",border:`1px solid ${C.border}`,color:C.muted,fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"12px 10px",display:"flex",flexDirection:"column",gap:8}}>
+        {msgs.length===0
+          ?<div style={{textAlign:"center",color:C.muted,fontSize:13,marginTop:40}}>💬<br/>Sin mensajes aún</div>
+          :msgs.map((m,i)=>{
+            const isMe=m.user_id===user.id;
+            return<div key={i} style={{display:"flex",gap:7,alignItems:"flex-end",flexDirection:isMe?"row-reverse":"row"}}>
+              <div style={{width:28,height:28,borderRadius:"50%",background:isMe?`${C.accent}30`:"#1a2535",border:`1.5px solid ${isMe?C.accent+"55":C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>{isMe?(user.avatar_emoji||"🏀"):(m.users?.avatar_emoji||"🏀")}</div>
+              <div style={{maxWidth:"78%"}}>
+                <div style={{fontSize:9,color:isMe?C.accent:C.muted,marginBottom:3,textAlign:isMe?"right":"left",fontWeight:700}}>{isMe?"Tú":m.users?.name}</div>
+                <div style={{background:isMe?`${C.accent}25`:"#131d29",border:`1px solid ${isMe?C.accent+"44":C.border}`,borderRadius:isMe?"14px 14px 4px 14px":"14px 14px 14px 4px",padding:"8px 12px",fontSize:13,color:C.text,lineHeight:1.4}}>{m.content}</div>
+                <div style={{fontSize:8,color:C.muted,marginTop:3,textAlign:isMe?"right":"left"}}>{new Date(m.created_at).toLocaleTimeString("es",{hour:"2-digit",minute:"2-digit"})}</div>
+              </div>
+            </div>;
+          })}
+        <div ref={endRef}/>
+      </div>
+      <div style={{padding:"10px 12px",borderTop:`1px solid ${C.border}`,display:"flex",gap:8,background:"#0a0f17"}}>
+        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder="Escribe un mensaje..." style={{flex:1,background:"#131d29",border:`1.5px solid ${input?C.accent:C.border}`,borderRadius:12,padding:"10px 14px",color:C.text,fontSize:13,outline:"none"}}/>
+        <button className="btn" onClick={send} disabled={!input.trim()||sending} style={{padding:"10px 16px",borderRadius:12,background:input.trim()?C.accent:"#131d29",color:input.trim()?"#07090f":C.muted,fontSize:16,fontWeight:900,minWidth:46}}>→</button>
+      </div>
+    </div>}
+    <button className="btn" onClick={()=>setOpen(o=>!o)} title="Chat del grupo" style={{position:"fixed",bottom:16,right:16,width:56,height:56,borderRadius:"50%",background:open?"#131d29":"linear-gradient(135deg,#00C2FF,#0055ff)",border:`2px solid ${open?C.border:"#00C2FF88"}`,fontSize:24,zIndex:1500,boxShadow:"0 4px 20px #00C2FF55",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .2s"}}>
+      {open?"✕":"💬"}
+    </button>
+  </>);
+};
+
 /* ═══ APP ROOT ═══ */
 const TABS=[{id:"home",icon:"🏠",label:"Home"},{id:"teams",icon:"🏆",label:"Equipos"},{id:"players",icon:"⭐",label:"Jugadores"},{id:"pickem",icon:"👥",label:"Grupos"},{id:"bracket",icon:"🏅",label:"Playoffs"},{id:"games",icon:"🎮",label:"Juegos"},{id:"settings",icon:"⚙️",label:"Config"}];
 export default function App(){
@@ -2043,8 +2124,8 @@ export default function App(){
     <div style={{background:"#0a0f17",borderBottom:`1px solid ${C.border}`,padding:"0 22px",display:"flex",overflowX:"auto"}}>
       {TABS.map(n=><button key={n.id} className="btn" onClick={()=>setTab(n.id)} style={{padding:"11px 14px",background:"transparent",border:"none",borderBottom:`2px solid ${tab===n.id?C.accent:"transparent"}`,color:tab===n.id?C.accent:C.muted,fontSize:12,fontWeight:tab===n.id?700:500,whiteSpace:"nowrap"}}>{n.icon} {n.label}</button>)}
     </div>
-    <div style={{maxWidth:1000,margin:"0 auto",padding:"22px 18px"}}>
-      {tab==="home"&&<HomeTab games={games} live={live} userCtx={userCtx} standings={standings} goToChat={()=>{setPickemInitSubTab("chat");setTab("pickem");}} goToBets={()=>{setPickemInitSubTab("apuestas");setTab("pickem");}}/>}
+    <div style={{maxWidth:1000,margin:"0 auto",padding:"22px 18px 100px"}}>
+      {tab==="home"&&<HomeTab games={games} live={live} userCtx={userCtx} standings={standings} goToBets={()=>{setPickemInitSubTab("apuestas");setTab("pickem");}}/>}
       {tab==="teams"&&<TeamsTab standings={standings} live={live}/>}
       {tab==="players"&&<PlayersTab players={players} live={live}/>}
       {tab==="pickem"&&<PickemTab games={games} userCtx={userCtx} initSubTab={pickemInitSubTab}/>}
@@ -2052,6 +2133,7 @@ export default function App(){
       {tab==="games"&&<MiniGamesTab players={players} userCtx={userCtx}/>}
       {tab==="settings"&&<SettingsTab userCtx={userCtx}/>}
     </div>
+    <FloatingChat userCtx={userCtx}/>
   </div>);
 }
 //
