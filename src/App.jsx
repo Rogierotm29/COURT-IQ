@@ -16,7 +16,7 @@ const ESPN_LOGO={ATL:"atl",BOS:"bos",BKN:"bkn",CHA:"cha",CHI:"chi",CLE:"cle",DAL
 const logo=(abbr,sz=32)=><img src={`https://a.espncdn.com/i/teamlogos/nba/500/${ESPN_LOGO[abbr]||abbr.toLowerCase()}.png`} alt={abbr} style={{width:sz,height:sz,objectFit:"contain"}} onError={e=>{e.target.style.display="none"}}/>;
 
 const TM={
-  ATL:{color:"#E03A3E",name:"Atlanta Hawks",conf:"E",div:"Southeast"},BOS:{color:"#008348",name:"Boston Celtics",conf:"E",div:"Atlantic"},BKN:{color:"#6A6A6A",name:"Brooklyn Nets",conf:"E",div:"Atlantic"},CHA:{color:"#1D1160",name:"Charlotte Hornets",conf:"E",div:"Southeast"},CHI:{color:"#CE1141",name:"Chicago Bulls",conf:"E",div:"Central"},CLE:{color:"#860038",name:"Cleveland Cavaliers",conf:"E",div:"Central"},DAL:{color:"#00538C",name:"Dallas Mavericks",conf:"W",div:"Southwest"},DEN:{color:"#FEC524",name:"Denver Nuggets",conf:"W",div:"Northwest"},DET:{color:"#C8102E",name:"Detroit Pistons",conf:"E",div:"Central"},GSW:{color:"#1D428A",name:"Golden State Warriors",conf:"W",div:"Pacific"},HOU:{color:"#CE1141",name:"Houston Rockets",conf:"W",div:"Southwest"},IND:{color:"#002D62",name:"Indiana Pacers",conf:"E",div:"Central"},LAC:{color:"#C8102E",name:"LA Clippers",conf:"W",div:"Pacific"},LAL:{color:"#552583",name:"Los Angeles Lakers",conf:"W",div:"Pacific"},MEM:{color:"#5D76A9",name:"Memphis Grizzlies",conf:"W",div:"Southwest"},MIA:{color:"#98002E",name:"Miami Heat",conf:"E",div:"Southeast"},MIL:{color:"#00471B",name:"Milwaukee Bucks",conf:"E",div:"Central"},MIN:{color:"#236192",name:"Minnesota Timberwolves",conf:"W",div:"Northwest"},NOP:{color:"#0C2340",name:"New Orleans Pelicans",conf:"W",div:"Southwest"},NYK:{color:"#006BB6",name:"New York Knicks",conf:"E",div:"Atlantic"},OKC:{color:"#007AC1",name:"OKC Thunder",conf:"W",div:"Northwest"},ORL:{color:"#0077C0",name:"Orlando Magic",conf:"E",div:"Southeast"},PHI:{color:"#ED174C",name:"Philadelphia 76ers",conf:"E",div:"Atlantic"},PHX:{color:"#E56020",name:"Phoenix Suns",conf:"W",div:"Pacific"},POR:{color:"#E03A3E",name:"Portland Trail Blazers",conf:"W",div:"Northwest"},SAC:{color:"#5A2D81",name:"Sacramento Kings",conf:"W",div:"Pacific"},SAS:{color:"#8E9093",name:"San Antonio Spurs",conf:"W",div:"Southwest"},TOR:{color:"#CE1141",name:"Toronto Raptors",conf:"E",div:"Atlantic"},UTA:{color:"#002B5C",name:"Utah Jazz",conf:"W",div:"Northwest"},WAS:{color:"#002B5C",name:"Washington Wizards",conf:"E",div:"Southeast"},
+  ATL:{color:"#E03A3E",name:"Atlanta Hawks",conf:"E",div:"Southeast"},BOS:{color:"#008348",name:"Boston Celtics",conf:"E",div:"Atlantic"},BKN:{color:"#BBBBBB",name:"Brooklyn Nets",conf:"E",div:"Atlantic"},CHA:{color:"#00B2A9",name:"Charlotte Hornets",conf:"E",div:"Southeast"},CHI:{color:"#CE1141",name:"Chicago Bulls",conf:"E",div:"Central"},CLE:{color:"#860038",name:"Cleveland Cavaliers",conf:"E",div:"Central"},DAL:{color:"#00538C",name:"Dallas Mavericks",conf:"W",div:"Southwest"},DEN:{color:"#FEC524",name:"Denver Nuggets",conf:"W",div:"Northwest"},DET:{color:"#C8102E",name:"Detroit Pistons",conf:"E",div:"Central"},GSW:{color:"#1D428A",name:"Golden State Warriors",conf:"W",div:"Pacific"},HOU:{color:"#CE1141",name:"Houston Rockets",conf:"W",div:"Southwest"},IND:{color:"#FDBB30",name:"Indiana Pacers",conf:"E",div:"Central"},LAC:{color:"#C8102E",name:"LA Clippers",conf:"W",div:"Pacific"},LAL:{color:"#552583",name:"Los Angeles Lakers",conf:"W",div:"Pacific"},MEM:{color:"#5D76A9",name:"Memphis Grizzlies",conf:"W",div:"Southwest"},MIA:{color:"#98002E",name:"Miami Heat",conf:"E",div:"Southeast"},MIL:{color:"#007A33",name:"Milwaukee Bucks",conf:"E",div:"Central"},MIN:{color:"#236192",name:"Minnesota Timberwolves",conf:"W",div:"Northwest"},NOP:{color:"#C8A96E",name:"New Orleans Pelicans",conf:"W",div:"Southwest"},NYK:{color:"#006BB6",name:"New York Knicks",conf:"E",div:"Atlantic"},OKC:{color:"#007AC1",name:"OKC Thunder",conf:"W",div:"Northwest"},ORL:{color:"#0077C0",name:"Orlando Magic",conf:"E",div:"Southeast"},PHI:{color:"#ED174C",name:"Philadelphia 76ers",conf:"E",div:"Atlantic"},PHX:{color:"#E56020",name:"Phoenix Suns",conf:"W",div:"Pacific"},POR:{color:"#E03A3E",name:"Portland Trail Blazers",conf:"W",div:"Northwest"},SAC:{color:"#5A2D81",name:"Sacramento Kings",conf:"W",div:"Pacific"},SAS:{color:"#8E9093",name:"San Antonio Spurs",conf:"W",div:"Southwest"},TOR:{color:"#CE1141",name:"Toronto Raptors",conf:"E",div:"Atlantic"},UTA:{color:"#F9A01B",name:"Utah Jazz",conf:"W",div:"Northwest"},WAS:{color:"#E31837",name:"Washington Wizards",conf:"E",div:"Southeast"},
 };
 const tm=a=>TM[a]||{color:C.accent,name:a||"?",conf:"W",div:""};
 const FIX={GS:"GSW",NY:"NYK",SA:"SAS",NO:"NOP",WSH:"WAS",UTAH:"UTA",CHAR:"CHA",PHO:"PHX",UTH:"UTA"};
@@ -173,11 +173,14 @@ function useUser() {
 }
 
 /* ═══ HOME TAB ═══ */
-const HomeTab=({games,live,userCtx,standings})=>{
+const HomeTab=({games,live,userCtx,standings,goToChat,goToBets})=>{
   const {user}=userCtx||{};
   const [picks,setPicks]=useState({});
   const [group,setGroup]=useState(null);
   const [loaded,setLoaded]=useState(false);
+  const [grpPicks,setGrpPicks]=useState([]);
+  const [pendingBets,setPendingBets]=useState([]);
+  const [expandedCard,setExpandedCard]=useState(null);
   useEffect(()=>{
     if(!user)return;
     pickemAPI("myGroups",{params:{userId:user.id}}).then(d=>{
@@ -190,16 +193,24 @@ const HomeTab=({games,live,userCtx,standings})=>{
           if(r.ok){const m={};(r.picks||[]).forEach(p=>{m[p.game_id]=p.picked_team;});setPicks(m);}
           setLoaded(true);
         });
+        pickemAPI("groupPicks",{params:{groupId:g.id}}).then(r=>{if(r.ok)setGrpPicks(r.picks||[]);});
+        pickemAPI("groupBets",{params:{groupId:g.id}}).then(r=>{
+          if(r.ok){const challenges=(r.bets||[]).filter(b=>b.status==="pending"&&b.opponent_id===user.id);setPendingBets(challenges);}
+        });
       } else setLoaded(true);
     });
   },[user,games]);
 
   const anyStarted=games.some(g=>g.status==="LIVE"||g.status==="Final");
-  const seasonWinPct=abbr=>{const t=standings.find(s=>s.abbr===abbr);return t&&(t.w+t.l)>0?+(t.w/(t.w+t.l)*100).toFixed(0):50;};
   const winPct=(g,side)=>{
     if(g.status==="Final") return side==="away"?(g.awayScore>g.homeScore?100:0):(g.homeScore>g.awayScore?100:0);
     if(g.status==="LIVE"){const diff=side==="away"?g.awayScore-g.homeScore:g.homeScore-g.awayScore;return Math.min(95,Math.max(5,50+diff*2.5));}
-    return seasonWinPct(side==="away"?g.away:g.home);
+    const homeT=standings.find(s=>s.abbr===g.home);
+    const awayT=standings.find(s=>s.abbr===g.away);
+    const hR=homeT&&(homeT.w+homeT.l)>0?homeT.w/(homeT.w+homeT.l):0.5;
+    const aR=awayT&&(awayT.w+awayT.l)>0?awayT.w/(awayT.w+awayT.l):0.5;
+    const hProb=Math.min(95,Math.max(5,Math.round((hR+0.03)/(hR+0.03+aR)*100)));
+    return side==="home"?hProb:100-hProb;
   };
 
   const makePick=async(gameId,team,home,away)=>{
@@ -218,12 +229,22 @@ const HomeTab=({games,live,userCtx,standings})=>{
       <div style={{fontSize:11,color:C.muted,marginBottom:16}}>Elige quién gana cada partido · Gana puntos · Sube en el ranking</div>
       <button className="btn" onClick={()=>{const b=document.querySelectorAll('.btn');b.forEach(x=>{if(x.textContent.includes('Grupos'))x.click();});}} style={{padding:"14px 36px",borderRadius:12,background:"linear-gradient(135deg,#00C2FF,#0066ff)",color:"#07090f",fontSize:15,fontWeight:900,letterSpacing:1}}>ENTRAR AL PICK'EM 🎯</button>
     </Card>}
-    {user&&<Card style={{marginBottom:22,background:"linear-gradient(135deg,#00FF9D08,#0d1117)",borderColor:"#00FF9D33",padding:"14px 18px"}}>
+    {user&&<Card style={{marginBottom:pendingBets.length?10:22,background:"linear-gradient(135deg,#00FF9D08,#0d1117)",borderColor:"#00FF9D33",padding:"14px 18px"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
         <div><div style={{fontSize:10,color:"#00FF9D",fontWeight:700,letterSpacing:2}}>PICK'EM ACTIVO</div><div style={{fontSize:14,fontWeight:700,color:C.text,marginTop:2}}>👋 {user.name} — Toca un equipo para elegir ganador</div></div>
-        {group?<Tag c="#00FF9D">Grupo: {group.name}</Tag>:<Tag c="#FFB800">Ve a Grupos para crear uno</Tag>}
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {group?<Tag c="#00FF9D">Grupo: {group.name}</Tag>:<Tag c="#FFB800">Ve a Grupos para crear uno</Tag>}
+          {group&&<button className="btn" onClick={goToChat} style={{padding:"6px 10px",borderRadius:10,background:"#00C2FF18",border:"1px solid #00C2FF44",color:"#00C2FF",fontSize:13}}>💬</button>}
+        </div>
       </div>
     </Card>}
+    {user&&pendingBets.length>0&&<div style={{marginBottom:22}}>
+      {pendingBets.map(b=><div key={b.id} onClick={goToBets} style={{cursor:"pointer",padding:"10px 14px",background:"linear-gradient(135deg,#FFB80012,#0d1117)",border:"1px solid #FFB80055",borderRadius:10,marginBottom:6,display:"flex",alignItems:"center",gap:10}}>
+        <span style={{fontSize:16}}>⚡</span>
+        <div style={{flex:1}}><span style={{fontSize:12,fontWeight:700,color:"#FFB800"}}>Reto de apuesta</span><span style={{fontSize:11,color:C.dim}}> · {b.away_team} vs {b.home_team} · 🪙{b.amount}</span></div>
+        <span style={{fontSize:10,color:"#FFB800",fontWeight:700}}>Ver →</span>
+      </div>)}
+    </div>}
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><ST sub="NBA 2025-26 · Hoy">Partidos del Día</ST><LiveBadge live={live.games}/></div>
     {user&&group&&anyStarted&&games.some(g=>g.status==="Upcoming")&&<div style={{marginBottom:12,padding:"10px 14px",background:"#00C2FF11",border:"1px solid #00C2FF33",borderRadius:10,fontSize:11,color:C.accent,display:"flex",alignItems:"center",gap:8}}>🎯 Algunos partidos ya empezaron — todavía puedes elegir en los que <b>aún no han iniciado</b></div>}
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:10,marginBottom:28}}>
@@ -235,17 +256,25 @@ const HomeTab=({games,live,userCtx,standings})=>{
         const correct=isFinal&&picked===winner;
         const awayPct=winPct(g,"away");const homePct=winPct(g,"home");
         const minsLeft=g.startTime&&isUpcoming?Math.max(0,Math.round((new Date(g.startTime)-new Date())/60000)):null;
-        return <Card key={g.id} style={{padding:14,borderColor:isFinal&&picked?(correct?"#00FF9D33":"#ff444433"):picked?`${tm(picked).color}33`:C.border}}>
+        const isExpanded=expandedCard===g.id;
+        const gp=grpPicks.filter(p=>p.game_id===g.id);
+        const forAway=gp.filter(p=>p.picked_team===g.away);
+        const forHome=gp.filter(p=>p.picked_team===g.home);
+        return <Card key={g.id} style={{padding:14,borderColor:isFinal&&picked?(correct?"#00FF9D33":"#ff444433"):isLive&&picked?`${tm(picked).color}44`:picked?`${tm(picked).color}33`:C.border}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
           <div style={{display:"flex",gap:6,alignItems:"center"}}>
             {isLive?<Tag c="#ff4444">● LIVE {g.detail}</Tag>:isFinal?<Tag c={C.muted}>Final</Tag>
             :minsLeft!==null?(minsLeft<=1?<Tag c="#ff4444">⏱ Iniciando...</Tag>:minsLeft<=60?<Tag c={minsLeft<=15?"#ff6666":"#FF6B35"}>⏱ {minsLeft} min</Tag>:<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>)
             :<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>}
           </div>
-          {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?"✅ +10":"❌"}</Tag>}
-          {!isFinal&&!isLive&&picked&&<Tag c="#00FF9D">✓ Pick</Tag>}
+          <div style={{display:"flex",gap:5,alignItems:"center"}}>
+            {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?"✅ +10":"❌"}</Tag>}
+            {isLive&&picked&&<Tag c={tm(picked).color}>● {picked}</Tag>}
+            {!isFinal&&!isLive&&picked&&<Tag c="#00FF9D">✓ {picked}</Tag>}
+            {group&&<button className="btn" onClick={()=>setExpandedCard(isExpanded?null:g.id)} style={{padding:"3px 7px",borderRadius:8,background:isExpanded?`${C.accent}22`:"#0a1018",border:`1px solid ${isExpanded?C.accent:C.border}`,color:isExpanded?C.accent:C.muted,fontSize:11}}>👥</button>}
+          </div>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:8,alignItems:"center"}}>
+        {!isExpanded&&<div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:8,alignItems:"center"}}>
           {[["away",g.away,g.awayScore],["vs"],["home",g.home,g.homeScore]].map((item,idx)=>
             idx===1?<div key="vs" style={{textAlign:"center",fontSize:12,color:C.muted,fontWeight:800}}>VS</div>
             :(user&&group&&isUpcoming)?
@@ -257,13 +286,29 @@ const HomeTab=({games,live,userCtx,standings})=>{
                 <span style={{fontSize:13,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif"}}>{item[1]}</span>
                 <span style={{fontSize:10,color:C.dim}}>{tm(item[1]).name}</span>
               </button>
-            :<div key={item[1]} style={{textAlign:"center",padding:"12px 8px"}}>
+            :<div key={item[1]} style={{textAlign:"center",padding:"12px 8px",opacity:picked&&picked!==item[1]?0.4:1}}>
                 {logo(item[1],36)}
-                <div style={{fontSize:13,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,marginTop:4}}>{item[1]}</div>
+                <div style={{fontSize:13,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:picked===item[1]?tm(item[1]).color:C.text,marginTop:4}}>{item[1]}</div>
                 {(isFinal||isLive)&&<div style={{fontSize:22,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:isFinal&&item[1]===winner?"#00FF9D":C.text,marginTop:4}}>{item[2]}</div>}
               </div>
           )}
-        </div>
+        </div>}
+        {isExpanded&&<div>
+          {gp.length===0?<div style={{textAlign:"center",padding:"16px 0",color:C.muted,fontSize:12}}>Nadie ha hecho pick aún</div>:<>
+            <div style={{display:"flex",height:8,borderRadius:4,overflow:"hidden",marginBottom:6}}>
+              <div style={{flex:forAway.length||0.01,background:tm(g.away).color}}/><div style={{flex:forHome.length||0.01,background:tm(g.home).color}}/>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.dim,marginBottom:8}}>
+              <span style={{color:tm(g.away).color}}>{g.away} {gp.length?Math.round(forAway.length/gp.length*100):0}%</span>
+              <span style={{color:tm(g.home).color}}>{gp.length?Math.round(forHome.length/gp.length*100):0}% {g.home}</span>
+            </div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+              {gp.map((p,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:4,background:`${tm(p.picked_team).color}18`,border:`1px solid ${tm(p.picked_team).color}44`,borderRadius:20,padding:"3px 8px"}}>
+                <span style={{fontSize:10}}>{p.users?.avatar_emoji||"🏀"}</span><span style={{fontSize:10,color:C.text,fontWeight:600}}>{p.users?.name||"?"}</span>{logo(p.picked_team,14)}
+              </div>)}
+            </div>
+          </>}
+        </div>}
         <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8,fontSize:9}}>
           <span style={{color:tm(g.away).color,fontWeight:700,minWidth:28}}>{awayPct}%</span>
           <div style={{flex:1,height:4,borderRadius:2,background:C.border,overflow:"hidden",position:"relative"}}>
@@ -393,14 +438,14 @@ async function autoSubscribePush(userId){
     await pickemAPI("subscribePush",{body:{userId,subscription:sub.toJSON()}});
   }catch(_){}
 }
-const PickemTab=({games,userCtx})=>{
+const PickemTab=({games,userCtx,initSubTab})=>{
   const {user,save}=userCtx;
   const [name,setName]=useState("");const [groups,setGroups]=useState([]);const [selGroup,setSelGroup]=useState(null);
   const [picks,setPicks]=useState({});const [leaderboard,setLeaderboard]=useState([]);
   const [newGroupName,setNewGroupName]=useState("");const [joinCode,setJoinCode]=useState("");
   const [panel,setPanel]=useState(null);
   const [pin,setPin]=useState(["","","",""]);
-  const [subTab,setSubTab]=useState("ranking");
+  const [subTab,setSubTab]=useState(initSubTab||"ranking");
   const [msg,setMsg]=useState("");const [loading,setLoading]=useState(false);
   const [copied,setCopied]=useState(false);
   const [nameStatus,setNameStatus]=useState(null);
@@ -737,7 +782,8 @@ const PickemTab=({games,userCtx})=>{
                 :<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>}
               </div>
               {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?"✅ +10":"❌"}</Tag>}
-              {isUpcoming&&picked&&<Tag c="#00FF9D">✓ Pick</Tag>}
+              {isLive&&picked&&<Tag c={tm(picked).color}>● {picked}</Tag>}
+              {isUpcoming&&picked&&<Tag c="#00FF9D">✓ {picked}</Tag>}
               {isUpcoming&&!picked&&<Tag c={C.accent}>Elige</Tag>}
               {isLive&&!picked&&<Tag c="#ff6666">Sin pick</Tag>}
             </div>
@@ -874,6 +920,19 @@ const PickemTab=({games,userCtx})=>{
           <div style={{fontSize:48,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800"}}>{balance!==null?balance:<Spin/>} 🪙</div>
           <div style={{fontSize:10,color:C.dim,marginTop:4}}>Empiezas con 500 · +100/día si tienes menos de 200</div>
         </Card>
+        {bets.filter(b=>b.status==="pending"&&b.opponent_id===user.id).length>0&&<div style={{marginBottom:14}}>
+          <div style={{fontSize:10,color:"#FFB800",textTransform:"uppercase",letterSpacing:2,fontWeight:700,marginBottom:8}}>⚡ Retos pendientes para ti</div>
+          {bets.filter(b=>b.status==="pending"&&b.opponent_id===user.id).map(b=><Card key={b.id} style={{marginBottom:8,borderColor:"#FFB80066",background:"linear-gradient(135deg,#FFB80012,#0d1117)"}}>
+            <div style={{fontSize:10,color:"#FFB800",fontWeight:700,marginBottom:6}}>⚡ ¡Te retaron!</div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>{logo(b.picked_team,22)}<span style={{fontSize:13,fontWeight:800,color:tm(b.picked_team).color}}>{b.picked_team} gana</span></div>
+                <div style={{fontSize:11,color:C.dim}}>{b.away_team} vs {b.home_team} · <span style={{color:"#FFB800",fontWeight:700}}>🪙{b.amount}</span></div>
+              </div>
+              <button className="btn" onClick={()=>doAcceptBet(b)} disabled={betLoading||(balance!==null&&b.amount>balance)} style={{padding:"8px 14px",borderRadius:10,background:"#FFB80022",border:"1px solid #FFB80044",color:"#FFB800",fontSize:12,fontWeight:700}}>⚡ Aceptar reto</button>
+            </div>
+          </Card>)}
+        </div>}
         {upcoming.length>0&&!betGame&&<Card style={{marginBottom:14}}>
           <div style={{fontSize:13,fontWeight:800,color:C.text,marginBottom:10}}>🎲 Nueva apuesta — elige un partido:</div>
           {upcoming.map(g=><button key={g.id} className="btn" onClick={()=>{setBetGame(g);setBetTeam(null);}} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"10px 12px",marginBottom:6,background:"#0a1018",border:`1px solid ${C.border}`,borderRadius:10,color:C.text,fontSize:12,fontWeight:600}}>
@@ -908,7 +967,7 @@ const PickemTab=({games,userCtx})=>{
           </div>
         </Card>}
         {bets.length>0&&<><div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>Apuestas del grupo</div>
-        {bets.map(b=>{const isMe=b.requester_id===user.id;const canAccept=!isMe&&b.status==="open";const isChallenge=b.status==="pending"&&b.opponent_id===user.id;
+        {[...bets].sort((a,b)=>{const aChallenge=a.status==="pending"&&a.opponent_id===user.id?-1:0;const bChallenge=b.status==="pending"&&b.opponent_id===user.id?-1:0;return aChallenge-bChallenge;}).map(b=>{const isMe=b.requester_id===user.id;const canAccept=!isMe&&b.status==="open";const isChallenge=b.status==="pending"&&b.opponent_id===user.id;
           return <Card key={b.id} style={{marginBottom:8,borderColor:isChallenge?"#FFB80066":b.status==="active"?"#00FF9D33":C.border,background:isChallenge?"linear-gradient(135deg,#FFB80008,#0d1117)":undefined}}>
             {isChallenge&&<div style={{fontSize:10,color:"#FFB800",fontWeight:700,marginBottom:6}}>⚡ ¡Te retaron!</div>}
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
@@ -1942,6 +2001,7 @@ const SettingsTab=({userCtx})=>{
 const TABS=[{id:"home",icon:"🏠",label:"Home"},{id:"teams",icon:"🏆",label:"Equipos"},{id:"players",icon:"⭐",label:"Jugadores"},{id:"pickem",icon:"👥",label:"Grupos"},{id:"bracket",icon:"🏅",label:"Playoffs"},{id:"games",icon:"🎮",label:"Juegos"},{id:"settings",icon:"⚙️",label:"Config"}];
 export default function App(){
   const [tab,setTab]=useState("home");const [games,setGames]=useState([]);const [standings,setStandings]=useState(FB_ST);const [players,setPlayers]=useState(FB_PL);
+  const [pickemInitSubTab,setPickemInitSubTab]=useState("ranking");
   const [live,setLive]=useState({games:false,standings:false,players:false});const [loading,setLoading]=useState(false);const [lastUpd,setLastUpd]=useState(null);
   const userCtx=useUser();
 
@@ -1984,10 +2044,10 @@ export default function App(){
       {TABS.map(n=><button key={n.id} className="btn" onClick={()=>setTab(n.id)} style={{padding:"11px 14px",background:"transparent",border:"none",borderBottom:`2px solid ${tab===n.id?C.accent:"transparent"}`,color:tab===n.id?C.accent:C.muted,fontSize:12,fontWeight:tab===n.id?700:500,whiteSpace:"nowrap"}}>{n.icon} {n.label}</button>)}
     </div>
     <div style={{maxWidth:1000,margin:"0 auto",padding:"22px 18px"}}>
-      {tab==="home"&&<HomeTab games={games} live={live} userCtx={userCtx} standings={standings}/>}
+      {tab==="home"&&<HomeTab games={games} live={live} userCtx={userCtx} standings={standings} goToChat={()=>{setPickemInitSubTab("chat");setTab("pickem");}} goToBets={()=>{setPickemInitSubTab("apuestas");setTab("pickem");}}/>}
       {tab==="teams"&&<TeamsTab standings={standings} live={live}/>}
       {tab==="players"&&<PlayersTab players={players} live={live}/>}
-      {tab==="pickem"&&<PickemTab games={games} userCtx={userCtx}/>}
+      {tab==="pickem"&&<PickemTab games={games} userCtx={userCtx} initSubTab={pickemInitSubTab}/>}
       {tab==="bracket"&&<BracketTab userCtx={userCtx} standings={standings}/>}
       {tab==="games"&&<MiniGamesTab players={players} userCtx={userCtx}/>}
       {tab==="settings"&&<SettingsTab userCtx={userCtx}/>}
