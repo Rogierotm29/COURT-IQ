@@ -384,16 +384,37 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
   </div>);
 };
 
+/* ═══ ESPN TEAM IDs ═══ */
+const ESPN_ID={ATL:1,BOS:2,NOP:3,CHI:4,CLE:5,DAL:6,DEN:7,DET:8,GSW:9,HOU:10,IND:11,LAC:12,LAL:13,MIA:14,MIL:15,MIN:16,BKN:17,NYK:18,ORL:19,PHI:20,PHX:21,POR:22,SAC:23,SAS:24,OKC:25,UTA:26,WAS:27,TOR:28,MEM:29,CHA:30};
+
 /* ═══ TEAMS TAB ═══ */
 const TeamsTab=({standings,live})=>{
   const [conf,setConf]=useState("ALL");
   const [sel,setSel]=useState(standings.find(t=>t.abbr==="DET")||standings[0]);
   const [gridOpen,setGridOpen]=useState(true);
+  const [liveRoster,setLiveRoster]=useState(null);
+  const [rosterLoading,setRosterLoading]=useState(false);
   const visible=standings.filter(t=>conf==="ALL"||t.conf===conf).sort((a,b)=>b.w-a.w);
+
+  useEffect(()=>{if(sel) loadLiveRoster(sel.abbr);},[]);
   const east=standings.filter(t=>t.conf==="E").sort((a,b)=>b.w-a.w);
   const west=standings.filter(t=>t.conf==="W").sort((a,b)=>b.w-a.w);
 
-  const pickTeam=(t)=>{setSel(t);setGridOpen(false);};
+  const loadLiveRoster=async(abbr)=>{
+    const id=ESPN_ID[abbr];
+    if(!id) return;
+    setRosterLoading(true);setLiveRoster(null);
+    try{
+      const r=await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/${id}/roster`,{signal:AbortSignal.timeout(5000)});
+      if(!r.ok) throw new Error();
+      const d=await r.json();
+      const players=(d.athletes||[]).flatMap(g=>g.items||[g]).map(a=>`${a.firstName} ${a.lastName}`).filter(Boolean);
+      if(players.length>0) setLiveRoster(players);
+    }catch(_){}
+    setRosterLoading(false);
+  };
+
+  const pickTeam=(t)=>{setSel(t);setGridOpen(false);loadLiveRoster(t.abbr);};
 
   return(<div className="fade-up">
     <ST sub="NBA 2025-26">30 Equipos</ST>
@@ -428,8 +449,21 @@ const TeamsTab=({standings,live})=>{
         <div><div style={{fontSize:22,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:sel.color}}>{sel.name}</div><div style={{fontSize:11,color:C.muted}}>{sel.conf==="E"?"Este":"Oeste"} · {sel.div}</div></div>
         <div style={{marginLeft:"auto",display:"flex",gap:18,flexWrap:"wrap"}}>{[[sel.w,"V",C.text],[sel.l,"D","#ff6666"],[(sel.pct*100).toFixed(1)+"%","%","#00FF9D"]].map(([v,l,c])=><div key={l} style={{textAlign:"center"}}><div style={{fontSize:28,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:c}}>{v}</div><div style={{fontSize:9,color:C.muted}}>{l}</div></div>)}</div>
       </div></Card>
-    <Card style={{marginBottom:28}}><div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:12}}>Roster 2025-26</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>{(sel.players||[]).map((p,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0"}}><span style={{fontSize:9,fontWeight:800,color:sel.color,width:16}}>{i+1}</span><span style={{fontSize:12,fontWeight:600,color:C.text}}>{p}</span></div>)}</div></Card>
+    <Card style={{marginBottom:28}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2}}>Roster 2025-26</div>
+        {rosterLoading?<Spin s={12}/>:liveRoster?<span style={{fontSize:9,color:"#00FF9D"}}>🟢 Live</span>:<span style={{fontSize:9,color:C.muted}}>📦 Cache</span>}
+      </div>
+      {rosterLoading
+        ?<div style={{textAlign:"center",padding:"20px 0",color:C.dim,fontSize:12}}>Cargando roster...</div>
+        :<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
+          {(liveRoster||sel.players||[]).map((p,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0"}}>
+            <span style={{fontSize:9,fontWeight:800,color:sel.color,width:16}}>{i+1}</span>
+            <span style={{fontSize:12,fontWeight:600,color:C.text}}>{p}</span>
+          </div>)}
+        </div>
+      }
+    </Card>
     </>}
 
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><ST sub="2025-26">Clasificación</ST><LiveBadge live={live.standings}/></div>
