@@ -1638,6 +1638,16 @@ const MiniGamesTab=({players,userCtx})=>{
   const [triviaSet,setTriviaSet]=useState([]);
   // Leaderboard
   const [scores,setScores]=useState([]);
+  const [allRankings,setAllRankings]=useState({scorer:[],trivia:[],guess:[],champs:[]});
+
+  useEffect(()=>{
+    const types=["scorer","trivia","guess","champs"];
+    Promise.all(types.map(t=>pickemAPI("getMiniScores",{params:{gameType:t}}))).then(results=>{
+      const r={};
+      types.forEach((t,i)=>{r[t]=results[i].ok?results[i].scores||[]:[]; });
+      setAllRankings(r);
+    });
+  },[]);
 
   // Guess player state
   const [guessRound,setGuessRound]=useState(0);
@@ -1678,7 +1688,7 @@ const MiniGamesTab=({players,userCtx})=>{
         setGuessDone(true);
         const final=isCorrect?guessScore+1:guessScore;
         if(user) pickemAPI("saveMiniScore",{body:{userId:user.id,gameType:"guess",score:final}});
-        pickemAPI("getMiniScores",{params:{gameType:"guess"}}).then(d=>{if(d.ok)setScores(d.scores||[]);});
+        pickemAPI("getMiniScores",{params:{gameType:"guess"}}).then(d=>{if(d.ok){setScores(d.scores||[]);setAllRankings(r=>({...r,guess:d.scores||[]}));}});
       } else {
         setGuessRound(next);setGuessQ(buildClueQ(guessPool,next));setGuessFeedback(null);
       }
@@ -1687,7 +1697,14 @@ const MiniGamesTab=({players,userCtx})=>{
 
   const buildChampsQ=(pool,round)=>{
     const correct=pool[round];
-    const others=[...CHAMPS].filter(c=>c.team!==correct.team).sort(()=>Math.random()-.5).slice(0,3);
+    // Deduplicate by team abbr so same team never appears twice as option
+    const seen=new Set([correct.team]);
+    const others=[];
+    const shuffled=[...CHAMPS].sort(()=>Math.random()-.5);
+    for(const c of shuffled){
+      if(!seen.has(c.team)){seen.add(c.team);others.push(c);}
+      if(others.length===3) break;
+    }
     const opts=[correct,...others].sort(()=>Math.random()-.5);
     return{correct,opts};
   };
@@ -1707,7 +1724,7 @@ const MiniGamesTab=({players,userCtx})=>{
         setChampsDone(true);
         const final=isCorrect?champsScore+1:champsScore;
         if(user) pickemAPI("saveMiniScore",{body:{userId:user.id,gameType:"champs",score:final}});
-        pickemAPI("getMiniScores",{params:{gameType:"champs"}}).then(d=>{if(d.ok)setScores(d.scores||[]);});
+        pickemAPI("getMiniScores",{params:{gameType:"champs"}}).then(d=>{if(d.ok){setScores(d.scores||[]);setAllRankings(r=>({...r,champs:d.scores||[]}));}});
       } else {
         setChampsRound(next);setChampsQ(buildChampsQ(champsPool,next));setChampsFeedback(null);
       }
@@ -1746,7 +1763,7 @@ const MiniGamesTab=({players,userCtx})=>{
         setScorerDone(true);
         const finalScore=correct?scorerScore+1:scorerScore;
         if(user) pickemAPI("saveMiniScore",{body:{userId:user.id,gameType:"scorer",score:finalScore}});
-        pickemAPI("getMiniScores",{params:{gameType:"scorer"}}).then(d=>{if(d.ok)setScores(d.scores||[]);});
+        pickemAPI("getMiniScores",{params:{gameType:"scorer"}}).then(d=>{if(d.ok){setScores(d.scores||[]);setAllRankings(r=>({...r,scorer:d.scores||[]}));}});
       } else {
         setScorerRound(nextRound);setScorerPair(pickPair());setScorerFeedback(null);
       }
@@ -1765,41 +1782,67 @@ const MiniGamesTab=({players,userCtx})=>{
         setTriviaDone(true);
         const finalScore=correct?triviaScore+1:triviaScore;
         if(user) pickemAPI("saveMiniScore",{body:{userId:user.id,gameType:"trivia",score:finalScore}});
-        pickemAPI("getMiniScores",{params:{gameType:"trivia"}}).then(d=>{if(d.ok)setScores(d.scores||[]);});
+        pickemAPI("getMiniScores",{params:{gameType:"trivia"}}).then(d=>{if(d.ok){setScores(d.scores||[]);setAllRankings(r=>({...r,trivia:d.scores||[]}));}});
       } else {
         setTriviaQ(nextQ);setTriviaFeedback(null);
       }
     },700);
   };
 
+  const GAME_META=[
+    {key:"scorer",icon:"📊",label:"¿Quién anota más?",desc:"Adivina qué jugador tiene más PPG · 10 rondas",color:C.accent,start:startScorer,max:10},
+    {key:"trivia",icon:"🧠",label:"NBA Trivia",desc:"10 preguntas sobre la NBA · ¿Cuántas aciertas?",color:"#FFB800",start:startTrivia,max:10},
+    {key:"guess",icon:"🕵️",label:"Adivina el Jugador",desc:"4 pistas de carrera · 8 rondas",color:"#00FF9D",start:startGuess,max:8},
+    {key:"champs",icon:"🏆",label:"Campeones NBA",desc:"¿Quién ganó en ese año? · 1947–2024 · 10 rondas",color:"#E03A3E",start:startChamps,max:10},
+  ];
+
   if(screen==="menu") return(<div className="fade-up">
     <ST sub="Mini Juegos">Juegos NBA 🎮</ST>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-      <Card style={{textAlign:"center",padding:24,borderColor:`${C.accent}33`}}>
-        <div style={{fontSize:40,marginBottom:10}}>📊</div>
-        <div style={{fontSize:15,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,marginBottom:4}}>¿Quién anota más?</div>
-        <div style={{fontSize:11,color:C.dim,marginBottom:12}}>Adivina qué jugador tiene más PPG · 10 rondas</div>
-        <button className="btn" onClick={startScorer} style={{width:"100%",padding:"10px",borderRadius:10,background:`linear-gradient(135deg,${C.accent},#0066ff)`,color:"#07090f",fontWeight:900,fontSize:13}}>Jugar</button>
-      </Card>
-      <Card style={{textAlign:"center",padding:24,borderColor:"#FFB80033"}}>
-        <div style={{fontSize:40,marginBottom:10}}>🧠</div>
-        <div style={{fontSize:15,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,marginBottom:4}}>NBA Trivia</div>
-        <div style={{fontSize:11,color:C.dim,marginBottom:12}}>10 preguntas sobre la NBA · ¿Cuántas aciertas?</div>
-        <button className="btn" onClick={startTrivia} style={{width:"100%",padding:"10px",borderRadius:10,background:"linear-gradient(135deg,#FFB800,#ff9500)",color:"#07090f",fontWeight:900,fontSize:13}}>Jugar</button>
-      </Card>
-      <Card style={{textAlign:"center",padding:24,borderColor:"#00FF9D33"}}>
-        <div style={{fontSize:40,marginBottom:10}}>🕵️</div>
-        <div style={{fontSize:15,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,marginBottom:4}}>Adivina el Jugador</div>
-        <div style={{fontSize:11,color:C.dim,marginBottom:12}}>4 pistas de carrera · 8 rondas</div>
-        <button className="btn" onClick={startGuess} style={{width:"100%",padding:"10px",borderRadius:10,background:"linear-gradient(135deg,#00FF9D,#00aa66)",color:"#07090f",fontWeight:900,fontSize:13}}>Jugar</button>
-      </Card>
-      <Card style={{textAlign:"center",padding:24,borderColor:"#E03A3E33"}}>
-        <div style={{fontSize:40,marginBottom:10}}>🏆</div>
-        <div style={{fontSize:15,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,marginBottom:4}}>Campeones NBA</div>
-        <div style={{fontSize:11,color:C.dim,marginBottom:12}}>¿Quién ganó en ese año? · 1985–2024 · 10 rondas</div>
-        <button className="btn" onClick={startChamps} style={{width:"100%",padding:"10px",borderRadius:10,background:"linear-gradient(135deg,#E03A3E,#a00000)",color:"#fff",fontWeight:900,fontSize:13}}>Jugar</button>
-      </Card>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
+      {GAME_META.map(g=>(
+        <Card key={g.key} style={{textAlign:"center",padding:20,borderColor:g.color+"33",display:"flex",flexDirection:"column"}}>
+          <div style={{fontSize:36,marginBottom:8}}>{g.icon}</div>
+          <div style={{fontSize:14,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,marginBottom:4,lineHeight:1.2}}>{g.label}</div>
+          <div style={{fontSize:11,color:C.dim,marginBottom:12,flex:1}}>{g.desc}</div>
+          {allRankings[g.key].length>0&&(()=>{
+            const top=allRankings[g.key][0];
+            const myRank=user?allRankings[g.key].findIndex(s=>s.users?.name===user.name)+1:0;
+            return<div style={{fontSize:10,color:C.muted,marginBottom:8,padding:"4px 8px",background:g.color+"11",borderRadius:6}}>
+              👑 {top.users?.avatar_emoji||"🏀"} {top.users?.name}: {top.score}/{g.max}
+              {myRank>0&&<span style={{color:g.color}}> · Tu puesto: #{myRank}</span>}
+            </div>;
+          })()}
+          <button className="btn" onClick={g.start} style={{width:"100%",padding:"10px",borderRadius:10,background:`linear-gradient(135deg,${g.color},${g.color}aa)`,color:g.key==="champs"?"#fff":"#07090f",fontWeight:900,fontSize:13}}>Jugar</button>
+        </Card>
+      ))}
     </div>
+    <button className="btn" onClick={()=>setScreen("rankings")} style={{width:"100%",padding:"13px",borderRadius:12,background:"#0a1018",border:`1px solid ${C.border}`,color:C.text,fontWeight:700,fontSize:14}}>🏆 Ver Rankings Globales</button>
+  </div>);
+
+  if(screen==="rankings") return(<div className="fade-up">
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+      <button className="btn" onClick={()=>setScreen("menu")} style={{padding:"8px 14px",borderRadius:8,background:"#0a1018",border:`1px solid ${C.border}`,color:C.dim,fontSize:12}}>← Volver</button>
+      <ST sub="Mini Juegos" style={{margin:0}}>Rankings Globales 🌎</ST>
+    </div>
+    {GAME_META.map(g=>(
+      <Card key={g.key} style={{marginBottom:14,borderColor:g.color+"33"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+          <span style={{fontSize:20}}>{g.icon}</span>
+          <span style={{fontSize:14,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:g.color}}>{g.label}</span>
+        </div>
+        {allRankings[g.key].length===0?<div style={{fontSize:12,color:C.dim,textAlign:"center",padding:"8px 0"}}>Aún no hay puntuaciones</div>
+        :allRankings[g.key].map((s,i)=>{
+          const isMe=user&&s.users?.name===user.name;
+          return<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 0",borderBottom:i<allRankings[g.key].length-1?`1px solid ${C.border}`:"none",background:isMe?g.color+"11":"transparent",borderRadius:isMe?6:0,paddingLeft:isMe?6:0}}>
+            <span style={{fontSize:11,color:i<3?g.color:C.muted,fontWeight:i<3?900:400,width:18}}>{i===0?"🥇":i===1?"🥈":i===2?"🥉":i+1}</span>
+            <span style={{fontSize:14}}>{s.users?.avatar_emoji||"🏀"}</span>
+            <span style={{flex:1,fontSize:13,color:isMe?g.color:C.text,fontWeight:isMe?700:400}}>{s.users?.name}{isMe?" (tú)":""}</span>
+            <span style={{fontSize:15,fontWeight:900,color:g.color}}>{s.score}<span style={{fontSize:10,color:C.muted}}>/{g.max}</span></span>
+          </div>;
+        })}
+      </Card>
+    ))}
+    <button className="btn" onClick={()=>setScreen("menu")} style={{width:"100%",padding:"13px",borderRadius:12,background:C.accent,color:"#07090f",fontWeight:900,fontSize:14}}>← Volver al Menú</button>
   </div>);
 
   if(screen==="game"&&game==="scorer") {
@@ -1897,8 +1940,9 @@ const MiniGamesTab=({players,userCtx})=>{
         {opts.map((p)=>{
           const isCorrect=p.name===correct.name;
           return<button key={p.name} className="btn" onClick={()=>answerGuess(p)} style={{padding:"14px 10px",borderRadius:12,textAlign:"center",background:guessFeedback!==null?(isCorrect?"#00FF9D22":"#0a1018"):"#0a1018",border:`2px solid ${guessFeedback!==null?isCorrect?"#00FF9D":C.border:C.border}`,transition:"all .2s"}}>
-            {logo(p.team,28)}
-            <div style={{fontSize:12,fontWeight:700,color:guessFeedback!==null&&isCorrect?"#00FF9D":C.text,marginTop:6}}>{p.name}</div>
+            {guessFeedback!==null&&logo(p.team,24)}
+            <div style={{fontSize:12,fontWeight:700,color:guessFeedback!==null&&isCorrect?"#00FF9D":C.text,marginTop:guessFeedback!==null?4:0}}>{p.name}</div>
+            {guessFeedback!==null&&<div style={{fontSize:10,color:C.dim,marginTop:2}}>{p.team}</div>}
           </button>;
         })}
       </div>
@@ -1935,12 +1979,12 @@ const MiniGamesTab=({players,userCtx})=>{
         {opts.map((o)=>{
           const isCorrect=o.team===correct.team;
           return<button key={o.team+o.year} className="btn" onClick={()=>answerChamps(o.team)} style={{padding:"16px 10px",borderRadius:12,textAlign:"center",background:champsFeedback!==null?(isCorrect?"#E03A3E22":"#0a1018"):"#0a1018",border:`2px solid ${champsFeedback!==null?isCorrect?"#E03A3E":C.border:C.border}`,transition:"all .2s"}}>
-            {logo(o.team,36)}
-            <div style={{fontSize:12,fontWeight:700,color:champsFeedback!==null&&isCorrect?"#E03A3E":C.text,marginTop:6}}>{tm(o.team).name}</div>
+            {champsFeedback!==null&&logo(o.team,32)}
+            <div style={{fontSize:12,fontWeight:700,color:champsFeedback!==null&&isCorrect?"#E03A3E":C.text,marginTop:champsFeedback!==null?4:0}}>{o.label||tm(o.team).name||o.team}</div>
           </button>;
         })}
       </div>
-      {champsFeedback!==null&&<div style={{textAlign:"center",marginTop:10,fontSize:15,fontWeight:700,color:champsFeedback?"#E03A3E":"#ff6666"}}>{champsFeedback?"🏆 ¡Correcto!":"❌ Fue "+tm(correct.team).name}</div>}
+      {champsFeedback!==null&&<div style={{textAlign:"center",marginTop:10,fontSize:15,fontWeight:700,color:champsFeedback?"#E03A3E":"#ff6666"}}>{champsFeedback?"🏆 ¡Correcto!":"❌ Fue "+(correct.label||tm(correct.team).name||correct.team)}</div>}
       <div style={{height:5,borderRadius:3,background:C.border,overflow:"hidden",marginTop:14}}><div style={{width:`${(champsRound/10)*100}%`,height:"100%",background:"#E03A3E",transition:"width .4s"}}/></div>
     </div>);
   }
