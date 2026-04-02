@@ -273,13 +273,14 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         const correct=isFinal&&picked===winner;
         const awayPct=winPct(g,"away");const homePct=winPct(g,"home");
         const minsLeft=g.startTime&&isUpcoming?Math.max(0,Math.round((new Date(g.startTime)-new Date())/60000)):null;
-        const isExpanded=lockedPicks||(expandedCard===g.id);
-        const canToggle=!lockedPicks;
+        const showGrpSection=lockedPicks&&expandedCard===g.id;
         const gp=grpPicks.filter(p=>p.game_id===g.id);
         const forAway=gp.filter(p=>p.picked_team===g.away);
         const forHome=gp.filter(p=>p.picked_team===g.home);
+        const canPick=user&&group&&isUpcoming&&!lockedPicks;
         return <Card key={g.id} style={{padding:16,borderColor:isFinal&&picked?(correct?"#00FF9D55":"#ff444455"):isLive&&picked?`${tm(picked).color}55`:picked?`${tm(picked).color}44`:C.border,borderWidth:picked?2:1}}>
-        {/* Header: estado + resultado */}
+
+        {/* Header: estado + tu pick */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
           <div style={{display:"flex",gap:6,alignItems:"center"}}>
             {isLive?<Tag c="#ff4444">● EN VIVO {g.detail}</Tag>:isFinal?<Tag c={C.muted}>Terminado</Tag>
@@ -287,18 +288,19 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
             :<Tag c={C.accent}>{g.detail||"Hoy"}</Tag>}
           </div>
           <div style={{display:"flex",gap:6,alignItems:"center"}}>
-            {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?"✅ Correcto +10 pts":"❌ Incorrecto"}</Tag>}
-            {isLive&&picked&&<Tag c={tm(picked).color}>● Tu pick: {picked}</Tag>}
-            {!isFinal&&!isLive&&picked&&<Tag c="#00FF9D">✓ Elegiste: {picked}</Tag>}
+            {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?"✅ +10 pts":"❌ Incorrecto"}</Tag>}
+            {isLive&&picked&&<Tag c={tm(picked).color}>● {picked}</Tag>}
+            {!isFinal&&!isLive&&picked&&!lockedPicks&&<Tag c="#00FF9D">✓ {picked}</Tag>}
+            {lockedPicks&&picked&&!isFinal&&<Tag c="#FF6B35">🔒 {picked}</Tag>}
           </div>
         </div>
 
-        {/* Vista picks o grupo */}
-        {!isExpanded
-          ?<div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:10,alignItems:"center"}}>
-            {[["away",g.away,g.awayScore],["vs"],["home",g.home,g.homeScore]].map((item,idx)=>
-              idx===1?<div key="vs" style={{textAlign:"center",fontSize:14,color:C.muted,fontWeight:900}}>VS</div>
-              :(user&&group&&isUpcoming)
+        {/* Vista del juego — siempre visible */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:10,alignItems:"center"}}>
+          {[["away",g.away,g.awayScore],["vs"],["home",g.home,g.homeScore]].map((item,idx)=>
+            idx===1
+              ?<div key="vs" style={{textAlign:"center",fontSize:14,color:C.muted,fontWeight:900}}>VS</div>
+              :canPick
                 ?<button key={item[1]} className="btn" onClick={()=>makePick(g.id,item[1],g.home,g.away)} style={{padding:"14px 8px",borderRadius:14,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:5,background:picked===item[1]?`${tm(item[1]).color}22`:"#0a1018",border:`2.5px solid ${picked===item[1]?tm(item[1]).color:C.border}`,color:picked===item[1]?tm(item[1]).color:C.text,width:"100%",position:"relative"}}>
                     {picked===item[1]&&<div style={{position:"absolute",top:6,right:6,width:18,height:18,borderRadius:"50%",background:tm(item[1]).color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:"#07090f",fontWeight:900}}>✓</div>}
                     {logo(item[1],44)}
@@ -309,36 +311,36 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
                 :<div key={item[1]} style={{textAlign:"center",padding:"12px 8px",opacity:picked&&picked!==item[1]?0.35:1}}>
                     {logo(item[1],44)}
                     <div style={{fontSize:15,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:picked===item[1]?tm(item[1]).color:C.text,marginTop:5}}>{item[1]}</div>
-                    {(isFinal||isLive)&&<div style={{fontSize:26,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:isFinal&&item[1]===winner?"#00FF9D":C.text,marginTop:4}}>{item[2]}</div>}
+                    {(isFinal||isLive)&&<div style={{fontSize:28,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:isFinal&&item[1]===winner?"#00FF9D":isLive&&picked===item[1]?tm(item[1]).color:C.text,marginTop:4}}>{item[2]}</div>}
                   </div>
-            )}
-          </div>
-          :<div>
-            {gp.length===0
-              ?<div style={{textAlign:"center",padding:"20px 0",color:C.muted,fontSize:13}}>Nadie en el grupo ha hecho pick aún</div>
-              :<>
-                <div style={{display:"flex",height:10,borderRadius:5,overflow:"hidden",marginBottom:8}}>
-                  <div style={{flex:forAway.length||0.01,background:tm(g.away).color}}/><div style={{flex:forHome.length||0.01,background:tm(g.home).color}}/>
-                </div>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:11,fontWeight:700,marginBottom:10}}>
-                  <span style={{color:tm(g.away).color}}>{logo(g.away,16)} {g.away} — {gp.length?Math.round(forAway.length/gp.length*100):0}%</span>
-                  <span style={{color:tm(g.home).color}}>{gp.length?Math.round(forHome.length/gp.length*100):0}% {g.home} {logo(g.home,16)}</span>
-                </div>
-                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                  {gp.map((p,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:5,background:`${tm(p.picked_team).color}20`,border:`1.5px solid ${tm(p.picked_team).color}55`,borderRadius:22,padding:"4px 10px"}}>
-                    <span style={{fontSize:14}}>{p.users?.avatar_emoji||"🏀"}</span>
-                    <span style={{fontSize:11,color:C.text,fontWeight:700}}>{p.users?.name||"?"}</span>
-                    {logo(p.picked_team,16)}
-                  </div>)}
-                </div>
-              </>}
-          </div>}
+          )}
+        </div>
 
-        {/* Botón toggle picks ↔ grupo (solo si no está bloqueado) */}
-        {group&&canToggle&&<button className="btn" onClick={()=>setExpandedCard(isExpanded?null:g.id)} style={{width:"100%",marginTop:12,padding:"9px",borderRadius:10,background:isExpanded?"#0a1018":`${C.accent}11`,border:`1px solid ${isExpanded?C.border:C.accent+"44"}`,color:isExpanded?C.muted:C.accent,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-          {isExpanded?"🎯 Volver a los picks":"👥 Ver quién eligió qué en el grupo"}
+        {/* Picks del grupo — solo disponible tras cerrar picks */}
+        {lockedPicks&&group&&<button className="btn" onClick={()=>setExpandedCard(showGrpSection?null:g.id)} style={{width:"100%",marginTop:12,padding:"9px",borderRadius:10,background:showGrpSection?`${C.accent}11`:"#0a1018",border:`1px solid ${showGrpSection?C.accent+"55":C.border}`,color:showGrpSection?C.accent:C.muted,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+          {showGrpSection?"▲ Ocultar picks del grupo":"👥 Ver qué eligió el grupo"}
         </button>}
-        {lockedPicks&&<div style={{marginTop:10,fontSize:10,color:"#FF6B35",textAlign:"center",fontWeight:700}}>🔒 Picks cerrados — ya no puedes cambiar</div>}
+
+        {showGrpSection&&<div style={{marginTop:10,padding:"12px",background:"#0a1018",borderRadius:10,border:`1px solid ${C.border}`}}>
+          {gp.length===0
+            ?<div style={{textAlign:"center",padding:"10px 0",color:C.muted,fontSize:12}}>Nadie en el grupo hizo pick aún</div>
+            :<>
+              <div style={{display:"flex",height:10,borderRadius:5,overflow:"hidden",marginBottom:8}}>
+                <div style={{flex:forAway.length||0.01,background:tm(g.away).color}}/><div style={{flex:forHome.length||0.01,background:tm(g.home).color}}/>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,fontWeight:700,marginBottom:10}}>
+                <span style={{color:tm(g.away).color,display:"flex",alignItems:"center",gap:4}}>{logo(g.away,14)} {g.away} {gp.length?Math.round(forAway.length/gp.length*100):0}%</span>
+                <span style={{color:tm(g.home).color,display:"flex",alignItems:"center",gap:4}}>{gp.length?Math.round(forHome.length/gp.length*100):0}% {g.home} {logo(g.home,14)}</span>
+              </div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                {gp.map((p,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:5,background:`${tm(p.picked_team).color}20`,border:`1.5px solid ${tm(p.picked_team).color}55`,borderRadius:22,padding:"4px 10px"}}>
+                  <span style={{fontSize:13}}>{p.users?.avatar_emoji||"🏀"}</span>
+                  <span style={{fontSize:11,color:C.text,fontWeight:700}}>{p.users?.name||"?"}</span>
+                  {logo(p.picked_team,14)}
+                </div>)}
+              </div>
+            </>}
+        </div>}
 
         {/* Barra de probabilidad */}
         <div style={{display:"flex",alignItems:"center",gap:6,marginTop:10,fontSize:10}}>
