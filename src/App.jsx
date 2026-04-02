@@ -519,15 +519,20 @@ const PlayersTab=({players,live})=>{
 /* ═══ PICK'EM TAB v2 ═══ */
 const VAPID_KEY="BKMJ55qDz8klBdhztjHMlXcXAWbF1FecmMqFzq2j6XbFotJUe_Cwdx-WMKERkQ51qv4X_DrFjsK1wP8LFpIjz_k";
 
+const isIOS=()=>/iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream;
+const isStandalone=()=>window.matchMedia("(display-mode: standalone)").matches||window.navigator.standalone===true;
+
 async function autoSubscribePush(userId){
-  try{
-    if(!("Notification" in window)||!("serviceWorker" in navigator)) return;
-    const perm=await Notification.requestPermission();
-    if(perm!=="granted") return;
-    const reg=await navigator.serviceWorker.ready;
-    const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:VAPID_KEY});
-    await pickemAPI("subscribePush",{body:{userId,subscription:sub.toJSON()}});
-  }catch(_){}
+  if(!("Notification" in window)) throw new Error("Tu navegador no soporta notificaciones");
+  if(!("serviceWorker" in navigator)) throw new Error("Tu navegador no soporta service workers");
+  if(isIOS()&&!isStandalone()) throw new Error("iOS_NOT_INSTALLED");
+  const perm=await Notification.requestPermission();
+  if(perm==="denied") throw new Error("Bloqueaste las notificaciones en este navegador. Debes habilitarlas en Configuración del teléfono.");
+  if(perm!=="granted") throw new Error("Permiso de notificaciones no otorgado");
+  const reg=await navigator.serviceWorker.ready;
+  const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:VAPID_KEY});
+  const result=await pickemAPI("subscribePush",{body:{userId,subscription:sub.toJSON()}});
+  if(!result?.ok) throw new Error(result?.error||"Error guardando suscripción en el servidor");
 }
 const PickemTab=({games,userCtx,initSubTab})=>{
   const {user,save}=userCtx;
@@ -1994,7 +1999,7 @@ const MiniGamesTab=({players,userCtx})=>{
 
 /* ═══ SETTINGS TAB ═══ */
 const EMOJI_OPTS=["🏀","🏆","🔥","⭐","💎","👑","🦁","🐺","🦅","🐯","💪","🎯","🚀","✨","🌟","🎮","🃏","🥇","🎖️","🏅","🧠","💫","⚡","🎪","🦎","🐻","🏟️","🔮","🎲","🌊"];
-const SettingsTab=({userCtx})=>{
+const SettingsTab=({userCtx,installPrompt,onInstalled})=>{
   const {user,logout,save}=userCtx||{};
   const [showEmojiPicker,setShowEmojiPicker]=useState(false);
   const [notifGranted,setNotifGranted]=useState(typeof Notification!=="undefined"&&Notification.permission==="granted");
@@ -2010,14 +2015,18 @@ const SettingsTab=({userCtx})=>{
   },[user]);
 
   const subscribePush=async()=>{
-    setNotifLoading(true);
+    setNotifLoading(true);setMsg("");
     try{
       await autoSubscribePush(user.id);
-      const granted=typeof Notification!=="undefined"&&Notification.permission==="granted";
-      setNotifGranted(granted);
-      if(granted) setMsg("🔔 ¡Notificaciones activadas!");
-      else setMsg("Notificaciones bloqueadas por el navegador");
-    }catch(e){setMsg("Error: "+e.message);}
+      setNotifGranted(true);
+      setMsg("✅ ¡Notificaciones activadas correctamente!");
+    }catch(e){
+      if(e.message==="iOS_NOT_INSTALLED"){
+        setMsg("📲 En iPhone debes instalar la app primero: toca Compartir → 'Agregar a inicio'. Después activa las notificaciones.");
+      } else {
+        setMsg("❌ "+e.message);
+      }
+    }
     setNotifLoading(false);
   };
 
@@ -2075,6 +2084,42 @@ const SettingsTab=({userCtx})=>{
         </div>
       </div>}
     </Card>
+
+    {/* Instalar App */}
+    {(installPrompt||isIOS())&&<>
+      <ST sub="PWA">Instalar App</ST>
+      <Card style={{marginBottom:18,borderColor:`${C.accent}33`}}>
+        {isIOS()
+          ?<div>
+            <div style={{display:"flex",gap:12,alignItems:"flex-start",marginBottom:12}}>
+              <span style={{fontSize:32}}>📲</span>
+              <div>
+                <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:4}}>Instalar en iPhone / iPad</div>
+                <div style={{fontSize:12,color:C.dim,lineHeight:1.6}}>Para instalar Court IQ y habilitar notificaciones:</div>
+              </div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {[["1","Toca el botón","📤 Compartir","en Safari (barra inferior)"],["2","Baja y busca","➕ Agregar a pantalla de inicio",""],["3","Toca","Agregar","en la esquina superior derecha"]].map(([n,pre,bold,post])=>
+                <div key={n} style={{display:"flex",gap:10,alignItems:"center",padding:"8px 12px",background:"#0a1018",borderRadius:10,border:`1px solid ${C.border}`}}>
+                  <div style={{width:24,height:24,borderRadius:"50%",background:C.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#07090f",flexShrink:0}}>{n}</div>
+                  <div style={{fontSize:12,color:C.text}}>{pre} <span style={{color:C.accent,fontWeight:700}}>{bold}</span> {post}</div>
+                </div>
+              )}
+            </div>
+          </div>
+          :<div>
+            <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:12}}>
+              <span style={{fontSize:32}}>📱</span>
+              <div>
+                <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:2}}>Instalar Court IQ</div>
+                <div style={{fontSize:12,color:C.dim}}>Acceso directo desde tu pantalla de inicio, sin navegador</div>
+              </div>
+            </div>
+            <button className="btn" onClick={async()=>{if(!installPrompt)return;installPrompt.prompt();const{outcome}=await installPrompt.userChoice;if(outcome==="accepted")onInstalled?.();}} style={{width:"100%",padding:"13px",borderRadius:10,background:`linear-gradient(135deg,${C.accent},#0066ff)`,color:"#07090f",fontWeight:900,fontSize:14}}>📲 Instalar App</button>
+          </div>
+        }
+      </Card>
+    </>}
 
     {/* Notificaciones */}
     <ST sub="Push">Notificaciones</ST>
@@ -2140,20 +2185,59 @@ const FloatingChat=({userCtx})=>{
   const [input,setInput]=useState("");
   const [sending,setSending]=useState(false);
   const [group,setGroup]=useState(null);
+  const [unread,setUnread]=useState(0);
   const endRef=useRef(null);
+  const groupRef=useRef(null);
 
+  const getLastRead=(gid)=>localStorage.getItem(`courtiq_chat_read_${gid}`)||"0";
+  const markRead=(gid)=>localStorage.setItem(`courtiq_chat_read_${gid}`,new Date().toISOString());
+
+  const loadMsgs=(g,markAsRead=false)=>{
+    pickemAPI("getChat",{params:{groupId:g.id}}).then(r=>{
+      if(!r.ok) return;
+      const messages=r.messages||[];
+      setMsgs(messages);
+      if(markAsRead){
+        markRead(g.id);
+        setUnread(0);
+      } else {
+        const lastRead=getLastRead(g.id);
+        const count=messages.filter(m=>m.user_id!==user.id&&m.created_at>lastRead).length;
+        setUnread(count);
+      }
+    });
+  };
+
+  // Load group on mount and start polling (even when chat is closed)
   useEffect(()=>{
-    if(!user||!open) return;
+    if(!user) return;
     const gid=localStorage.getItem("courtiq_lastgroup");
     if(!gid) return;
     pickemAPI("myGroups",{params:{userId:user.id}}).then(d=>{
       if(d.ok&&d.groups?.length){
         const g=d.groups.find(x=>x.id===gid)||d.groups[0];
-        setGroup(g);
-        pickemAPI("getChat",{params:{groupId:g.id}}).then(r=>{if(r.ok)setMsgs(r.messages||[]);});
+        setGroup(g);groupRef.current=g;
+        loadMsgs(g,false);
       }
     });
+  },[user]);
+
+  // Poll every 20s for new messages
+  useEffect(()=>{
+    const t=setInterval(()=>{
+      if(groupRef.current&&user){
+        loadMsgs(groupRef.current,open);
+      }
+    },20000);
+    return()=>clearInterval(t);
   },[user,open]);
+
+  // When chat opens: load messages and mark as read
+  useEffect(()=>{
+    if(open&&groupRef.current&&user){
+      loadMsgs(groupRef.current,true);
+    }
+  },[open]);
 
   useEffect(()=>{if(open)endRef.current?.scrollIntoView({behavior:"smooth"});},[msgs,open]);
 
@@ -2162,15 +2246,17 @@ const FloatingChat=({userCtx})=>{
     setSending(true);
     const text=input.trim();setInput("");
     await pickemAPI("sendChat",{body:{groupId:group.id,userId:user.id,content:text}});
-    pickemAPI("getChat",{params:{groupId:group.id}}).then(r=>{if(r.ok)setMsgs(r.messages||[]);});
+    loadMsgs(group,true);
     setSending(false);
   };
+
+  const openChat=()=>{setOpen(o=>{const next=!o;if(!o&&groupRef.current)markRead(groupRef.current.id);return next;});};
 
   if(!user) return null;
   return(<>
     {open&&<div style={{position:"fixed",bottom:82,right:16,width:Math.min(340,window.innerWidth-32),height:440,background:C.card,border:`1.5px solid ${C.border}`,borderRadius:18,zIndex:1500,display:"flex",flexDirection:"column",boxShadow:"0 12px 48px #00000099",overflow:"hidden"}}>
       <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",background:"#0a0f17"}}>
-        <div><div style={{fontSize:14,fontWeight:800,color:C.text}}>💬 {group?.name||"Chat del grupo"}</div><div style={{fontSize:9,color:C.muted}}>Chat en tiempo real</div></div>
+        <div><div style={{fontSize:14,fontWeight:800,color:C.text}}>💬 {group?.name||"Chat del grupo"}</div><div style={{fontSize:9,color:C.muted}}>Chat en tiempo real · actualiza cada 20s</div></div>
         <button className="btn" onClick={()=>setOpen(false)} style={{width:32,height:32,borderRadius:"50%",background:"#131d29",border:`1px solid ${C.border}`,color:C.muted,fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"12px 10px",display:"flex",flexDirection:"column",gap:8}}>
@@ -2191,11 +2277,12 @@ const FloatingChat=({userCtx})=>{
       </div>
       <div style={{padding:"10px 12px",borderTop:`1px solid ${C.border}`,display:"flex",gap:8,background:"#0a0f17"}}>
         <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder="Escribe un mensaje..." style={{flex:1,background:"#131d29",border:`1.5px solid ${input?C.accent:C.border}`,borderRadius:12,padding:"10px 14px",color:C.text,fontSize:13,outline:"none"}}/>
-        <button className="btn" onClick={send} disabled={!input.trim()||sending} style={{padding:"10px 16px",borderRadius:12,background:input.trim()?C.accent:"#131d29",color:input.trim()?"#07090f":C.muted,fontSize:16,fontWeight:900,minWidth:46}}>→</button>
+        <button className="btn" onClick={send} disabled={!input.trim()||sending} style={{padding:"10px 16px",borderRadius:12,background:input.trim()?C.accent:"#131d29",color:input.trim()?"#07090f":C.muted,fontSize:16,fontWeight:900,minWidth:46}}>{sending?<Spin s={16}/>:"→"}</button>
       </div>
     </div>}
-    <button className="btn" onClick={()=>setOpen(o=>!o)} title="Chat del grupo" style={{position:"fixed",bottom:16,right:16,width:56,height:56,borderRadius:"50%",background:open?"#131d29":"linear-gradient(135deg,#00C2FF,#0055ff)",border:`2px solid ${open?C.border:"#00C2FF88"}`,fontSize:24,zIndex:1500,boxShadow:"0 4px 20px #00C2FF55",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .2s"}}>
+    <button className="btn" onClick={openChat} title="Chat del grupo" style={{position:"fixed",bottom:16,right:16,width:56,height:56,borderRadius:"50%",background:open?"#131d29":"linear-gradient(135deg,#00C2FF,#0055ff)",border:`2px solid ${open?C.border:"#00C2FF88"}`,fontSize:24,zIndex:1500,boxShadow:"0 4px 20px #00C2FF55",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .2s"}}>
       {open?"✕":"💬"}
+      {!open&&unread>0&&<div style={{position:"absolute",top:-4,right:-4,minWidth:20,height:20,borderRadius:10,background:"#ff3b30",border:"2px solid #07090f",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900,color:"#fff",padding:"0 4px"}}>{unread>9?"9+":unread}</div>}
     </button>
   </>);
 };
@@ -2206,7 +2293,14 @@ export default function App(){
   const [tab,setTab]=useState("home");const [games,setGames]=useState([]);const [standings,setStandings]=useState(FB_ST);const [players,setPlayers]=useState(FB_PL);
   const [pickemInitSubTab,setPickemInitSubTab]=useState("ranking");
   const [live,setLive]=useState({games:false,standings:false,players:false});const [loading,setLoading]=useState(false);const [lastUpd,setLastUpd]=useState(null);
+  const [installPrompt,setInstallPrompt]=useState(null);
   const userCtx=useUser();
+
+  useEffect(()=>{
+    const handler=(e)=>{e.preventDefault();setInstallPrompt(e);};
+    window.addEventListener("beforeinstallprompt",handler);
+    return()=>window.removeEventListener("beforeinstallprompt",handler);
+  },[]);
 
   const refreshAll=useCallback(async()=>{
     setLoading(true);
@@ -2248,6 +2342,16 @@ export default function App(){
     <div style={{background:"#0a0f17",borderBottom:`1px solid ${C.border}`,padding:"0 22px",display:"flex",overflowX:"auto"}}>
       {TABS.map(n=><button key={n.id} className="btn" onClick={()=>setTab(n.id)} style={{padding:"11px 14px",background:"transparent",border:"none",borderBottom:`2px solid ${tab===n.id?C.accent:"transparent"}`,color:tab===n.id?C.accent:C.muted,fontSize:12,fontWeight:tab===n.id?700:500,whiteSpace:"nowrap"}}>{n.icon} {n.label}</button>)}
     </div>
+    {installPrompt&&<div style={{background:`linear-gradient(135deg,${C.accent}22,#0055ff22)`,borderBottom:`1px solid ${C.accent}33`,padding:"8px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <span style={{fontSize:18}}>📲</span>
+        <span style={{fontSize:12,color:C.text,fontWeight:600}}>Instala Court IQ en tu celular para mejor experiencia</span>
+      </div>
+      <div style={{display:"flex",gap:6,flexShrink:0}}>
+        <button className="btn" onClick={async()=>{installPrompt.prompt();const{outcome}=await installPrompt.userChoice;if(outcome==="accepted")setInstallPrompt(null);}} style={{padding:"6px 14px",borderRadius:8,background:C.accent,color:"#07090f",fontWeight:900,fontSize:12}}>Instalar</button>
+        <button className="btn" onClick={()=>setInstallPrompt(null)} style={{padding:"6px 10px",borderRadius:8,background:"#0a1018",border:`1px solid ${C.border}`,color:C.dim,fontSize:12}}>✕</button>
+      </div>
+    </div>}
     <div style={{maxWidth:1000,margin:"0 auto",padding:"22px 18px 100px"}}>
       {tab==="home"&&<HomeTab games={games} live={live} userCtx={userCtx} standings={standings} goToBets={()=>{setPickemInitSubTab("apuestas");setTab("pickem");}} goToGroup={()=>{setPickemInitSubTab("picks");setTab("pickem");}}/>}
       {tab==="teams"&&<TeamsTab standings={standings} live={live}/>}
@@ -2255,7 +2359,7 @@ export default function App(){
       {tab==="pickem"&&<PickemTab games={games} userCtx={userCtx} initSubTab={pickemInitSubTab}/>}
       {tab==="bracket"&&<BracketTab userCtx={userCtx} standings={standings}/>}
       {tab==="games"&&<MiniGamesTab players={players} userCtx={userCtx}/>}
-      {tab==="settings"&&<SettingsTab userCtx={userCtx}/>}
+      {tab==="settings"&&<SettingsTab userCtx={userCtx} installPrompt={installPrompt} onInstalled={()=>setInstallPrompt(null)}/>}
     </div>
     <FloatingChat userCtx={userCtx}/>
   </div>);

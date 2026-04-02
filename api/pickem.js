@@ -776,10 +776,57 @@ export default async function handler(req, res) {
       case "sendChat": {
         const { userId, groupId, content } = body;
         if (!userId || !groupId || !content) return res.json({ ok: false, error: "Faltan datos" });
+
+        // Save the message
         await supabase("chat_messages", {
           method: "POST",
           body: { user_id: userId, group_id: groupId, content },
         });
+
+        // Push notifications to all other group members in background
+        try {
+          const webpush = await import("web-push");
+          const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
+          const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
+          if (VAPID_PUBLIC && VAPID_PRIVATE) {
+            webpush.default.setVapidDetails("mailto:courtiq@app.com", VAPID_PUBLIC, VAPID_PRIVATE);
+
+            // Get sender name
+            const senderRows = await supabase("users", { filters: `?id=eq.${userId}&select=name,avatar_emoji&limit=1` });
+            const sender = senderRows?.[0];
+
+            // Get group name
+            const groupRows = await supabase("groups", { filters: `?id=eq.${groupId}&select=name&limit=1` });
+            const groupName = groupRows?.[0]?.name || "tu grupo";
+
+            // Get all other members' push subscriptions
+            const members = await supabase("group_members", {
+              filters: `?group_id=eq.${groupId}&user_id=neq.${userId}&select=user_id`,
+            });
+            if (members?.length) {
+              const memberIds = members.map(m => m.user_id);
+              // Batch fetch subscriptions
+              const subsFilter = memberIds.map(id => `user_id.eq.${id}`).join(",");
+              const subs = await supabase("push_subscriptions", {
+                filters: `?or=(${subsFilter})&select=endpoint,p256dh,auth`,
+              });
+              const shortMsg = content.length > 60 ? content.slice(0, 57) + "…" : content;
+              const notifPayload = JSON.stringify({
+                title: `${sender?.avatar_emoji || "🏀"} ${sender?.name || "Alguien"} — ${groupName}`,
+                body: shortMsg,
+                tag: `chat-${groupId}`,
+                url: "/",
+              });
+              await Promise.allSettled((subs || []).map(sub =>
+                webpush.default.sendNotification(
+                  { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+                  notifPayload
+                )
+              ));
+            }
+          }
+        } catch (_) {}
+
         return res.json({ ok: true });
       }
 
