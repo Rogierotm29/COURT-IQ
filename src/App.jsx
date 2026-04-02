@@ -2253,15 +2253,25 @@ const FloatingChat=({userCtx})=>{
     loadMsgs(g,open);
   };
 
-  // Load group on mount and start polling (even when chat is closed)
+  // Load group on mount — also handle ?chat=groupId from notification tap
   useEffect(()=>{
     if(!user) return;
-    const gid=localStorage.getItem("courtiq_lastgroup");
+    const params=new URLSearchParams(window.location.search);
+    const chatParam=params.get("chat");
+    const gid=chatParam||localStorage.getItem("courtiq_lastgroup");
     if(!gid) return;
+    // Clean the URL param without reload
+    if(chatParam){
+      const url=new URL(window.location.href);
+      url.searchParams.delete("chat");
+      window.history.replaceState({},"",url.toString());
+    }
     pickemAPI("myGroups",{params:{userId:user.id}}).then(d=>{
       if(d.ok&&d.groups?.length){
         const g=d.groups.find(x=>x.id===gid)||d.groups[0];
         switchGroup(g);
+        // If opened from notification, open chat automatically
+        if(chatParam) setOpen(true);
       }
     });
   },[user]);

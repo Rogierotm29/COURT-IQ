@@ -826,7 +826,7 @@ export default async function handler(req, res) {
                 title: `${sender?.avatar_emoji || "🏀"} ${sender?.name || "Alguien"} — ${groupName}`,
                 body: shortMsg,
                 tag: `chat-${groupId}`,
-                url: "/",
+                url: `/?chat=${groupId}`,
               });
               await Promise.allSettled((subs || []).map(sub =>
                 webpush.default.sendNotification(
