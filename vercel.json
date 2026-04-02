@@ -1,5 +1,9 @@
 {
   "framework": "vite",
   "buildCommand": "npm run build",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "crons": [
+    { "path": "/api/pickem?action=scoreGames", "schedule": "0 4 * * *" },
+    { "path": "/api/pickem?action=scoreGames", "schedule": "0 12 * * *" }
+  ]
 }

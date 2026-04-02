@@ -186,26 +186,37 @@ export default async function handler(req, res) {
       // ─── SCORE GAMES (check ESPN for finished games, update picks) ──
       case "scoreGames": {
         const today = new Date().toISOString().split("T")[0];
-        // Get unscored picks
+        // Get unscored picks (any past date, not just today)
         const unscored = await supabase("picks", {
           filters: `?scored=eq.false&game_date=lte.${today}&limit=200`,
         });
         if (!unscored?.length) return res.json({ ok: true, scored: 0 });
 
-        // Fetch ESPN scoreboard
-        const espnRes = await fetch("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard");
-        const espnData = await espnRes.json();
+        // Collect unique dates from unscored picks
+        const dates = [...new Set(unscored.map(p => p.game_date))];
+
+        // Fetch ESPN scoreboard for each date with unscored picks
         const finishedGames = {};
-        (espnData.events || []).forEach((e) => {
-          const comp = e.competitions?.[0];
-          if (!comp?.status?.type?.completed) return;
-          const home = comp.competitors?.find((c) => c.homeAway === "home");
-          const away = comp.competitors?.find((c) => c.homeAway === "away");
-          const homeScore = parseInt(home?.score || 0);
-          const awayScore = parseInt(away?.score || 0);
-          const winner = homeScore > awayScore ? fix(home?.team?.abbreviation) : fix(away?.team?.abbreviation);
-          finishedGames[e.id] = winner;
-        });
+        const parseEspn = (espnData) => {
+          (espnData.events || []).forEach((e) => {
+            const comp = e.competitions?.[0];
+            if (!comp?.status?.type?.completed) return;
+            const home = comp.competitors?.find((c) => c.homeAway === "home");
+            const away = comp.competitors?.find((c) => c.homeAway === "away");
+            const homeScore = parseInt(home?.score || 0);
+            const awayScore = parseInt(away?.score || 0);
+            const winner = homeScore > awayScore ? fix(home?.team?.abbreviation) : fix(away?.team?.abbreviation);
+            finishedGames[e.id] = winner;
+          });
+        };
+
+        await Promise.all(dates.map(async (date) => {
+          try {
+            const dateStr = date.replace(/-/g, "");
+            const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${dateStr}`);
+            if (r.ok) parseEspn(await r.json());
+          } catch (_) {}
+        }));
 
         let scored = 0;
         const correctPicks = [];
