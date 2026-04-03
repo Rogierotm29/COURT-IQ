@@ -184,9 +184,23 @@ export default async function handler(req, res) {
       case "leaderboard": {
         const { groupId } = req.query;
         if (!groupId) return res.json({ ok: false, error: "groupId requerido" });
-        const rows = await supabase("leaderboard", { filters: `?group_id=eq.${groupId}&order=total_points.desc` });
-        if (!rows?.length) return res.json({ ok: true, leaderboard: [] });
-        // Attach shop cosmetics for each member
+        // Query members directly — no dependency on the view
+        const members = await supabase("group_members", { filters: `?group_id=eq.${groupId}&select=user_id,users(name,avatar_emoji)` });
+        if (!members?.length) return res.json({ ok: true, leaderboard: [] });
+        // Get all picks for this group
+        const picks = await supabase("picks", { filters: `?group_id=eq.${groupId}&select=user_id,correct,points&limit=2000` });
+        // Aggregate by user
+        const agg = {};
+        for (const m of members) {
+          agg[m.user_id] = { user_id: m.user_id, name: m.users?.name, avatar_emoji: m.users?.avatar_emoji, correct_picks: 0, total_picks: 0, total_points: 0 };
+        }
+        for (const p of (picks || [])) {
+          if (!agg[p.user_id]) continue;
+          agg[p.user_id].total_picks++;
+          if (p.correct) { agg[p.user_id].correct_picks++; agg[p.user_id].total_points += (p.points || 10); }
+        }
+        const rows = Object.values(agg).map(r => ({ ...r, accuracy: r.total_picks > 0 ? Math.round(r.correct_picks / r.total_picks * 100) : 0 })).sort((a, b) => b.total_points - a.total_points);
+        // Attach shop cosmetics
         const userIds = rows.map(r => r.user_id).filter(Boolean).join(",");
         const cosmetics = userIds ? await supabase("user_achievements", { filters: `?user_id=in.(${userIds})&achievement_key=like.shop_%&select=user_id,achievement_key` }) : [];
         const cosmeticsByUser = {};
