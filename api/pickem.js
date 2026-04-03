@@ -32,6 +32,13 @@ function genCode() {
   return code;
 }
 
+// Grant achievement silently (unique constraint prevents duplicates)
+async function grantAchievement(userId, key) {
+  try {
+    await supabase("user_achievements", { method: "POST", body: { user_id: userId, achievement_key: key } });
+  } catch (_) {}
+}
+
 const FIX = { GS:"GSW",NY:"NYK",SA:"SAS",NO:"NOP",WSH:"WAS",UTAH:"UTA",CHAR:"CHA",PHO:"PHX",UTH:"UTA" };
 const fix = (a) => FIX[a] || a;
 
@@ -115,6 +122,7 @@ export default async function handler(req, res) {
           method: "POST",
           body: { group_id: group.id, user_id: userId },
         });
+        grantAchievement(userId, "joined_group");
         return res.json({ ok: true, group });
       }
 
@@ -137,18 +145,16 @@ export default async function handler(req, res) {
 
       // ─── MAKE PICK ────────────────────────────────────────
       case "makePick": {
-        const { userId, groupId, gameId, gameDate, pickedTeam, homeTeam, awayTeam } = body;
+        const { userId, groupId, gameId, gameDate, pickedTeam, homeTeam, awayTeam, confidence } = body;
         if (!userId || !groupId || !gameId || !pickedTeam)
           return res.json({ ok: false, error: "Faltan datos" });
-        // Upsert (si ya existe, actualiza)
+        const conf = Math.min(3, Math.max(1, parseInt(confidence) || 1));
         const existing = await supabase("picks", {
           filters: `?user_id=eq.${userId}&group_id=eq.${groupId}&game_id=eq.${gameId}`,
         });
         if (existing?.length) {
-          // Update
           await supabase(`picks?id=eq.${existing[0].id}`, {
-            method: "PATCH",
-            body: { picked_team: pickedTeam },
+            method: "PATCH", body: { picked_team: pickedTeam, confidence: conf },
           });
           return res.json({ ok: true, updated: true });
         }
@@ -157,9 +163,10 @@ export default async function handler(req, res) {
           body: {
             user_id: userId, group_id: groupId, game_id: gameId,
             game_date: gameDate || new Date().toISOString().split("T")[0],
-            picked_team: pickedTeam, home_team: homeTeam, away_team: awayTeam,
+            picked_team: pickedTeam, home_team: homeTeam, away_team: awayTeam, confidence: conf,
           },
         });
+        grantAchievement(userId, "first_pick");
         return res.json({ ok: true, pick });
       }
 
@@ -220,17 +227,54 @@ export default async function handler(req, res) {
 
         let scored = 0;
         const correctPicks = [];
+        const userScoreMap = {}; // userId -> { correct, total, groupId }
         for (const pick of unscored) {
           const winner = finishedGames[pick.game_id];
           if (!winner) continue;
           const correct = pick.picked_team === winner;
+          const conf = pick.confidence || 1;
+          const points = correct ? conf * 10 : 0;
           await supabase(`picks?id=eq.${pick.id}`, {
-            method: "PATCH",
-            body: { correct, scored: true, points: correct ? 10 : 0 },
+            method: "PATCH", body: { correct, scored: true, points },
           });
-          if (correct) correctPicks.push(pick);
+          if (!userScoreMap[pick.user_id]) userScoreMap[pick.user_id] = { correct: 0, total: 0, groupId: pick.group_id };
+          userScoreMap[pick.user_id].total++;
+          if (correct) { userScoreMap[pick.user_id].correct++; correctPicks.push(pick); }
           scored++;
         }
+
+        // Grant achievements for scored users
+        for (const [uid, stats] of Object.entries(userScoreMap)) {
+          if (stats.correct > 0) grantAchievement(uid, "first_win");
+          if (stats.correct >= 2 && stats.correct === stats.total) grantAchievement(uid, "perfect_day");
+        }
+
+        // Score pending parlays
+        try {
+          const pendingParlays = await supabase("parlays", { filters: `?status=eq.pending&limit=200` });
+          for (const parlay of (pendingParlays || [])) {
+            const picks = typeof parlay.picks === "string" ? JSON.parse(parlay.picks) : (parlay.picks || []);
+            let changed = false, allScored = true, allCorrect = true;
+            for (const p of picks) {
+              if (p.scored) continue;
+              const winner = finishedGames[p.game_id];
+              if (winner) { p.correct = p.picked_team === winner; p.scored = true; changed = true; if (!p.correct) allCorrect = false; }
+              else allScored = false;
+            }
+            if (!changed) continue;
+            if (allScored) {
+              const bonus = allCorrect ? picks.length * 30 : 0;
+              if (allCorrect && bonus > 0) {
+                const balRows = await supabase("coin_balances", { filters: `?user_id=eq.${parlay.user_id}&group_id=eq.${parlay.group_id}&limit=1` });
+                if (balRows?.length) await supabase(`coin_balances?id=eq.${balRows[0].id}`, { method: "PATCH", body: { balance: balRows[0].balance + bonus } });
+                grantAchievement(parlay.user_id, "parlay_win");
+              }
+              await supabase(`parlays?id=eq.${parlay.id}`, { method: "PATCH", body: { picks: JSON.stringify(picks), status: allCorrect ? "won" : "lost", bonus_earned: allCorrect ? picks.length * 30 : 0 } });
+            } else {
+              await supabase(`parlays?id=eq.${parlay.id}`, { method: "PATCH", body: { picks: JSON.stringify(picks) } });
+            }
+          }
+        } catch (_) {}
 
         // Push notifications for correct picks
         if (correctPicks.length > 0) {
@@ -243,12 +287,12 @@ export default async function handler(req, res) {
               for (const pick of correctPicks) {
                 const subs = await supabase("push_subscriptions", { filters: `?user_id=eq.${pick.user_id}&limit=1` });
                 if (!subs?.length) continue;
+                const conf = pick.confidence || 1;
                 const sub = { endpoint: subs[0].endpoint, keys: { p256dh: subs[0].p256dh, auth: subs[0].auth } };
                 await webpush.default.sendNotification(sub, JSON.stringify({
                   title: "✅ ¡Acertaste!",
-                  body: `Tu pick de ${pick.picked_team} fue correcto — +10 puntos 🏀`,
-                  tag: "pick-correct-" + pick.id,
-                  url: "/"
+                  body: `Tu pick de ${pick.picked_team} fue correcto — +${conf * 10} pts 🏀${conf > 1 ? ` (${conf}x 🔥)` : ""}`,
+                  tag: "pick-correct-" + pick.id, url: "/",
                 })).catch(() => {});
               }
             }
@@ -634,6 +678,7 @@ export default async function handler(req, res) {
             });
           }
           await supabase(`bets?id=eq.${bet.id}`, { method: "PATCH", body: { status: "settled", winner_id: winnerId, actual_winner: winner } });
+          grantAchievement(winnerId, "bet_won");
           settled++;
         }
         return res.json({ ok: true, settled });
@@ -786,6 +831,7 @@ export default async function handler(req, res) {
           method: "POST",
           body: { requester_id: userId, opponent_id: opponentId, group_id: groupId, game_id: gameId, amount: parseInt(amount), picked_team: pickedTeam, home_team: homeTeam, away_team: awayTeam, status: "pending" },
         });
+        grantAchievement(userId, "challenge_sent");
         // Get requester name
         const requesterRows = await supabase("users", { filters: `?id=eq.${userId}&limit=1` });
         const requesterName = requesterRows?.[0]?.name || "Alguien";
@@ -957,6 +1003,210 @@ export default async function handler(req, res) {
           filters: `?game_type=eq.${gameType}&select=score,users(name,avatar_emoji)&order=score.desc&limit=10`,
         });
         return res.json({ ok: true, scores: scores || [] });
+      }
+
+      // ─── DAILY BONUS ───────────────────────────────────────
+      case "claimDailyBonus": {
+        const { userId } = body;
+        if (!userId) return res.json({ ok: false, error: "userId requerido" });
+        const today = new Date().toISOString().split("T")[0];
+        const users = await supabase("users", { filters: `?id=eq.${userId}&limit=1` });
+        if (!users?.length) return res.json({ ok: false, error: "Usuario no encontrado" });
+        const u = users[0];
+        if (u.last_daily_bonus === today) return res.json({ ok: false, already: true, error: "Ya reclamaste tu bonus hoy" });
+        const memberships = await supabase("group_members", { filters: `?user_id=eq.${userId}&select=group_id` });
+        const bonus = 25;
+        for (const m of (memberships || [])) {
+          const bal = await supabase("coin_balances", { filters: `?user_id=eq.${userId}&group_id=eq.${m.group_id}&limit=1` });
+          if (bal?.length) await supabase(`coin_balances?id=eq.${bal[0].id}`, { method: "PATCH", body: { balance: bal[0].balance + bonus } });
+          else await supabase("coin_balances", { method: "POST", body: { user_id: userId, group_id: m.group_id, balance: 500 + bonus } });
+        }
+        await supabase(`users?id=eq.${userId}`, { method: "PATCH", body: { last_daily_bonus: today } });
+        return res.json({ ok: true, bonus });
+      }
+
+      // ─── CHECK DAILY BONUS STATUS ──────────────────────────
+      case "dailyBonusStatus": {
+        const { userId } = req.query;
+        if (!userId) return res.json({ ok: false, error: "userId requerido" });
+        const today = new Date().toISOString().split("T")[0];
+        const users = await supabase("users", { filters: `?id=eq.${userId}&select=last_daily_bonus&limit=1` });
+        const claimed = users?.[0]?.last_daily_bonus === today;
+        return res.json({ ok: true, claimed });
+      }
+
+      // ─── PERSONAL STATS ────────────────────────────────────
+      case "myStats": {
+        const { userId } = req.query;
+        if (!userId) return res.json({ ok: false, error: "userId requerido" });
+        const picks = await supabase("picks", { filters: `?user_id=eq.${userId}&scored=eq.true&select=picked_team,correct,points,game_date&limit=500` });
+        if (!picks?.length) return res.json({ ok: true, stats: null });
+        const byTeam = {};
+        let totalCorrect = 0, totalPicks = picks.length, totalPoints = 0;
+        for (const p of picks) {
+          totalPoints += p.points || 0;
+          if (p.correct) totalCorrect++;
+          if (!byTeam[p.picked_team]) byTeam[p.picked_team] = { team: p.picked_team, correct: 0, total: 0 };
+          byTeam[p.picked_team].total++;
+          if (p.correct) byTeam[p.picked_team].correct++;
+        }
+        const teamStats = Object.values(byTeam).map(t => ({ ...t, acc: Math.round(t.correct / t.total * 100) })).sort((a, b) => b.total - a.total);
+        const minGames = 2;
+        const favoriteTeam = teamStats[0] || null;
+        const bestTeam = teamStats.filter(t => t.total >= minGames).sort((a, b) => b.acc - a.acc)[0] || null;
+        const worstTeam = teamStats.filter(t => t.total >= minGames).sort((a, b) => a.acc - b.acc)[0] || null;
+        return res.json({ ok: true, stats: { totalPicks, totalCorrect, totalPoints, accuracy: Math.round(totalCorrect / totalPicks * 100), favoriteTeam, bestTeam, worstTeam, topTeams: teamStats.slice(0, 10) } });
+      }
+
+      // ─── CHECK STREAK ACHIEVEMENTS ─────────────────────────
+      case "checkAchievements": {
+        const { userId, groupId } = req.query;
+        if (!userId || !groupId) return res.json({ ok: false, error: "Faltan datos" });
+        const picks = await supabase("picks", { filters: `?user_id=eq.${userId}&group_id=eq.${groupId}&scored=eq.true&select=correct,game_date&order=game_date.desc&limit=30` });
+        let streak = 0;
+        for (const p of (picks || [])) { if (!p.correct) break; streak++; }
+        const newAchievements = [];
+        if (streak >= 3) { await grantAchievement(userId, "streak_3"); if (streak === 3) newAchievements.push("streak_3"); }
+        if (streak >= 5) { await grantAchievement(userId, "streak_5"); if (streak === 5) newAchievements.push("streak_5"); }
+        if (streak >= 7) {
+          await grantAchievement(userId, "streak_7");
+          newAchievements.push("streak_7");
+          // Give a streak shield
+          const u = await supabase("users", { filters: `?id=eq.${userId}&limit=1` });
+          if (u?.length) {
+            const shields = (u[0].streak_shields || 0) + 1;
+            await supabase(`users?id=eq.${userId}`, { method: "PATCH", body: { streak_shields: shields } });
+          }
+        }
+        return res.json({ ok: true, streak, newAchievements });
+      }
+
+      // ─── STREAK SHIELD ─────────────────────────────────────
+      case "getShields": {
+        const { userId } = req.query;
+        if (!userId) return res.json({ ok: false, error: "userId requerido" });
+        const u = await supabase("users", { filters: `?id=eq.${userId}&select=streak_shields&limit=1` });
+        return res.json({ ok: true, shields: u?.[0]?.streak_shields || 0 });
+      }
+
+      case "useShield": {
+        const { userId } = body;
+        if (!userId) return res.json({ ok: false, error: "userId requerido" });
+        const u = await supabase("users", { filters: `?id=eq.${userId}&limit=1` });
+        if (!u?.length) return res.json({ ok: false, error: "Usuario no encontrado" });
+        const shields = u[0].streak_shields || 0;
+        if (shields < 1) return res.json({ ok: false, error: "No tienes escudos disponibles" });
+        await supabase(`users?id=eq.${userId}`, { method: "PATCH", body: { streak_shields: shields - 1 } });
+        return res.json({ ok: true, shieldsLeft: shields - 1 });
+      }
+
+      // ─── UPDATE GROUP (admin) ──────────────────────────────
+      case "updateGroup": {
+        const { userId, groupId, name, emoji } = body;
+        if (!userId || !groupId) return res.json({ ok: false, error: "Faltan datos" });
+        const grp = await supabase("groups", { filters: `?id=eq.${groupId}&owner_id=eq.${userId}&limit=1` });
+        if (!grp?.length) return res.json({ ok: false, error: "Solo el creador puede editar el grupo" });
+        const updates = {};
+        if (name?.trim()) updates.name = name.trim();
+        if (emoji) updates.emoji = emoji;
+        await supabase(`groups?id=eq.${groupId}`, { method: "PATCH", body: updates });
+        return res.json({ ok: true });
+      }
+
+      // ─── SEND GAME REMINDERS (cron every 30 min) ──────────
+      case "sendReminders": {
+        const webpush = await import("web-push");
+        const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
+        const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
+        if (!VAPID_PUBLIC || !VAPID_PRIVATE) return res.json({ ok: false, error: "VAPID keys no configuradas" });
+        webpush.default.setVapidDetails("mailto:courtiq@app.com", VAPID_PUBLIC, VAPID_PRIVATE);
+        const now = new Date();
+        const in15 = new Date(now.getTime() + 15 * 60 * 1000).toISOString();
+        const in45 = new Date(now.getTime() + 45 * 60 * 1000).toISOString();
+        const espnRes = await fetch("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard");
+        const espnData = await espnRes.json();
+        const upcoming = (espnData.events || []).filter(e => e.date >= in15 && e.date <= in45);
+        const subs = await supabase("push_subscriptions", { filters: `?select=endpoint,p256dh,auth` });
+        if (!subs?.length || !upcoming.length) return res.json({ ok: true, sent: 0 });
+        let remindedGames = 0;
+        for (const game of upcoming) {
+          try {
+            await supabase("reminder_sent", { method: "POST", body: { game_id: game.id } });
+          } catch (_) { continue; } // Already sent for this game
+          const comp = game.competitions?.[0];
+          const home = comp?.competitors?.find(c => c.homeAway === "home");
+          const away = comp?.competitors?.find(c => c.homeAway === "away");
+          const payload = JSON.stringify({
+            title: "⏰ ¡Partido en 15 min!",
+            body: `${fix(away?.team?.abbreviation || "")} vs ${fix(home?.team?.abbreviation || "")} — ¡Haz tus picks!`,
+            tag: `reminder-${game.id}`, url: "/",
+          });
+          await Promise.allSettled(subs.map(s =>
+            webpush.default.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload)
+          ));
+          remindedGames++;
+        }
+        return res.json({ ok: true, remindedGames });
+      }
+
+      // ─── PARLAY ────────────────────────────────────────────
+      case "createParlay": {
+        const { userId, groupId, parlayPicks } = body;
+        if (!userId || !groupId || !Array.isArray(parlayPicks)) return res.json({ ok: false, error: "Faltan datos" });
+        if (parlayPicks.length < 3 || parlayPicks.length > 5) return res.json({ ok: false, error: "El parlay necesita 3-5 juegos" });
+        const d = new Date(); d.setDate(d.getDate() - d.getDay() + 1);
+        const weekStart = d.toISOString().split("T")[0];
+        const existing = await supabase("parlays", { filters: `?user_id=eq.${userId}&group_id=eq.${groupId}&week_start=eq.${weekStart}&limit=1` });
+        const picks = parlayPicks.map(p => ({ ...p, correct: null, scored: false }));
+        if (existing?.length) {
+          await supabase(`parlays?id=eq.${existing[0].id}`, { method: "PATCH", body: { picks: JSON.stringify(picks), status: "pending", bonus_earned: 0 } });
+          return res.json({ ok: true, updated: true });
+        }
+        const [parlay] = await supabase("parlays", { method: "POST", body: { user_id: userId, group_id: groupId, week_start: weekStart, picks: JSON.stringify(picks), status: "pending", bonus_earned: 0 } });
+        return res.json({ ok: true, parlay });
+      }
+
+      case "myParlay": {
+        const { userId, groupId } = req.query;
+        if (!userId || !groupId) return res.json({ ok: false, error: "Faltan datos" });
+        const d = new Date(); d.setDate(d.getDate() - d.getDay() + 1);
+        const weekStart = d.toISOString().split("T")[0];
+        const parlays = await supabase("parlays", { filters: `?user_id=eq.${userId}&group_id=eq.${groupId}&week_start=eq.${weekStart}&limit=1` });
+        const parlay = parlays?.[0] || null;
+        if (parlay && typeof parlay.picks === "string") parlay.picks = JSON.parse(parlay.picks);
+        return res.json({ ok: true, parlay });
+      }
+
+      case "groupParlays": {
+        const { groupId } = req.query;
+        if (!groupId) return res.json({ ok: false, error: "groupId requerido" });
+        const d = new Date(); d.setDate(d.getDate() - d.getDay() + 1);
+        const weekStart = d.toISOString().split("T")[0];
+        const parlays = await supabase("parlays", { filters: `?group_id=eq.${groupId}&week_start=eq.${weekStart}&select=*,users(name,avatar_emoji)&order=bonus_earned.desc` });
+        return res.json({ ok: true, parlays: (parlays || []).map(p => ({ ...p, picks: typeof p.picks === "string" ? JSON.parse(p.picks) : p.picks })) });
+      }
+
+      // ─── COIN SHOP ─────────────────────────────────────────
+      case "purchaseItem": {
+        const { userId, groupId, itemKey, itemCost } = body;
+        if (!userId || !itemKey) return res.json({ ok: false, error: "Faltan datos" });
+        const owned = await supabase("user_achievements", { filters: `?user_id=eq.${userId}&achievement_key=eq.shop_${itemKey}&limit=1` });
+        if (owned?.length) return res.json({ ok: false, error: "Ya tienes este artículo" });
+        const cost = parseInt(itemCost) || 0;
+        if (groupId && cost > 0) {
+          const bal = await supabase("coin_balances", { filters: `?user_id=eq.${userId}&group_id=eq.${groupId}&limit=1` });
+          if (!bal?.length || bal[0].balance < cost) return res.json({ ok: false, error: "Saldo insuficiente" });
+          await supabase(`coin_balances?id=eq.${bal[0].id}`, { method: "PATCH", body: { balance: bal[0].balance - cost } });
+        }
+        await supabase("user_achievements", { method: "POST", body: { user_id: userId, achievement_key: `shop_${itemKey}` } });
+        return res.json({ ok: true });
+      }
+
+      case "myShopItems": {
+        const { userId } = req.query;
+        if (!userId) return res.json({ ok: false, error: "userId requerido" });
+        const items = await supabase("user_achievements", { filters: `?user_id=eq.${userId}&achievement_key=like.shop_%&select=achievement_key` });
+        return res.json({ ok: true, items: (items || []).map(i => i.achievement_key.replace("shop_", "")) });
       }
 
       default:

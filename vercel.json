@@ -6,6 +6,7 @@
     { "path": "/api/pickem?action=scoreGames", "schedule": "0 4 * * *" },
     { "path": "/api/pickem?action=scoreGames", "schedule": "0 12 * * *" },
     { "path": "/api/pickem?action=settleBets", "schedule": "0 5 * * *" },
-    { "path": "/api/pickem?action=settleBets", "schedule": "0 13 * * *" }
+    { "path": "/api/pickem?action=settleBets", "schedule": "0 13 * * *" },
+    { "path": "/api/pickem?action=sendReminders", "schedule": "*/30 * * * *" }
   ]
 }

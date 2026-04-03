@@ -64,3 +64,33 @@ create table if not exists notification_prefs (
 alter table notification_prefs enable row level security;
 create policy "public_notif_prefs" on notification_prefs for all using (true) with check (true);
 grant all on notification_prefs to anon, authenticated;
+
+-- ─── NEW COLUMNS (run each separately if needed) ─────
+alter table picks add column if not exists confidence int default 1;
+alter table users add column if not exists last_daily_bonus date;
+alter table users add column if not exists streak_shields int default 0;
+
+-- ─── PARLAYS ─────────────────────────────────────────
+create table if not exists parlays (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references users(id) on delete cascade,
+  group_id uuid references groups(id) on delete cascade,
+  week_start date not null,
+  picks jsonb not null default '[]',
+  status text default 'pending',
+  bonus_earned int default 0,
+  created_at timestamptz default now(),
+  unique(user_id, group_id, week_start)
+);
+alter table parlays enable row level security;
+create policy "public_parlays" on parlays for all using (true) with check (true);
+grant all on parlays to anon, authenticated;
+
+-- ─── REMINDER SENT (dedup cron reminders) ────────────
+create table if not exists reminder_sent (
+  game_id text primary key,
+  sent_at timestamptz default now()
+);
+alter table reminder_sent enable row level security;
+create policy "public_reminder_sent" on reminder_sent for all using (true) with check (true);
+grant all on reminder_sent to anon, authenticated;
