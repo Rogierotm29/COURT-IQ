@@ -185,12 +185,15 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
   const [showPctInfo,setShowPctInfo]=useState(false);
   useEffect(()=>{
     if(!user)return;
+    const today=new Date().toISOString().split("T")[0];
+    // Restore lock synchronously before any async call — prevents flicker
+    const savedGid=localStorage.getItem("courtiq_lastgroup");
+    if(savedGid&&localStorage.getItem(`courtiq_locked_${savedGid}_${today}`)) setLockedPicks(true);
+
     pickemAPI("myGroups",{params:{userId:user.id}}).then(d=>{
       if(d.ok&&d.groups?.length){
-        const saved=localStorage.getItem("courtiq_lastgroup");
-        const g=d.groups.find(x=>x.id===saved)||d.groups[0];
+        const g=d.groups.find(x=>x.id===savedGid)||d.groups[0];
         setGroup(g);
-        const today=new Date().toISOString().split("T")[0];
         pickemAPI("myPicks",{params:{userId:user.id,groupId:g.id,date:today}}).then(r=>{
           if(r.ok){const m={};(r.picks||[]).forEach(p=>{m[p.game_id]=p.picked_team;});setPicks(m);}
           setLoaded(true);
@@ -199,11 +202,11 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         pickemAPI("groupBets",{params:{groupId:g.id}}).then(r=>{
           if(r.ok){const challenges=(r.bets||[]).filter(b=>b.status==="pending"&&b.opponent_id===user.id);setPendingBets(challenges);}
         });
-        const today2=new Date().toISOString().split("T")[0];
-        if(localStorage.getItem(`courtiq_locked_${g.id}_${today2}`)) setLockedPicks(true);
+        // Confirm lock with actual group id
+        if(localStorage.getItem(`courtiq_locked_${g.id}_${today}`)) setLockedPicks(true);
       } else setLoaded(true);
     });
-  },[user,games]);
+  },[user]);
 
   const lockAllPicks=()=>{
     if(!group) return;
@@ -2386,6 +2389,20 @@ export default function App(){
 
   // Auto-score picks on load
   useEffect(()=>{pickemAPI("scoreGames").catch(()=>{});},[]);
+
+  // Handle deep-link URL params from push notifications
+  useEffect(()=>{
+    const params=new URLSearchParams(window.location.search);
+    const tabParam=params.get("tab");
+    const subtabParam=params.get("subtab");
+    if(tabParam){
+      setTab(tabParam);
+      if(subtabParam) setPickemInitSubTab(subtabParam);
+      const url=new URL(window.location.href);
+      url.searchParams.delete("tab");url.searchParams.delete("subtab");
+      window.history.replaceState({},"",url.toString());
+    }
+  },[]);
 
   const liveGame=games.find(g=>g.status==="LIVE");
   return(<div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Outfit','Segoe UI',sans-serif",color:C.text}}>

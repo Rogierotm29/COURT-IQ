@@ -565,7 +565,7 @@ export default async function handler(req, res) {
         const { groupId } = req.query;
         if (!groupId) return res.json({ ok: false, error: "groupId requerido" });
         const bets = await supabase("bets", {
-          filters: `?group_id=eq.${groupId}&status=in.(open,active)&order=created_at.desc&limit=50`,
+          filters: `?group_id=eq.${groupId}&status=in.(open,active,pending)&select=*,requester:users!bets_requester_id_fkey(name,avatar_emoji),opponent:users!bets_opponent_id_fkey(name,avatar_emoji)&order=created_at.desc&limit=50`,
         });
         return res.json({ ok: true, bets: bets || [] });
       }
@@ -766,6 +766,7 @@ export default async function handler(req, res) {
                 title: "🪙 ¡Reto de apuesta!",
                 body: `${requesterName} te reta: 🪙${amount} en ${homeTeam} vs ${awayTeam}`,
                 tag: "bet_challenge",
+                url: "/?tab=pickem&subtab=apuestas",
               }));
             }
           }
