@@ -758,11 +758,17 @@ const PickemTab=({games,userCtx,initSubTab,standalone})=>{
     pickemAPI("dailyWinner",{params:{groupId:selGroup.id}}).then(d=>{if(d.ok)setDailyWinner(d.winner);});
   },[user,selGroup]);
 
-  // Period leaderboard
+  // Period leaderboard — enrich with shopItems from season leaderboard (already loaded)
   useEffect(()=>{
     if(!selGroup||lbPeriod==="season") return;
-    pickemAPI("periodLeaderboard",{params:{groupId:selGroup.id,period:lbPeriod}}).then(d=>{if(d.ok)setPeriodLb(d.leaderboard||[]);});
-  },[selGroup,lbPeriod]);
+    pickemAPI("periodLeaderboard",{params:{groupId:selGroup.id,period:lbPeriod}}).then(d=>{
+      if(d.ok){
+        // Merge shopItems from season leaderboard
+        const shopMap={};leaderboard.forEach(r=>{if(r.user_id)shopMap[r.user_id]=r.shopItems||[];});
+        setPeriodLb((d.leaderboard||[]).map(r=>({...r,shopItems:shopMap[r.user_id]||[]})));
+      }
+    });
+  },[selGroup,lbPeriod,leaderboard]);
 
   // Sub-tab specific data
   useEffect(()=>{
@@ -1124,7 +1130,9 @@ const PickemTab=({games,userCtx,initSubTab,standalone})=>{
           {activeLb.length===0?<div style={{textAlign:"center",padding:30,color:C.dim}}>Aún no hay picks</div>
           :activeLb.map((r,i)=>{
             const isMe=r.user_id===user.id;const mc=["#FFB800","#C0C0C0","#CD7F32"];
-            const rItems=r.shopItems||[];const nameClr=getNameColor(rItems);const prefix=getNamePrefix(rItems);const bdClr=getBorderColor(rItems);
+            // Para isMe usar shopItems del state local (siempre fresco), para otros usar el del API
+            const rItems=isMe?[...shopItems,...(r.shopItems||[])]:r.shopItems||[];
+            const nameClr=getNameColor(rItems);const prefix=getNamePrefix(rItems);const bdClr=getBorderColor(rItems);
             return <div key={r.user_id||i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 8px",marginBottom:4,borderRadius:10,background:isMe?`${C.accent}11`:i<3?"#FFB80008":"transparent",border:isMe?`1px solid ${C.accent}33`:"1px solid transparent"}}>
               <div style={{width:32,height:32,borderRadius:"50%",background:i<3?`${mc[i]}22`:"#0a1018",border:`2px solid ${bdClr||( i<3?mc[i]:C.border)}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:i<3?14:12,fontWeight:900,color:i<3?mc[i]:C.dim,flexShrink:0,boxShadow:bdClr?`0 0 8px ${bdClr}66`:undefined}}>{i<3?["🥇","🥈","🥉"][i]:i+1}</div>
               <div style={{flex:1,cursor:isMe?undefined:"pointer"}} onClick={()=>!isMe&&openProfile(r)}>
