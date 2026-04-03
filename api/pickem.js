@@ -184,10 +184,17 @@ export default async function handler(req, res) {
       case "leaderboard": {
         const { groupId } = req.query;
         if (!groupId) return res.json({ ok: false, error: "groupId requerido" });
-        const rows = await supabase("leaderboard", {
-          filters: `?group_id=eq.${groupId}&order=total_points.desc`,
-        });
-        return res.json({ ok: true, leaderboard: rows || [] });
+        const rows = await supabase("leaderboard", { filters: `?group_id=eq.${groupId}&order=total_points.desc` });
+        if (!rows?.length) return res.json({ ok: true, leaderboard: [] });
+        // Attach shop cosmetics for each member
+        const userIds = rows.map(r => r.user_id).filter(Boolean).join(",");
+        const cosmetics = userIds ? await supabase("user_achievements", { filters: `?user_id=in.(${userIds})&achievement_key=like.shop_%&select=user_id,achievement_key` }) : [];
+        const cosmeticsByUser = {};
+        for (const c of cosmetics || []) {
+          if (!cosmeticsByUser[c.user_id]) cosmeticsByUser[c.user_id] = [];
+          cosmeticsByUser[c.user_id].push(c.achievement_key.replace("shop_", ""));
+        }
+        return res.json({ ok: true, leaderboard: rows.map(r => ({ ...r, shopItems: cosmeticsByUser[r.user_id] || [] })) });
       }
 
       // ─── SCORE GAMES (check ESPN for finished games, update picks) ──
@@ -1206,9 +1213,20 @@ export default async function handler(req, res) {
       case "purchaseItem": {
         const { userId, groupId, itemKey, itemCost } = body;
         if (!userId || !itemKey) return res.json({ ok: false, error: "Faltan datos" });
+        const cost = parseInt(itemCost) || 0;
+        // Shield is consumable — add directly to streak_shields, don't store in achievements
+        if (itemKey === "shield") {
+          if (!groupId) return res.json({ ok: false, error: "groupId requerido" });
+          const bal = await supabase("coin_balances", { filters: `?user_id=eq.${userId}&group_id=eq.${groupId}&limit=1` });
+          if (!bal?.length || bal[0].balance < cost) return res.json({ ok: false, error: "Saldo insuficiente" });
+          await supabase(`coin_balances?id=eq.${bal[0].id}`, { method: "PATCH", body: { balance: bal[0].balance - cost } });
+          const u = await supabase("users", { filters: `?id=eq.${userId}&limit=1` });
+          const newShields = (u?.[0]?.streak_shields || 0) + 1;
+          await supabase(`users?id=eq.${userId}`, { method: "PATCH", body: { streak_shields: newShields } });
+          return res.json({ ok: true, shields: newShields });
+        }
         const owned = await supabase("user_achievements", { filters: `?user_id=eq.${userId}&achievement_key=eq.shop_${itemKey}&limit=1` });
         if (owned?.length) return res.json({ ok: false, error: "Ya tienes este artículo" });
-        const cost = parseInt(itemCost) || 0;
         if (groupId && cost > 0) {
           const bal = await supabase("coin_balances", { filters: `?user_id=eq.${userId}&group_id=eq.${groupId}&limit=1` });
           if (!bal?.length || bal[0].balance < cost) return res.json({ ok: false, error: "Saldo insuficiente" });

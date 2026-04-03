@@ -620,12 +620,51 @@ const ACHIEVEMENT_DEFS=[
   {key:"joined_group",emoji:"👥",name:"Social",desc:"Te uniste a un grupo",color:"#00C2FF"},
   {key:"challenge_sent",emoji:"⚡",name:"Retador",desc:"Enviaste un reto de apuesta",color:"#FFB800"},
   {key:"parlay_win",emoji:"🎰",name:"Parlay Perfecto",desc:"Acertaste todos los picks de tu parlay",color:"#FF6B35"},
-  {key:"shop_gold_border",emoji:"✨",name:"Borde Dorado",desc:"Marco dorado en el leaderboard",color:"#FFB800"},
-  {key:"shop_fire_color",emoji:"🔥",name:"Color Fuego",desc:"Nombre en naranja fuego",color:"#FF6B35"},
-  {key:"shop_crown_badge",emoji:"👑",name:"Corona",desc:"Badge de corona en tu nombre",color:"#FFB800"},
-  {key:"shop_100_badge",emoji:"💯",name:"Badge 100",desc:"Badge especial 100 en tu nombre",color:"#00FF9D"},
 ];
-const PickemTab=({games,userCtx,initSubTab})=>{
+
+// ─── SHOP ITEMS ─────────────────────────────────────────────────────────────
+const SHOP_ITEMS=[
+  // Títulos (aparecen antes del nombre en el ranking)
+  {key:"title_rey",   emoji:"👑",name:"Título Rey",      desc:"👑 antes de tu nombre en el ranking",   cost:200, type:"title",  cat:"Títulos"},
+  {key:"title_mvp",   emoji:"🏅",name:"Título MVP",      desc:"🏅 MVP junto a tu nombre",              cost:350, type:"title",  cat:"Títulos"},
+  {key:"title_fire",  emoji:"🔥",name:"Título Fuego",    desc:"🔥 antes de tu nombre",                cost:120, type:"title",  cat:"Títulos"},
+  {key:"title_goat",  emoji:"🐐",name:"Título GOAT",     desc:"🐐 el más grande, junto a tu nombre",  cost:500, type:"title",  cat:"Títulos"},
+  // Colores de nombre
+  {key:"color_fire",  emoji:"🟠",name:"Nombre Fuego",    desc:"Tu nombre en naranja en el ranking",    cost:150, type:"color",  cat:"Colores",  value:"#FF6B35"},
+  {key:"color_gold",  emoji:"🟡",name:"Nombre Dorado",   desc:"Tu nombre en dorado en el ranking",     cost:250, type:"color",  cat:"Colores",  value:"#FFB800"},
+  {key:"color_green", emoji:"🟢",name:"Nombre Verde",    desc:"Tu nombre en verde en el ranking",      cost:150, type:"color",  cat:"Colores",  value:"#00FF9D"},
+  {key:"color_purple",emoji:"🟣",name:"Nombre Violeta",  desc:"Tu nombre en violeta en el ranking",    cost:200, type:"color",  cat:"Colores",  value:"#9B59B6"},
+  // Marcos del avatar/posición
+  {key:"border_gold", emoji:"✨",name:"Marco Dorado",    desc:"Borde dorado en tu posición del ranking",cost:300, type:"border", cat:"Marcos",   value:"#FFB800"},
+  {key:"border_fire", emoji:"🔴",name:"Marco Fuego",     desc:"Borde rojo en tu posición del ranking", cost:300, type:"border", cat:"Marcos",   value:"#FF4444"},
+  {key:"border_neon", emoji:"🔵",name:"Marco Neón",      desc:"Borde cyan neón en tu posición",        cost:250, type:"border", cat:"Marcos",   value:"#00C2FF"},
+  // Funcional
+  {key:"shield",      emoji:"🛡️",name:"Escudo de Racha",desc:"+1 escudo para proteger tu racha (úsalo en Grupos)",cost:75, type:"shield", cat:"Poderes"},
+];
+
+// Helpers para aplicar cosmetics en el leaderboard
+const getNameColor=(items=[])=>{
+  if(items.includes("color_gold"))return "#FFB800";
+  if(items.includes("color_purple"))return "#9B59B6";
+  if(items.includes("color_fire")||items.includes("fire_color"))return "#FF6B35";
+  if(items.includes("color_green"))return "#00FF9D";
+  return null;
+};
+const getNamePrefix=(items=[])=>{
+  const p=[];
+  if(items.includes("title_goat"))p.push("🐐");
+  if(items.includes("title_mvp"))p.push("🏅");
+  if(items.includes("title_rey")||items.includes("crown_badge"))p.push("👑");
+  if(items.includes("title_fire"))p.push("🔥");
+  return p.join("");
+};
+const getBorderColor=(items=[])=>{
+  if(items.includes("border_gold")||items.includes("gold_border"))return "#FFB800";
+  if(items.includes("border_fire"))return "#FF4444";
+  if(items.includes("border_neon"))return "#00C2FF";
+  return null;
+};
+const PickemTab=({games,userCtx,initSubTab,standalone})=>{
   const {user,save}=userCtx;
   const [name,setName]=useState("");const [groups,setGroups]=useState([]);const [selGroup,setSelGroup]=useState(null);
   const [picks,setPicks]=useState({});const [leaderboard,setLeaderboard]=useState([]);
@@ -1029,10 +1068,10 @@ const PickemTab=({games,userCtx,initSubTab})=>{
         </div>
       </Card>}
 
-      {/* Sub-tabs */}
-      <div style={{display:"flex",gap:0,marginBottom:14,overflowX:"auto",borderBottom:`1px solid ${C.border}`}}>
-        {[["picks","🎯 Picks"],["ranking","🏆 Ranking"],["historial","📅 Historial"],["grupo","👥 Grupo"],["apuestas","🪙 Apuestas"],["parlay","🎰 Parlay"],["estadisticas","📊 Stats"],["chat","💬 Chat"]].map(([id,label])=><button key={id} className="btn" onClick={()=>setSubTab(id)} style={{padding:"9px 12px",background:"transparent",borderBottom:subTab===id?`2px solid ${C.accent}`:"2px solid transparent",color:subTab===id?C.accent:C.dim,fontSize:11,fontWeight:subTab===id?700:500,whiteSpace:"nowrap"}}>{label}</button>)}
-      </div>
+      {/* Sub-tabs — ocultos en modo standalone (Apuestas/Parlay como main tab) */}
+      {!standalone&&<div style={{display:"flex",gap:0,marginBottom:14,overflowX:"auto",borderBottom:`1px solid ${C.border}`}}>
+        {[["picks","🎯 Picks"],["ranking","🏆 Ranking"],["historial","📅 Historial"],["grupo","👥 Grupo"],["estadisticas","📊 Stats"],["chat","💬 Chat"]].map(([id,label])=><button key={id} className="btn" onClick={()=>setSubTab(id)} style={{padding:"9px 12px",background:"transparent",borderBottom:subTab===id?`2px solid ${C.accent}`:"2px solid transparent",color:subTab===id?C.accent:C.dim,fontSize:11,fontWeight:subTab===id?700:500,whiteSpace:"nowrap"}}>{label}</button>)}
+      </div>}
 
       {/* ─── PICKS ─── */}
       {subTab==="picks"&&<>
@@ -1085,10 +1124,11 @@ const PickemTab=({games,userCtx,initSubTab})=>{
           {activeLb.length===0?<div style={{textAlign:"center",padding:30,color:C.dim}}>Aún no hay picks</div>
           :activeLb.map((r,i)=>{
             const isMe=r.user_id===user.id;const mc=["#FFB800","#C0C0C0","#CD7F32"];
+            const rItems=r.shopItems||[];const nameClr=getNameColor(rItems);const prefix=getNamePrefix(rItems);const bdClr=getBorderColor(rItems);
             return <div key={r.user_id||i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 8px",marginBottom:4,borderRadius:10,background:isMe?`${C.accent}11`:i<3?"#FFB80008":"transparent",border:isMe?`1px solid ${C.accent}33`:"1px solid transparent"}}>
-              <div style={{width:32,height:32,borderRadius:"50%",background:i<3?`${mc[i]}22`:"#0a1018",border:`2px solid ${i<3?mc[i]:C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:i<3?14:12,fontWeight:900,color:i<3?mc[i]:C.dim,flexShrink:0}}>{i<3?["🥇","🥈","🥉"][i]:i+1}</div>
+              <div style={{width:32,height:32,borderRadius:"50%",background:i<3?`${mc[i]}22`:"#0a1018",border:`2px solid ${bdClr||( i<3?mc[i]:C.border)}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:i<3?14:12,fontWeight:900,color:i<3?mc[i]:C.dim,flexShrink:0,boxShadow:bdClr?`0 0 8px ${bdClr}66`:undefined}}>{i<3?["🥇","🥈","🥉"][i]:i+1}</div>
               <div style={{flex:1,cursor:isMe?undefined:"pointer"}} onClick={()=>!isMe&&openProfile(r)}>
-                <div style={{fontSize:13,fontWeight:isMe?800:600,color:isMe?C.accent:C.text}}>{isMe?(user.avatar_emoji||"🏀"):(r.avatar_emoji||"🏀")} {r.name||r.user_name}{isMe?" (tú)":""}</div>
+                <div style={{fontSize:13,fontWeight:isMe?800:600,color:nameClr||(isMe?C.accent:C.text)}}>{isMe?(user.avatar_emoji||"🏀"):(r.avatar_emoji||"🏀")} {prefix}{r.name||r.user_name}{isMe?" (tú)":""}</div>
                 <div style={{fontSize:10,color:C.dim}}>{r.correct_picks??r.correct??0} aciertos · {r.accuracy}% precisión{(streaks[r.user_id]||0)>=3&&<span style={{fontSize:9,color:"#FF6B35",fontWeight:700}}> 🔥{streaks[r.user_id]} en racha</span>}</div>
               </div>
               <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2}}>
@@ -1158,33 +1198,43 @@ const PickemTab=({games,userCtx,initSubTab})=>{
         })}
       </>}
 
-      {/* ─── GRUPO ─── */}
+      {/* ─── GRUPO — apuestas del grupo ─── */}
       {subTab==="grupo"&&<>
-        {allGames.length===0?<Card style={{textAlign:"center",padding:40}}><div style={{fontSize:36}}>🌙</div><div style={{fontSize:14,color:C.dim,marginTop:8}}>No hay partidos hoy</div></Card>
-        :allGames.map(g=>{
-          const gp=grpByGame[g.id]||[];const total=gp.length||1;
-          const forAway=gp.filter(p=>p.picked_team===g.away);const forHome=gp.filter(p=>p.picked_team===g.home);
-          return <Card key={g.id} style={{marginBottom:10}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-              <div style={{display:"flex",gap:6,alignItems:"center"}}>{logo(g.away,20)}<span style={{fontSize:12,fontWeight:700,color:C.text}}>{g.away}</span><span style={{fontSize:10,color:C.muted}}>vs</span>{logo(g.home,20)}<span style={{fontSize:12,fontWeight:700,color:C.text}}>{g.home}</span></div>
-              <Tag c={C.accent}>{gp.length} picks</Tag>
-            </div>
-            {gp.length>0&&<>
-              <div style={{display:"flex",height:8,borderRadius:4,overflow:"hidden",marginBottom:6}}>
-                <div style={{flex:forAway.length,background:tm(g.away).color}}/><div style={{flex:forHome.length,background:tm(g.home).color}}/>
+        <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>🪙 Apuestas activas del grupo</div>
+        {bets.filter(b=>b.status!=="settled").length===0
+          ?<Card style={{textAlign:"center",padding:30}}><div style={{fontSize:36,marginBottom:8}}>🪙</div><div style={{fontSize:14,color:C.dim}}>No hay apuestas activas</div><div style={{fontSize:11,color:C.muted,marginTop:6}}>Crea apuestas en el tab 🪙 Apuestas</div></Card>
+          :bets.filter(b=>b.status!=="settled").map(b=>{
+            const opponentTeam=b.home_team===b.picked_team?b.away_team:b.home_team;
+            return <Card key={b.id} style={{marginBottom:8,borderColor:b.status==="active"?"#00FF9D33":b.status==="pending"?"#FFB80033":C.border}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,justifyContent:"space-between"}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:13}}>{b.requester?.avatar_emoji||"🏀"}</span>
+                  <div>
+                    <div style={{fontSize:11,fontWeight:700,color:C.text}}>{b.requester?.name||"?"} <span style={{color:tm(b.picked_team).color}}>→ {b.picked_team}</span></div>
+                    {b.status==="active"&&<div style={{fontSize:10,color:C.dim}}>vs {b.opponent?.name||"?"} <span style={{color:tm(opponentTeam).color}}>→ {opponentTeam}</span></div>}
+                    <div style={{fontSize:9,color:C.muted}}>{b.away_team} @ {b.home_team}</div>
+                  </div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:14,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800"}}>🪙{b.amount}</div>
+                  <Tag c={b.status==="active"?"#00FF9D":b.status==="pending"?"#FFB800":C.muted}>{b.status==="active"?"✓ Activa":"⏳ Esperando"}</Tag>
+                </div>
               </div>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.dim,marginBottom:10}}>
-                <span style={{color:tm(g.away).color}}>{g.away} {Math.round(forAway.length/total*100)}%</span>
-                <span style={{color:tm(g.home).color}}>{Math.round(forHome.length/total*100)}% {g.home}</span>
+            </Card>;
+          })}
+        {bets.filter(b=>b.status==="settled").length>0&&<>
+          <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10,marginTop:16}}>📜 Últimas resueltas</div>
+          {bets.filter(b=>b.status==="settled").slice(0,5).map(b=>{
+            const opponentTeam=b.home_team===b.picked_team?b.away_team:b.home_team;
+            const winnerId=b.winner_id;
+            return <Card key={b.id} style={{marginBottom:8,opacity:0.75}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{fontSize:11,color:C.text}}><span style={{fontWeight:700}}>{b.requester?.name||"?"}</span> vs <span style={{fontWeight:700}}>{b.opponent?.name||"?"}</span> · ganó <span style={{color:"#00FF9D",fontWeight:700}}>{b.actual_winner}</span></div>
+                <div style={{fontSize:13,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800"}}>🪙{b.amount*2}</div>
               </div>
-            </>}
-            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-              {gp.map((p,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:4,background:`${tm(p.picked_team).color}18`,border:`1px solid ${tm(p.picked_team).color}44`,borderRadius:20,padding:"3px 8px"}}>
-                <span style={{fontSize:11}}>{p.user_id===user.id?(user.avatar_emoji||"🏀"):(p.users?.avatar_emoji||"🏀")}</span><span style={{fontSize:10,color:C.text,fontWeight:600}}>{p.users?.name||"?"}</span>
-              </div>)}
-            </div>
-          </Card>;
-        })}
+            </Card>;
+          })}
+        </>}
       </>}
 
       {/* ─── APUESTAS ─── */}
@@ -2318,14 +2368,85 @@ const MiniGamesTab=({players,userCtx})=>{
   return null;
 };
 
+/* ═══ SHOP TAB ═══ */
+const ShopTab=({userCtx})=>{
+  const {user}=userCtx||{};
+  const [shopItems,setShopItems]=useState([]);
+  const [balance,setBalance]=useState(null);
+  const [shields,setShields]=useState(0);
+  const [loading,setLoading]=useState(false);
+  const [msg,setMsg]=useState("");
+  const [groupId,setGroupId]=useState(null);
+  const [selCat,setSelCat]=useState("Todos");
+
+  useEffect(()=>{
+    if(!user)return;
+    const gid=localStorage.getItem("courtiq_lastgroup");
+    setGroupId(gid);
+    if(gid) pickemAPI("getBalance",{params:{userId:user.id,groupId:gid}}).then(d=>{if(d.ok)setBalance(d.balance);});
+    pickemAPI("myShopItems",{params:{userId:user.id}}).then(d=>{if(d.ok)setShopItems(d.items||[]);});
+    pickemAPI("getShields",{params:{userId:user.id}}).then(d=>{if(d.ok)setShields(d.shields||0);});
+  },[user]);
+
+  const buy=async(item)=>{
+    if(!groupId){setMsg("Abre un grupo primero para gastar monedas");return;}
+    if(!confirm(`¿Comprar "${item.name}" por 🪙${item.cost}?`))return;
+    setLoading(true);setMsg("");
+    const d=await pickemAPI("purchaseItem",{body:{userId:user.id,groupId,itemKey:item.key,itemCost:item.cost}});
+    if(d.ok){
+      if(item.type==="shield"){setShields(s=>s+1);setMsg("✅ +1 escudo de racha agregado");}
+      else{setShopItems(s=>[...s,item.key]);setMsg(`✅ ¡${item.name} aplicado en el ranking!`);}
+      setBalance(b=>b-item.cost);
+    }else setMsg(d.error||"Error");
+    setLoading(false);
+  };
+
+  if(!user)return<div className="fade-up"><Card style={{textAlign:"center",padding:40}}><div style={{fontSize:48,marginBottom:12}}>🛍️</div><div style={{fontSize:16,fontWeight:700,color:C.text}}>Inicia sesión para acceder a la tienda</div></Card></div>;
+
+  const cats=["Todos",...new Set(SHOP_ITEMS.map(i=>i.cat))];
+  const filtered=selCat==="Todos"?SHOP_ITEMS:SHOP_ITEMS.filter(i=>i.cat===selCat);
+
+  return(<div className="fade-up">
+    <ST sub="Personaliza tu perfil">Coin Shop 🛍️</ST>
+    {/* Saldo */}
+    <Card style={{marginBottom:18,background:"linear-gradient(135deg,#FFB80012,#0d1117)",borderColor:"#FFB80044",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+      <div><div style={{fontSize:9,color:"#FFB800",textTransform:"uppercase",letterSpacing:2}}>Tu saldo</div><div style={{fontSize:40,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800"}}>{balance!==null?balance:<Spin/>} 🪙</div><div style={{fontSize:10,color:C.dim}}>Gana monedas apostando y acertando picks</div></div>
+      {shields>0&&<div style={{background:"#00C2FF11",border:"1px solid #00C2FF33",borderRadius:10,padding:"10px 16px",textAlign:"center"}}><div style={{fontSize:9,color:C.accent,textTransform:"uppercase",letterSpacing:1}}>Escudos</div><div style={{fontSize:28,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.accent}}>🛡️ {shields}</div></div>}
+    </Card>
+    {msg&&<div style={{marginBottom:14,padding:"10px 14px",background:msg.startsWith("✅")?"#00FF9D11":"#ff444411",border:`1px solid ${msg.startsWith("✅")?"#00FF9D33":"#ff444433"}`,borderRadius:10,fontSize:12,color:msg.startsWith("✅")?"#00FF9D":"#ff6666"}}>{msg}</div>}
+    {/* Categorías */}
+    <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:14,paddingBottom:4}}>
+      {cats.map(c=><button key={c} className="btn" onClick={()=>setSelCat(c)} style={{padding:"6px 14px",borderRadius:20,background:selCat===c?C.accent:"#0d1117",border:`1px solid ${selCat===c?C.accent:C.border}`,color:selCat===c?"#07090f":C.dim,fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{c}</button>)}
+    </div>
+    {/* Items */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:22}}>
+      {filtered.map(item=>{
+        const owned=item.type==="shield"?false:shopItems.includes(item.key);
+        const canAfford=balance===null||balance>=item.cost;
+        return<Card key={item.key} style={{padding:"16px 12px",borderColor:owned?`${C.accent}55`:C.border,position:"relative",overflow:"hidden"}}>
+          {owned&&<div style={{position:"absolute",top:8,right:8,background:`${C.accent}22`,border:`1px solid ${C.accent}44`,borderRadius:8,padding:"2px 6px",fontSize:8,fontWeight:700,color:C.accent}}>TUYO</div>}
+          <div style={{fontSize:32,marginBottom:6,textAlign:"center"}}>{item.emoji}</div>
+          <div style={{fontSize:12,fontWeight:800,color:owned?C.text:C.muted,textAlign:"center",marginBottom:4}}>{item.name}</div>
+          <div style={{fontSize:9,color:C.dim,textAlign:"center",marginBottom:10,lineHeight:1.4}}>{item.desc}</div>
+          {item.type==="color"&&<div style={{height:4,borderRadius:2,background:item.value,marginBottom:10}}/>}
+          {item.type==="border"&&<div style={{height:4,borderRadius:2,background:`linear-gradient(90deg,transparent,${item.value},transparent)`,marginBottom:10}}/>}
+          {owned&&item.type!=="shield"
+            ?<div style={{textAlign:"center",fontSize:11,color:C.accent,fontWeight:700}}>✅ Aplicado</div>
+            :<button className="btn" onClick={()=>buy(item)} disabled={loading||(!owned&&!canAfford)} style={{width:"100%",padding:"8px",borderRadius:8,background:canAfford?`linear-gradient(135deg,#FFB800,#ff9500)`:"#0a1018",color:canAfford?"#07090f":C.muted,fontSize:12,fontWeight:900}}>
+              {item.type==="shield"?"🛡️ ":""}🪙{item.cost}
+            </button>
+          }
+        </Card>;
+      })}
+    </div>
+    <div style={{padding:"12px 16px",background:"#0a1018",borderRadius:10,border:`1px solid ${C.border}`,fontSize:11,color:C.dim}}>
+      💡 Los títulos y colores aparecen en el ranking de tu grupo visible para todos. El escudo protege tu racha de aciertos.
+    </div>
+  </div>);
+};
+
 /* ═══ SETTINGS TAB ═══ */
 const EMOJI_OPTS=["🏀","🏆","🔥","⭐","💎","👑","🦁","🐺","🦅","🐯","💪","🎯","🚀","✨","🌟","🎮","🃏","🥇","🎖️","🏅","🧠","💫","⚡","🎪","🦎","🐻","🏟️","🔮","🎲","🌊"];
-const SHOP_ITEMS=[
-  {key:"gold_border",emoji:"✨",name:"Borde Dorado",desc:"Marco dorado en el leaderboard",cost:200},
-  {key:"fire_color",emoji:"🔥",name:"Color Fuego",desc:"Nombre en naranja fuego",cost:150},
-  {key:"crown_badge",emoji:"👑",name:"Corona",desc:"Badge de corona en tu nombre",cost:300},
-  {key:"100_badge",emoji:"💯",name:"Badge 100",desc:"Badge especial 100 en tu nombre",cost:250},
-];
 
 const SettingsTab=({userCtx,installPrompt,onInstalled})=>{
   const {user,logout,save}=userCtx||{};
@@ -2335,17 +2456,11 @@ const SettingsTab=({userCtx,installPrompt,onInstalled})=>{
   const [notifLoading,setNotifLoading]=useState(false);
   const [msg,setMsg]=useState("");
   const [achievements,setAchievements]=useState([]);
-  const [shopItems,setShopItems]=useState([]);
-  const [shopBalance,setShopBalance]=useState(null);
-  const [shopLoading,setShopLoading]=useState(false);
 
   useEffect(()=>{
     if(!user) return;
     pickemAPI("getNotifPrefs",{params:{userId:user.id}}).then(d=>{if(d.ok)setNotifPrefs(d.prefs);});
     pickemAPI("getAchievements",{params:{userId:user.id}}).then(d=>{if(d.ok)setAchievements(d.achievements||[]);});
-    pickemAPI("myShopItems",{params:{userId:user.id}}).then(d=>{if(d.ok)setShopItems(d.items||[]);});
-    const gid=localStorage.getItem("courtiq_lastgroup");
-    if(gid) pickemAPI("getBalance",{params:{userId:user.id,groupId:gid}}).then(d=>{if(d.ok)setShopBalance(d.balance);});
   },[user]);
 
   const subscribePush=async()=>{
@@ -2494,31 +2609,6 @@ const SettingsTab=({userCtx,installPrompt,onInstalled})=>{
         )}
       </div>
     </Card>
-
-    {/* Coin shop */}
-    <ST sub="Tienda">Coin Shop 🪙</ST>
-    {shopBalance!==null&&<div style={{marginBottom:12,display:"flex",alignItems:"center",gap:8,background:"#FFB80011",border:"1px solid #FFB80033",borderRadius:10,padding:"10px 14px"}}><span style={{fontSize:18}}>🪙</span><span style={{fontSize:16,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800"}}>{shopBalance}</span><span style={{fontSize:11,color:C.dim}}>monedas disponibles (grupo activo)</span></div>}
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:22}}>
-      {SHOP_ITEMS.map(item=>{
-        const owned=shopItems.includes(item.key)||achievements.some(a=>a.achievement_key===`shop_${item.key}`);
-        return<Card key={item.key} style={{textAlign:"center",padding:"14px 10px",borderColor:owned?`${C.accent}44`:C.border,opacity:owned?1:0.85}}>
-          <div style={{fontSize:28,marginBottom:4}}>{item.emoji}</div>
-          <div style={{fontSize:11,fontWeight:800,color:owned?C.text:C.muted,marginBottom:2}}>{item.name}</div>
-          <div style={{fontSize:9,color:C.dim,marginBottom:8}}>{item.desc}</div>
-          {owned?<Tag c={C.accent}>✅ Tuyo</Tag>
-          :<button className="btn" disabled={shopLoading||(shopBalance!==null&&shopBalance<item.cost)} onClick={async()=>{
-            const gid=localStorage.getItem("courtiq_lastgroup");
-            if(!gid){setMsg("Primero abre un grupo para usar monedas");return;}
-            if(!confirm(`¿Comprar ${item.name} por 🪙${item.cost}?`))return;
-            setShopLoading(true);
-            const d=await pickemAPI("purchaseItem",{body:{userId:user.id,groupId:gid,itemKey:item.key,itemCost:item.cost}});
-            if(d.ok){setShopItems(s=>[...s,item.key]);setShopBalance(b=>b-item.cost);setMsg(`✅ ¡${item.name} desbloqueado!`);}
-            else setMsg(d.error||"Error");
-            setShopLoading(false);
-          }} style={{padding:"6px 14px",borderRadius:8,background:`${C.accent}22`,border:`1px solid ${C.accent}44`,color:(shopBalance!==null&&shopBalance<item.cost)?C.muted:C.accent,fontSize:11,fontWeight:700}}>🪙{item.cost}</button>}
-        </Card>;
-      })}
-    </div>
 
     {/* Logros */}
     <ST sub="Logros">Mis Badges</ST>
@@ -2673,7 +2763,7 @@ const FloatingChat=({userCtx})=>{
 };
 
 /* ═══ APP ROOT ═══ */
-const TABS=[{id:"home",icon:"🏠",label:"Home"},{id:"pickem",icon:"👥",label:"Grupos"},{id:"apuestas",icon:"🪙",label:"Apuestas"},{id:"parlay",icon:"🎰",label:"Parlay"},{id:"teams",icon:"🏆",label:"Equipos"},{id:"players",icon:"⭐",label:"Jugadores"},{id:"bracket",icon:"🏅",label:"Playoffs"},{id:"games",icon:"🎮",label:"Juegos"},{id:"settings",icon:"⚙️",label:"Config"}];
+const TABS=[{id:"home",icon:"🏠",label:"Home"},{id:"pickem",icon:"👥",label:"Grupos"},{id:"apuestas",icon:"🪙",label:"Apuestas"},{id:"parlay",icon:"🎰",label:"Parlay"},{id:"shop",icon:"🛍️",label:"Shop"},{id:"teams",icon:"🏆",label:"Equipos"},{id:"players",icon:"⭐",label:"Jugadores"},{id:"bracket",icon:"🏅",label:"Playoffs"},{id:"games",icon:"🎮",label:"Juegos"},{id:"settings",icon:"⚙️",label:"Config"}];
 export default function App(){
   const [tab,setTab]=useState("home");const [games,setGames]=useState([]);const [standings,setStandings]=useState(FB_ST);const [players,setPlayers]=useState(FB_PL);
   const [pickemInitSubTab,setPickemInitSubTab]=useState("picks");
@@ -2756,8 +2846,9 @@ export default function App(){
       {tab==="teams"&&<TeamsTab standings={standings} live={live}/>}
       {tab==="players"&&<PlayersTab players={players} live={live}/>}
       {tab==="pickem"&&<PickemTab games={games} userCtx={userCtx} initSubTab="picks"/>}
-      {tab==="apuestas"&&<PickemTab games={games} userCtx={userCtx} initSubTab="apuestas"/>}
-      {tab==="parlay"&&<PickemTab games={games} userCtx={userCtx} initSubTab="parlay"/>}
+      {tab==="apuestas"&&<PickemTab games={games} userCtx={userCtx} initSubTab="apuestas" standalone/>}
+      {tab==="parlay"&&<PickemTab games={games} userCtx={userCtx} initSubTab="parlay" standalone/>}
+      {tab==="shop"&&<ShopTab userCtx={userCtx}/>}
       {tab==="bracket"&&<BracketTab userCtx={userCtx} standings={standings}/>}
       {tab==="games"&&<MiniGamesTab players={players} userCtx={userCtx}/>}
       {tab==="settings"&&<SettingsTab userCtx={userCtx} installPrompt={installPrompt} onInstalled={()=>setInstallPrompt(null)}/>}
