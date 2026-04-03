@@ -240,7 +240,7 @@ export default async function handler(req, res) {
           if (!winner) continue;
           const correct = pick.picked_team === winner;
           const conf = pick.confidence || 1;
-          const points = correct ? conf * 10 : 0;
+          const points = correct ? conf * 10 : -(conf * 10);
           await supabase(`picks?id=eq.${pick.id}`, {
             method: "PATCH", body: { correct, scored: true, points },
           });
@@ -585,8 +585,18 @@ export default async function handler(req, res) {
         const bet = bets[0];
         if (bet.status !== "open" && bet.status !== "pending") return res.json({ ok: false, error: "Apuesta ya no disponible" });
         if (bet.requester_id === userId) return res.json({ ok: false, error: "No puedes aceptar tu propia apuesta" });
-        // Pending bets are directed at a specific opponent only
         if (bet.status === "pending" && bet.opponent_id && bet.opponent_id !== userId) return res.json({ ok: false, error: "Esta apuesta es para otro usuario" });
+        // Verificar que el partido no haya empezado aún
+        try {
+          const espnRes = await fetch("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard", { signal: AbortSignal.timeout(5000) });
+          const espnData = await espnRes.json();
+          const game = (espnData.events || []).find(e => e.id === bet.game_id);
+          if (!game) return res.json({ ok: false, error: "❌ Este partido ya no está disponible — probablemente ya terminó" });
+          const state = game.competitions?.[0]?.status?.type?.state;
+          if (state !== "pre") return res.json({ ok: false, error: "❌ Este partido ya empezó o terminó — no puedes aceptar esta apuesta" });
+        } catch (_) {
+          // Si ESPN falla, igual dejamos pasar (mejor experiencia)
+        }
         const rows = await supabase("coin_balances", { filters: `?user_id=eq.${userId}&group_id=eq.${bet.group_id}&limit=1` });
         if (!rows?.length || rows[0].balance < bet.amount) return res.json({ ok: false, error: "Saldo insuficiente" });
         await supabase(`coin_balances?user_id=eq.${userId}&group_id=eq.${bet.group_id}`, {
@@ -704,7 +714,44 @@ export default async function handler(req, res) {
           }
           settled++;
         }
-        return res.json({ ok: true, settled });
+        // ─── Auto-cancel open/pending bets whose game already started ───
+        const openBets = await supabase("bets", { filters: `?status=in.(open,pending)&limit=200` });
+        let cancelled = 0;
+        if (openBets?.length) {
+          // Build set of game ids that are no longer in "pre" state (already started or ended)
+          const gameStates = {};
+          await Promise.all(dates.map(async (date) => {
+            try {
+              const dateStr = date.replace(/-/g, "");
+              const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${dateStr}`);
+              if (r.ok) {
+                const data = await r.json();
+                (data.events || []).forEach(e => {
+                  const state = e.competitions?.[0]?.status?.type?.state;
+                  gameStates[e.id] = state || "pre";
+                });
+              }
+            } catch (_) {}
+          }));
+          for (const bet of openBets) {
+            const state = gameStates[bet.game_id];
+            if (state && state !== "pre") {
+              // Refund requester
+              if (bet.status !== "open") {
+                // pending bets: requester already paid, refund them
+                const bal = await supabase("coin_balances", { filters: `?user_id=eq.${bet.requester_id}&group_id=eq.${bet.group_id}&limit=1` });
+                if (bal?.length) {
+                  await supabase(`coin_balances?user_id=eq.${bet.requester_id}&group_id=eq.${bet.group_id}`, {
+                    method: "PATCH", body: { balance: bal[0].balance + bet.amount }
+                  });
+                }
+              }
+              await supabase(`bets?id=eq.${bet.id}`, { method: "PATCH", body: { status: "cancelled" } });
+              cancelled++;
+            }
+          }
+        }
+        return res.json({ ok: true, settled, cancelled });
       }
 
       // ─── UPDATE PROFILE ────────────────────────────────────

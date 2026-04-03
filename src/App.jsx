@@ -299,7 +299,7 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         const gp=grpPicks.filter(p=>p.game_id===g.id);
         const forAway=gp.filter(p=>p.picked_team===g.away);
         const forHome=gp.filter(p=>p.picked_team===g.home);
-        const canPick=user&&group&&isUpcoming&&!lockedPicks;
+        const canPick=user&&group&&isUpcoming;
         const conf=confidence[g.id]||1;
         return <Card key={g.id} style={{padding:16,borderColor:isFinal&&picked?(correct?"#00FF9D55":"#ff444455"):isLive&&picked?`${tm(picked).color}55`:picked?`${tm(picked).color}44`:C.border,borderWidth:picked?2:1}}>
 
@@ -311,7 +311,7 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
             :<Tag c={C.accent}>{g.detail||"Hoy"}</Tag>}
           </div>
           <div style={{display:"flex",gap:6,alignItems:"center"}}>
-            {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?"✅ +10 pts":"❌ Incorrecto"}</Tag>}
+            {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?`✅ +${(confidence[g.id]||1)*10} pts`:`❌ -${(confidence[g.id]||1)*10} pts`}</Tag>}
             {isLive&&picked&&<Tag c={tm(picked).color}>● {picked}</Tag>}
             {!isFinal&&!isLive&&picked&&!lockedPicks&&<Tag c="#00FF9D">✓ {picked}</Tag>}
             {lockedPicks&&picked&&!isFinal&&<Tag c="#FF6B35">🔒 {picked}</Tag>}
@@ -342,7 +342,7 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         {/* Confidence multiplier — visible al hacer pick */}
         {canPick&&picked&&<div style={{marginTop:10,display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}>
           <span style={{fontSize:10,color:C.muted}}>Confianza:</span>
-          {[1,2,3].map(c=><button key={c} className="btn" onClick={()=>{setConfidence(cf=>({...cf,[g.id]:c}));pickemAPI("makePick",{body:{userId:user.id,groupId:group.id,gameId:g.id,gameDate:new Date().toISOString().split("T")[0],pickedTeam:picked,homeTeam:g.home,awayTeam:g.away,confidence:c}});}} style={{padding:"4px 10px",borderRadius:8,background:conf===c?`${C.accent}22`:"#0a1018",border:`1px solid ${conf===c?C.accent:C.border}`,color:conf===c?C.accent:C.muted,fontSize:10,fontWeight:700}}>{c}x · {c===1?"10pts":c===2?"20pts":"30pts"}</button>)}
+          {[1,2,3].map(c=><button key={c} className="btn" onClick={()=>{setConfidence(cf=>({...cf,[g.id]:c}));pickemAPI("makePick",{body:{userId:user.id,groupId:group.id,gameId:g.id,gameDate:new Date().toISOString().split("T")[0],pickedTeam:picked,homeTeam:g.home,awayTeam:g.away,confidence:c}});}} style={{padding:"4px 10px",borderRadius:8,background:conf===c?`${C.accent}22`:"#0a1018",border:`1px solid ${conf===c?C.accent:C.border}`,color:conf===c?C.accent:C.muted,fontSize:10,fontWeight:700}}>{c}x · {c===1?"±10pts":c===2?"±20pts":"±30pts"}</button>)}
         </div>}
 
         {/* Consenso del grupo — visible siempre cuando hay picks */}
@@ -390,7 +390,7 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
             <div style={{width:`${awayPct}%`,height:"100%",background:`linear-gradient(90deg,${tm(g.away).color},${tm(g.home).color})`,transition:"width .6s ease"}}/>
           </div>
           <span style={{color:tm(g.home).color,fontWeight:700,minWidth:34,textAlign:"right"}}>{homePct}%</span>
-          <button className="btn" onClick={()=>setShowPctInfo(true)} style={{width:18,height:18,borderRadius:"50%",background:"#0a1018",border:`1px solid ${C.border}`,color:C.muted,fontSize:9,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>i</button>
+          <button className="btn" onClick={()=>setShowPctInfo(true)} style={{width:32,height:32,borderRadius:"50%",background:"#0a1018",border:`1px solid ${C.border}`,color:C.muted,fontSize:11,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,touchAction:"manipulation"}}>i</button>
         </div>
         {isLive&&<div style={{fontSize:9,color:"#ff4444",textAlign:"center",marginTop:4}}>● En vivo · basado en marcador</div>}
         {!isLive&&!isFinal&&<div style={{fontSize:9,color:C.muted,textAlign:"center",marginTop:4}}>% estimado de ganar este partido</div>}
@@ -1254,16 +1254,23 @@ const PickemTab=({games,userCtx,initSubTab,standalone})=>{
         </Card>
         {bets.filter(b=>b.status==="pending"&&b.opponent_id===user.id).length>0&&<div style={{marginBottom:14}}>
           <div style={{fontSize:10,color:"#FFB800",textTransform:"uppercase",letterSpacing:2,fontWeight:700,marginBottom:8}}>⚡ Retos pendientes para ti</div>
-          {bets.filter(b=>b.status==="pending"&&b.opponent_id===user.id).map(b=><Card key={b.id} style={{marginBottom:8,borderColor:"#FFB80066",background:"linear-gradient(135deg,#FFB80012,#0d1117)"}}>
-            <div style={{fontSize:10,color:"#FFB800",fontWeight:700,marginBottom:6}}>⚡ ¡Te retaron!</div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
-              <div style={{flex:1}}>
-                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>{logo(b.picked_team,22)}<span style={{fontSize:13,fontWeight:800,color:tm(b.picked_team).color}}>{b.picked_team} gana</span></div>
-                <div style={{fontSize:11,color:C.dim}}>{b.away_team} vs {b.home_team} · <span style={{color:"#FFB800",fontWeight:700}}>🪙{b.amount}</span></div>
+          {bets.filter(b=>b.status==="pending"&&b.opponent_id===user.id).map(b=>{
+            const betGameObj=games.find(g=>g.id===b.game_id);
+            const gameExpired=betGameObj?betGameObj.status!=="Upcoming":true;
+            return <Card key={b.id} style={{marginBottom:8,borderColor:gameExpired?"#ff444444":"#FFB80066",background:"linear-gradient(135deg,#FFB80012,#0d1117)"}}>
+              <div style={{fontSize:10,color:gameExpired?"#ff6666":"#FFB800",fontWeight:700,marginBottom:6}}>{gameExpired?"⏰ Partido ya empezó — reto expirado":"⚡ ¡Te retaron!"}</div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+                <div style={{flex:1}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>{logo(b.picked_team,22)}<span style={{fontSize:13,fontWeight:800,color:tm(b.picked_team).color}}>{b.picked_team} gana</span></div>
+                  <div style={{fontSize:11,color:C.dim}}>{b.away_team} vs {b.home_team} · <span style={{color:"#FFB800",fontWeight:700}}>🪙{b.amount}</span></div>
+                </div>
+                {gameExpired
+                  ?<Tag c="#ff4444">Expirada</Tag>
+                  :<button className="btn" onClick={()=>doAcceptBet(b)} disabled={betLoading||(balance!==null&&b.amount>balance)} style={{padding:"8px 14px",borderRadius:10,background:"#FFB80022",border:"1px solid #FFB80044",color:"#FFB800",fontSize:12,fontWeight:700}}>⚡ Aceptar reto</button>
+                }
               </div>
-              <button className="btn" onClick={()=>doAcceptBet(b)} disabled={betLoading||(balance!==null&&b.amount>balance)} style={{padding:"8px 14px",borderRadius:10,background:"#FFB80022",border:"1px solid #FFB80044",color:"#FFB800",fontSize:12,fontWeight:700}}>⚡ Aceptar reto</button>
-            </div>
-          </Card>)}
+            </Card>;
+          })}
         </div>}
         {upcoming.length>0&&!betGame&&<Card style={{marginBottom:14}}>
           <div style={{fontSize:13,fontWeight:800,color:C.text,marginBottom:10}}>🎲 Nueva apuesta — elige un partido:</div>
@@ -1303,6 +1310,7 @@ const PickemTab=({games,userCtx,initSubTab,standalone})=>{
         {bets.filter(b=>b.status!=="settled").length>0&&<><div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>Apuestas activas</div>
         {[...bets].filter(b=>b.status!=="settled").sort((a,b)=>{const aChallenge=a.status==="pending"&&a.opponent_id===user.id?-1:0;const bChallenge=b.status==="pending"&&b.opponent_id===user.id?-1:0;return aChallenge-bChallenge;}).map(b=>{
           const isMe=b.requester_id===user.id;const canAccept=!isMe&&b.status==="open";const isChallenge=b.status==="pending"&&b.opponent_id===user.id;
+          const betGameObj=games.find(g=>g.id===b.game_id);const gameExpired=!betGameObj||betGameObj.status!=="Upcoming";
           const opponentTeam=b.home_team===b.picked_team?b.away_team:b.home_team;
           const myTeam=isMe?b.picked_team:opponentTeam;const theirTeam=isMe?opponentTeam:b.picked_team;
           return <Card key={b.id} style={{marginBottom:8,borderColor:isChallenge?"#FFB80066":b.status==="active"?"#00FF9D33":C.border,background:isChallenge?"linear-gradient(135deg,#FFB80008,#0d1117)":undefined}}>
@@ -1319,8 +1327,8 @@ const PickemTab=({games,userCtx,initSubTab,standalone})=>{
                 <div style={{fontSize:10,color:C.dim}}>{b.away_team} @ {b.home_team} · <span style={{color:"#FFB800",fontWeight:700}}>🪙{b.amount}</span>{isChallenge&&` · tú apuestas por ${opponentTeam}`}</div>
               </div>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                {canAccept&&<button className="btn" onClick={()=>doAcceptBet(b)} disabled={betLoading||(balance!==null&&b.amount>balance)} style={{padding:"8px 14px",borderRadius:10,background:"#00FF9D22",border:"1px solid #00FF9D44",color:"#00FF9D",fontSize:12,fontWeight:700}}>Aceptar 🤝</button>}
-                {isChallenge&&<button className="btn" onClick={()=>doAcceptBet(b)} disabled={betLoading||(balance!==null&&b.amount>balance)} style={{padding:"8px 14px",borderRadius:10,background:"#FFB80022",border:"1px solid #FFB80044",color:"#FFB800",fontSize:12,fontWeight:700}}>⚡ Aceptar ({opponentTeam})</button>}
+                {canAccept&&(gameExpired?<Tag c="#ff6666">⏰ Expirada</Tag>:<button className="btn" onClick={()=>doAcceptBet(b)} disabled={betLoading||(balance!==null&&b.amount>balance)} style={{padding:"8px 14px",borderRadius:10,background:"#00FF9D22",border:"1px solid #00FF9D44",color:"#00FF9D",fontSize:12,fontWeight:700}}>Aceptar 🤝</button>)}
+                {isChallenge&&(gameExpired?<Tag c="#ff6666">⏰ Expirada</Tag>:<button className="btn" onClick={()=>doAcceptBet(b)} disabled={betLoading||(balance!==null&&b.amount>balance)} style={{padding:"8px 14px",borderRadius:10,background:"#FFB80022",border:"1px solid #FFB80044",color:"#FFB800",fontSize:12,fontWeight:700}}>⚡ Aceptar ({opponentTeam})</button>)}
                 {isMe&&(b.status==="open"||b.status==="pending")&&<button className="btn" onClick={()=>doCancelBet(b)} style={{padding:"8px 14px",borderRadius:10,background:"#ff444422",border:"1px solid #ff444444",color:"#ff6666",fontSize:12,fontWeight:700}}>Cancelar</button>}
                 {b.status==="active"&&<Tag c="#00FF9D">✓ Activa</Tag>}
                 {b.status==="settled"&&<Tag c={b.winner_id===user.id?"#00FF9D":"#ff4444"}>{b.winner_id===user.id?"🏆 Ganaste":"❌ Perdiste"}</Tag>}
@@ -2773,7 +2781,7 @@ const FloatingChat=({userCtx})=>{
 /* ═══ APP ROOT ═══ */
 const TABS=[{id:"home",icon:"🏠",label:"Home"},{id:"pickem",icon:"👥",label:"Grupos"},{id:"apuestas",icon:"🪙",label:"Apuestas"},{id:"parlay",icon:"🎰",label:"Parlay"},{id:"shop",icon:"🛍️",label:"Shop"},{id:"teams",icon:"🏆",label:"Equipos"},{id:"players",icon:"⭐",label:"Jugadores"},{id:"bracket",icon:"🏅",label:"Playoffs"},{id:"games",icon:"🎮",label:"Juegos"},{id:"settings",icon:"⚙️",label:"Config"}];
 export default function App(){
-  const [tab,setTab]=useState("home");const [games,setGames]=useState([]);const [standings,setStandings]=useState(FB_ST);const [players,setPlayers]=useState(FB_PL);
+  const [tab,setTab]=useState("home");const [menuOpen,setMenuOpen]=useState(false);const [games,setGames]=useState([]);const [standings,setStandings]=useState(FB_ST);const [players,setPlayers]=useState(FB_PL);
   const [pickemInitSubTab,setPickemInitSubTab]=useState("picks");
   const [live,setLive]=useState({games:false,standings:false,players:false});const [loading,setLoading]=useState(false);const [lastUpd,setLastUpd]=useState(null);
   const [installPrompt,setInstallPrompt]=useState(null);
@@ -2831,14 +2839,32 @@ export default function App(){
         </button>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:8}}>
-        {liveGame?<div style={{display:"flex",alignItems:"center",gap:6,background:"#0a1520",border:"1px solid #1a2c3d",borderRadius:20,padding:"5px 12px"}}><div style={{width:6,height:6,borderRadius:"50%",background:"#ff4444",animation:"pulse 1s infinite"}}/><span style={{fontSize:10,color:"#cc3333",fontWeight:700}}>LIVE</span><span style={{fontSize:10,color:C.muted}}>{liveGame.away} {liveGame.awayScore}–{liveGame.homeScore} {liveGame.home}</span></div>
-        :<div style={{fontSize:10,color:C.muted}}>Sin juegos en vivo</div>}
+        {liveGame&&<div style={{display:"flex",alignItems:"center",gap:6,background:"#0a1520",border:"1px solid #1a2c3d",borderRadius:20,padding:"5px 12px"}}><div style={{width:6,height:6,borderRadius:"50%",background:"#ff4444",animation:"pulse 1s infinite"}}/><span style={{fontSize:10,color:"#cc3333",fontWeight:700}}>LIVE</span><span style={{fontSize:10,color:C.muted}}>{liveGame.away} {liveGame.awayScore}–{liveGame.homeScore} {liveGame.home}</span></div>}
+        <div style={{fontSize:11,fontWeight:700,color:C.accent,background:`${C.accent}15`,border:`1px solid ${C.accent}33`,borderRadius:8,padding:"4px 10px"}}>{TABS.find(t=>t.id===tab)?.icon} {TABS.find(t=>t.id===tab)?.label}</div>
         <button className="btn" onClick={refreshAll} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px",color:C.dim,fontSize:13}}>{loading?<Spin s={13}/>:"🔄"}</button>
+        <button className="btn" onClick={()=>setMenuOpen(o=>!o)} style={{background:menuOpen?`${C.accent}22`:C.card,border:`1px solid ${menuOpen?C.accent:C.border}`,borderRadius:8,padding:"6px 12px",color:menuOpen?C.accent:C.dim,fontSize:16,fontWeight:900,lineHeight:1}}>☰</button>
       </div>
     </div>
-    <div style={{background:"#0a0f17",borderBottom:`1px solid ${C.border}`,padding:"0 22px",display:"flex",overflowX:"auto"}}>
-      {TABS.map(n=><button key={n.id} className="btn" onClick={()=>setTab(n.id)} style={{padding:"11px 14px",background:"transparent",border:"none",borderBottom:`2px solid ${tab===n.id?C.accent:"transparent"}`,color:tab===n.id?C.accent:C.muted,fontSize:12,fontWeight:tab===n.id?700:500,whiteSpace:"nowrap"}}>{n.icon} {n.label}</button>)}
-    </div>
+    {menuOpen&&<div onClick={()=>setMenuOpen(false)} style={{position:"fixed",inset:0,background:"#00000077",zIndex:1200,display:"flex",alignItems:"flex-end"}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxHeight:"80vh",background:"#0d1117",borderTop:`2px solid ${C.accent}33`,borderRadius:"20px 20px 0 0",padding:"20px 18px 32px",overflowY:"auto"}}>
+        <div style={{width:40,height:4,borderRadius:2,background:C.border,margin:"0 auto 18px"}}/>
+        <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>Inicio</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:18}}>
+          {[{id:"home",icon:"🏠",label:"Home"}].map(n=><button key={n.id} className="btn" onClick={()=>{setTab(n.id);setMenuOpen(false);}} style={{padding:"14px 12px",borderRadius:12,background:tab===n.id?`${C.accent}22`:"#0a1018",border:`1.5px solid ${tab===n.id?C.accent:C.border}`,color:tab===n.id?C.accent:C.text,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:8,gridColumn:"1/-1"}}>{n.icon} {n.label}</button>)}
+        </div>
+        <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>Pick'em</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:18}}>
+          {[{id:"pickem",icon:"👥",label:"Grupos"},{id:"apuestas",icon:"🪙",label:"Apuestas"},{id:"parlay",icon:"🎰",label:"Parlay"},{id:"shop",icon:"🛍️",label:"Shop"}].map(n=><button key={n.id} className="btn" onClick={()=>{setTab(n.id);setMenuOpen(false);}} style={{padding:"14px 12px",borderRadius:12,background:tab===n.id?`${C.accent}22`:"#0a1018",border:`1.5px solid ${tab===n.id?C.accent:C.border}`,color:tab===n.id?C.accent:C.text,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:8}}>{n.icon} {n.label}</button>)}
+        </div>
+        <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>NBA</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:18}}>
+          {[{id:"teams",icon:"🏆",label:"Equipos"},{id:"players",icon:"⭐",label:"Jugadores"},{id:"bracket",icon:"🏅",label:"Playoffs"},{id:"games",icon:"🎮",label:"Juegos"}].map(n=><button key={n.id} className="btn" onClick={()=>{setTab(n.id);setMenuOpen(false);}} style={{padding:"14px 12px",borderRadius:12,background:tab===n.id?`${C.accent}22`:"#0a1018",border:`1.5px solid ${tab===n.id?C.accent:C.border}`,color:tab===n.id?C.accent:C.text,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:8}}>{n.icon} {n.label}</button>)}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr",gap:8}}>
+          {[{id:"settings",icon:"⚙️",label:"Configuración"}].map(n=><button key={n.id} className="btn" onClick={()=>{setTab(n.id);setMenuOpen(false);}} style={{padding:"14px 12px",borderRadius:12,background:tab===n.id?`${C.accent}22`:"#0a1018",border:`1.5px solid ${tab===n.id?C.accent:C.border}`,color:tab===n.id?C.accent:C.text,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:8}}>{n.icon} {n.label}</button>)}
+        </div>
+      </div>
+    </div>}
     {installPrompt&&<div style={{background:`linear-gradient(135deg,${C.accent}22,#0055ff22)`,borderBottom:`1px solid ${C.accent}33`,padding:"8px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
       <div style={{display:"flex",alignItems:"center",gap:8}}>
         <span style={{fontSize:18}}>📲</span>
