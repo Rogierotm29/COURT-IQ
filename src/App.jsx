@@ -311,7 +311,7 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
             :<Tag c={C.accent}>{g.detail||"Hoy"}</Tag>}
           </div>
           <div style={{display:"flex",gap:6,alignItems:"center"}}>
-            {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?`✅ +${(confidence[g.id]||1)*10} pts`:`❌ -${(confidence[g.id]||1)*10} pts`}</Tag>}
+            {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{(()=>{const c2=confidence[g.id]||1;return correct?`✅ +${c2*10} pts`:(c2>=2?`❌ -${c2*10} pts`:"❌ 0 pts");})()}</Tag>}
             {isLive&&picked&&<Tag c={tm(picked).color}>● {picked}</Tag>}
             {!isFinal&&!isLive&&picked&&!lockedPicks&&<Tag c="#00FF9D">✓ {picked}</Tag>}
             {lockedPicks&&picked&&!isFinal&&<Tag c="#FF6B35">🔒 {picked}</Tag>}
@@ -342,7 +342,7 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         {/* Confidence multiplier — visible al hacer pick */}
         {canPick&&picked&&<div style={{marginTop:10,display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}>
           <span style={{fontSize:10,color:C.muted}}>Confianza:</span>
-          {[1,2,3].map(c=><button key={c} className="btn" onClick={()=>{setConfidence(cf=>({...cf,[g.id]:c}));pickemAPI("makePick",{body:{userId:user.id,groupId:group.id,gameId:g.id,gameDate:new Date().toISOString().split("T")[0],pickedTeam:picked,homeTeam:g.home,awayTeam:g.away,confidence:c}});}} style={{padding:"4px 10px",borderRadius:8,background:conf===c?`${C.accent}22`:"#0a1018",border:`1px solid ${conf===c?C.accent:C.border}`,color:conf===c?C.accent:C.muted,fontSize:10,fontWeight:700}}>{c}x · {c===1?"±10pts":c===2?"±20pts":"±30pts"}</button>)}
+          {[1,2,3].map(c=>{const labels={1:"✅ +10",2:"🔥 ±20",3:"⚡ ±30"};const descs={1:"seguro",2:"riesgo",3:"alto riesgo"};return<button key={c} className="btn" onClick={()=>{setConfidence(cf=>({...cf,[g.id]:c}));pickemAPI("makePick",{body:{userId:user.id,groupId:group.id,gameId:g.id,gameDate:new Date().toISOString().split("T")[0],pickedTeam:picked,homeTeam:g.home,awayTeam:g.away,confidence:c}});}} style={{padding:"5px 10px",borderRadius:8,background:conf===c?(c===1?`#00FF9D22`:c===2?`#FF6B3522`:`#ff444422`):"#0a1018",border:`1px solid ${conf===c?(c===1?"#00FF9D44":c===2?"#FF6B3544":"#ff444444"):C.border}`,color:conf===c?(c===1?"#00FF9D":c===2?"#FF6B35":"#ff4444"):C.muted,fontSize:10,fontWeight:700,display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><span>{labels[c]}</span><span style={{fontSize:8,opacity:.7}}>{descs[c]}</span></button>;})}
         </div>}
 
         {/* Consenso del grupo — visible siempre cuando hay picks */}

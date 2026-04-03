@@ -240,7 +240,8 @@ export default async function handler(req, res) {
           if (!winner) continue;
           const correct = pick.picked_team === winner;
           const conf = pick.confidence || 1;
-          const points = correct ? conf * 10 : -(conf * 10);
+          // conf=1 es seguro (sin penalización), conf>=2 tiene riesgo
+          const points = correct ? conf * 10 : (conf >= 2 ? -(conf * 10) : 0);
           await supabase(`picks?id=eq.${pick.id}`, {
             method: "PATCH", body: { correct, scored: true, points },
           });
