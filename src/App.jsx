@@ -1216,41 +1216,35 @@ const PickemTab=({games,userCtx,initSubTab,standalone})=>{
 
       {/* ─── GRUPO — apuestas del grupo ─── */}
       {subTab==="grupo"&&<>
-        <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>🪙 Apuestas activas del grupo</div>
-        {bets.filter(b=>b.status!=="settled").length===0
-          ?<Card style={{textAlign:"center",padding:30}}><div style={{fontSize:36,marginBottom:8}}>🪙</div><div style={{fontSize:14,color:C.dim}}>No hay apuestas activas</div><div style={{fontSize:11,color:C.muted,marginTop:6}}>Crea apuestas en el tab 🪙 Apuestas</div></Card>
-          :bets.filter(b=>b.status!=="settled").map(b=>{
-            const opponentTeam=b.home_team===b.picked_team?b.away_team:b.home_team;
-            return <Card key={b.id} style={{marginBottom:8,borderColor:b.status==="active"?"#00FF9D33":b.status==="pending"?"#FFB80033":C.border}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,justifyContent:"space-between"}}>
-                <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <span style={{fontSize:13}}>{b.requester?.avatar_emoji||"🏀"}</span>
-                  <div>
-                    <div style={{fontSize:11,fontWeight:700,color:C.text}}>{b.requester?.name||"?"} <span style={{color:tm(b.picked_team).color}}>→ {b.picked_team}</span></div>
-                    {b.status==="active"&&<div style={{fontSize:10,color:C.dim}}>vs {b.opponent?.name||"?"} <span style={{color:tm(opponentTeam).color}}>→ {opponentTeam}</span></div>}
-                    <div style={{fontSize:9,color:C.muted}}>{b.away_team} @ {b.home_team}</div>
+        <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:14}}>👥 Miembros de {selGroup.name}</div>
+        {leaderboard.length===0
+          ?<Card style={{textAlign:"center",padding:30}}><div style={{fontSize:36,marginBottom:8}}>👥</div><div style={{fontSize:14,color:C.dim}}>Sin miembros aún</div></Card>
+          :leaderboard.map((r,i)=>{
+            const isMe=r.user_id===user.id;
+            const rItems=isMe?[...shopItems,...(r.shopItems||[])]:r.shopItems||[];
+            const nameClr=getNameColor(rItems);const prefix=getNamePrefix(rItems);const bdClr=getBorderColor(rItems);
+            const streak=streaks[r.user_id]||0;
+            return <Card key={r.user_id} style={{marginBottom:8,borderColor:isMe?`${C.accent}44`:C.border,background:isMe?`${C.accent}08`:"#0d1117"}}>
+              <div style={{display:"flex",alignItems:"center",gap:12}}>
+                <div style={{width:44,height:44,borderRadius:"50%",background:`${bdClr||C.border}22`,border:`2px solid ${bdClr||(isMe?C.accent:C.border)}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0,boxShadow:bdClr?`0 0 10px ${bdClr}55`:undefined}}>
+                  {isMe?(user.avatar_emoji||"🏀"):(r.avatar_emoji||"🏀")}
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:14,fontWeight:800,color:nameClr||(isMe?C.accent:C.text)}}>{prefix}{r.name||"?"}{isMe?" (tú)":""}</div>
+                  <div style={{display:"flex",gap:10,marginTop:3}}>
+                    <span style={{fontSize:10,color:C.dim}}>✅ {r.correct_picks??0} aciertos</span>
+                    <span style={{fontSize:10,color:C.dim}}>📊 {r.accuracy??0}%</span>
+                    {streak>=3&&<span style={{fontSize:10,color:"#FF6B35",fontWeight:700}}>🔥{streak} racha</span>}
                   </div>
                 </div>
-                <div style={{textAlign:"right"}}>
-                  <div style={{fontSize:14,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800"}}>🪙{b.amount}</div>
-                  <Tag c={b.status==="active"?"#00FF9D":b.status==="pending"?"#FFB800":C.muted}>{b.status==="active"?"✓ Activa":"⏳ Esperando"}</Tag>
+                <div style={{textAlign:"right",flexShrink:0}}>
+                  <div style={{fontSize:24,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800"}}>{r.total_points??0}</div>
+                  <div style={{fontSize:8,color:C.muted,letterSpacing:1}}>PTS</div>
+                  <div style={{fontSize:10,color:i<3?["#FFB800","#C0C0C0","#CD7F32"][i]:C.muted,fontWeight:700}}>#{i+1}</div>
                 </div>
               </div>
             </Card>;
           })}
-        {bets.filter(b=>b.status==="settled").length>0&&<>
-          <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10,marginTop:16}}>📜 Últimas resueltas</div>
-          {bets.filter(b=>b.status==="settled").slice(0,5).map(b=>{
-            const opponentTeam=b.home_team===b.picked_team?b.away_team:b.home_team;
-            const winnerId=b.winner_id;
-            return <Card key={b.id} style={{marginBottom:8,opacity:0.75}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                <div style={{fontSize:11,color:C.text}}><span style={{fontWeight:700}}>{b.requester?.name||"?"}</span> vs <span style={{fontWeight:700}}>{b.opponent?.name||"?"}</span> · ganó <span style={{color:"#00FF9D",fontWeight:700}}>{b.actual_winner}</span></div>
-                <div style={{fontSize:13,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800"}}>🪙{b.amount*2}</div>
-              </div>
-            </Card>;
-          })}
-        </>}
       </>}
 
       {/* ─── APUESTAS ─── */}
