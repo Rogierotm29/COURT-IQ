@@ -253,7 +253,7 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
       <div style={{fontSize:22,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,marginBottom:6}}>¡QUÉ SOBRES!</div>
       <div style={{fontSize:13,color:C.dim,marginBottom:4}}>Regístrate para predecir ganadores y competir contra tus amigos</div>
       <div style={{fontSize:11,color:C.muted,marginBottom:16}}>Elige quién gana cada partido · Gana puntos · Sube en el ranking</div>
-      <button className="btn" onClick={()=>{const b=document.querySelectorAll('.btn');b.forEach(x=>{if(x.textContent.includes('Grupos'))x.click();});}} style={{padding:"14px 36px",borderRadius:12,background:"linear-gradient(135deg,#00C2FF,#0066ff)",color:"#07090f",fontSize:15,fontWeight:900,letterSpacing:1}}>ENTRAR AL PICK'EM 🎯</button>
+      <button className="btn" onClick={goToGroup} style={{padding:"14px 36px",borderRadius:12,background:"linear-gradient(135deg,#00C2FF,#0066ff)",color:"#07090f",fontSize:15,fontWeight:900,letterSpacing:1}}>ENTRAR AL PICK'EM 🎯</button>
     </Card>}
     {user&&<div onClick={group?goToGroup:undefined} style={{cursor:group?"pointer":"default",marginBottom:pendingBets.length?10:22}}>
       <Card style={{background:"linear-gradient(135deg,#00FF9D08,#0d1117)",borderColor:group?"#00FF9D55":"#FFB80044",padding:"14px 18px",transition:"border-color .2s"}}>
