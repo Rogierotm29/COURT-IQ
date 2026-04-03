@@ -532,14 +532,37 @@ export default async function handler(req, res) {
         const bets = await supabase("bets", { filters: `?id=eq.${betId}` });
         if (!bets?.length) return res.json({ ok: false, error: "Apuesta no encontrada" });
         const bet = bets[0];
-        if (bet.status !== "open") return res.json({ ok: false, error: "Apuesta ya no disponible" });
+        if (bet.status !== "open" && bet.status !== "pending") return res.json({ ok: false, error: "Apuesta ya no disponible" });
         if (bet.requester_id === userId) return res.json({ ok: false, error: "No puedes aceptar tu propia apuesta" });
+        // Pending bets are directed at a specific opponent only
+        if (bet.status === "pending" && bet.opponent_id && bet.opponent_id !== userId) return res.json({ ok: false, error: "Esta apuesta es para otro usuario" });
         const rows = await supabase("coin_balances", { filters: `?user_id=eq.${userId}&group_id=eq.${bet.group_id}&limit=1` });
         if (!rows?.length || rows[0].balance < bet.amount) return res.json({ ok: false, error: "Saldo insuficiente" });
         await supabase(`coin_balances?user_id=eq.${userId}&group_id=eq.${bet.group_id}`, {
           method: "PATCH", body: { balance: rows[0].balance - bet.amount },
         });
         await supabase(`bets?id=eq.${betId}`, { method: "PATCH", body: { opponent_id: userId, status: "active" } });
+        // Notify requester that their bet was accepted
+        try {
+          const webpush = await import("web-push");
+          const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
+          const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
+          if (VAPID_PUBLIC && VAPID_PRIVATE) {
+            webpush.default.setVapidDetails("mailto:courtiq@app.com", VAPID_PUBLIC, VAPID_PRIVATE);
+            const accepterRows = await supabase("users", { filters: `?id=eq.${userId}&select=name,avatar_emoji&limit=1` });
+            const accepter = accepterRows?.[0];
+            const subs = await supabase("push_subscriptions", { filters: `?user_id=eq.${bet.requester_id}&limit=1` });
+            if (subs?.length) {
+              const sub = { endpoint: subs[0].endpoint, keys: { p256dh: subs[0].p256dh, auth: subs[0].auth } };
+              await webpush.default.sendNotification(sub, JSON.stringify({
+                title: "🤝 ¡Apuesta aceptada!",
+                body: `${accepter?.avatar_emoji || "🏀"} ${accepter?.name || "Alguien"} aceptó tu apuesta de 🪙${bet.amount}`,
+                tag: "bet_accepted",
+                url: "/?tab=pickem&subtab=apuestas",
+              }));
+            }
+          }
+        } catch (_) {}
         return res.json({ ok: true });
       }
 
@@ -574,17 +597,31 @@ export default async function handler(req, res) {
       case "settleBets": {
         const activeBets = await supabase("bets", { filters: `?status=eq.active&limit=100` });
         if (!activeBets?.length) return res.json({ ok: true, settled: 0 });
-        const espnRes = await fetch("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard");
-        const espnData = await espnRes.json();
+        // Fetch last 3 days of scoreboards to cover multi-day bets
+        const dates = [];
+        for (let i = 0; i < 3; i++) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          dates.push(d.toISOString().split("T")[0]);
+        }
         const finished = {};
-        (espnData.events || []).forEach((e) => {
-          const comp = e.competitions?.[0];
-          if (!comp?.status?.type?.completed) return;
-          const home = comp.competitors?.find((c) => c.homeAway === "home");
-          const away = comp.competitors?.find((c) => c.homeAway === "away");
-          const winner = parseInt(home?.score || 0) > parseInt(away?.score || 0) ? fix(home?.team?.abbreviation) : fix(away?.team?.abbreviation);
-          finished[e.id] = winner;
-        });
+        const parseEspn = (data) => {
+          (data.events || []).forEach((e) => {
+            const comp = e.competitions?.[0];
+            if (!comp?.status?.type?.completed) return;
+            const home = comp.competitors?.find((c) => c.homeAway === "home");
+            const away = comp.competitors?.find((c) => c.homeAway === "away");
+            const winner = parseInt(home?.score || 0) > parseInt(away?.score || 0) ? fix(home?.team?.abbreviation) : fix(away?.team?.abbreviation);
+            finished[e.id] = winner;
+          });
+        };
+        await Promise.all(dates.map(async (date) => {
+          try {
+            const dateStr = date.replace(/-/g, "");
+            const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${dateStr}`);
+            if (r.ok) parseEspn(await r.json());
+          } catch (_) {}
+        }));
         let settled = 0;
         for (const bet of activeBets) {
           const winner = finished[bet.game_id];
