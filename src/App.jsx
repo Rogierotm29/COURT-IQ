@@ -1242,8 +1242,8 @@ const PickemTab=({games,userCtx,initSubTab})=>{
             <button className="btn" onClick={betOpponent?doChallengeBet:doBet} disabled={!betTeam||betLoading||(balance!==null&&betAmt>balance)} style={{flex:2,padding:"12px",borderRadius:10,background:betTeam&&!betLoading?"linear-gradient(135deg,#FFB800,#ff9500)":"#0a1018",color:betTeam&&!betLoading?"#07090f":C.muted,fontSize:13,fontWeight:900}}>{betLoading?<Spin s={13}/>:betOpponent?`⚡ Retar a ${betOpponent.name} 🪙${betAmt}`:`Apostar 🪙${betAmt} por ${betTeam||"..."}`}</button>
           </div>
         </Card>}
-        {bets.length>0&&<><div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>Apuestas del grupo</div>
-        {[...bets].sort((a,b)=>{const aChallenge=a.status==="pending"&&a.opponent_id===user.id?-1:0;const bChallenge=b.status==="pending"&&b.opponent_id===user.id?-1:0;return aChallenge-bChallenge;}).map(b=>{
+        {bets.filter(b=>b.status!=="settled").length>0&&<><div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>Apuestas activas</div>
+        {[...bets].filter(b=>b.status!=="settled").sort((a,b)=>{const aChallenge=a.status==="pending"&&a.opponent_id===user.id?-1:0;const bChallenge=b.status==="pending"&&b.opponent_id===user.id?-1:0;return aChallenge-bChallenge;}).map(b=>{
           const isMe=b.requester_id===user.id;const canAccept=!isMe&&b.status==="open";const isChallenge=b.status==="pending"&&b.opponent_id===user.id;
           const opponentTeam=b.home_team===b.picked_team?b.away_team:b.home_team;
           const myTeam=isMe?b.picked_team:opponentTeam;const theirTeam=isMe?opponentTeam:b.picked_team;
@@ -1270,6 +1270,30 @@ const PickemTab=({games,userCtx,initSubTab})=>{
             </div>
           </Card>;
         })}</>}
+        {bets.filter(b=>b.status==="settled").length>0&&<>
+          <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10,marginTop:18}}>📜 Historial de apuestas</div>
+          {bets.filter(b=>b.status==="settled").sort((a,b)=>new Date(b.updated_at||b.created_at)-new Date(a.updated_at||a.created_at)).map(b=>{
+            const isMe=b.requester_id===user.id;
+            const opponentTeam=b.home_team===b.picked_team?b.away_team:b.home_team;
+            const myTeam=isMe?b.picked_team:opponentTeam;
+            const iWon=b.winner_id===user.id;
+            return <Card key={b.id} style={{marginBottom:8,borderColor:iWon?"#00FF9D33":"#ff444433",background:iWon?"linear-gradient(135deg,#00FF9D08,#0d1117)":"linear-gradient(135deg,#ff444408,#0d1117)",opacity:0.85}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                <div style={{flex:1}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
+                    {logo(myTeam,20)}<span style={{fontSize:12,fontWeight:800,color:iWon?"#00FF9D":"#ff6666"}}>{iWon?"🏆 Ganaste":"❌ Perdiste"}</span>
+                  </div>
+                  <div style={{fontSize:10,color:C.dim}}>{b.away_team} @ {b.home_team} · ganó <span style={{fontWeight:700,color:C.text}}>{b.actual_winner}</span></div>
+                  <div style={{fontSize:10,color:C.dim,marginTop:2}}>vs {isMe?(b.opponent?.name||"rival"):(b.requester?.name||"rival")}</div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:iWon?"#00FF9D":"#ff6666"}}>{iWon?`+${b.amount*2}`:`-${b.amount}`}</div>
+                  <div style={{fontSize:9,color:C.muted}}>🪙 monedas</div>
+                </div>
+              </div>
+            </Card>;
+          })}
+        </>}
         {bets.length===0&&upcoming.length===0&&!betGame&&<Card style={{textAlign:"center",padding:30}}><div style={{fontSize:36,marginBottom:8}}>🌙</div><div style={{fontSize:14,color:C.dim}}>No hay partidos para apostar hoy</div></Card>}
       </>}
 
@@ -2649,10 +2673,10 @@ const FloatingChat=({userCtx})=>{
 };
 
 /* ═══ APP ROOT ═══ */
-const TABS=[{id:"home",icon:"🏠",label:"Home"},{id:"teams",icon:"🏆",label:"Equipos"},{id:"players",icon:"⭐",label:"Jugadores"},{id:"pickem",icon:"👥",label:"Grupos"},{id:"bracket",icon:"🏅",label:"Playoffs"},{id:"games",icon:"🎮",label:"Juegos"},{id:"settings",icon:"⚙️",label:"Config"}];
+const TABS=[{id:"home",icon:"🏠",label:"Home"},{id:"pickem",icon:"👥",label:"Grupos"},{id:"apuestas",icon:"🪙",label:"Apuestas"},{id:"parlay",icon:"🎰",label:"Parlay"},{id:"teams",icon:"🏆",label:"Equipos"},{id:"players",icon:"⭐",label:"Jugadores"},{id:"bracket",icon:"🏅",label:"Playoffs"},{id:"games",icon:"🎮",label:"Juegos"},{id:"settings",icon:"⚙️",label:"Config"}];
 export default function App(){
   const [tab,setTab]=useState("home");const [games,setGames]=useState([]);const [standings,setStandings]=useState(FB_ST);const [players,setPlayers]=useState(FB_PL);
-  const [pickemInitSubTab,setPickemInitSubTab]=useState("ranking");
+  const [pickemInitSubTab,setPickemInitSubTab]=useState("picks");
   const [live,setLive]=useState({games:false,standings:false,players:false});const [loading,setLoading]=useState(false);const [lastUpd,setLastUpd]=useState(null);
   const [installPrompt,setInstallPrompt]=useState(null);
   const userCtx=useUser();
@@ -2690,7 +2714,7 @@ export default function App(){
     const subtabParam=params.get("subtab");
     if(tabParam){
       setTab(tabParam);
-      if(subtabParam) setPickemInitSubTab(subtabParam);
+      if(subtabParam&&["apuestas","parlay","picks","ranking","historial","estadisticas"].includes(subtabParam)) setTab(subtabParam);
       const url=new URL(window.location.href);
       url.searchParams.delete("tab");url.searchParams.delete("subtab");
       window.history.replaceState({},"",url.toString());
@@ -2728,10 +2752,12 @@ export default function App(){
       </div>
     </div>}
     <div style={{maxWidth:1000,margin:"0 auto",padding:"22px 18px 100px"}}>
-      {tab==="home"&&<HomeTab games={games} live={live} userCtx={userCtx} standings={standings} goToBets={()=>{setPickemInitSubTab("apuestas");setTab("pickem");}} goToGroup={()=>{setPickemInitSubTab("picks");setTab("pickem");}}/>}
+      {tab==="home"&&<HomeTab games={games} live={live} userCtx={userCtx} standings={standings} goToBets={()=>setTab("apuestas")} goToGroup={()=>setTab("pickem")}/>}
       {tab==="teams"&&<TeamsTab standings={standings} live={live}/>}
       {tab==="players"&&<PlayersTab players={players} live={live}/>}
-      {tab==="pickem"&&<PickemTab games={games} userCtx={userCtx} initSubTab={pickemInitSubTab}/>}
+      {tab==="pickem"&&<PickemTab games={games} userCtx={userCtx} initSubTab="picks"/>}
+      {tab==="apuestas"&&<PickemTab games={games} userCtx={userCtx} initSubTab="apuestas"/>}
+      {tab==="parlay"&&<PickemTab games={games} userCtx={userCtx} initSubTab="parlay"/>}
       {tab==="bracket"&&<BracketTab userCtx={userCtx} standings={standings}/>}
       {tab==="games"&&<MiniGamesTab players={players} userCtx={userCtx}/>}
       {tab==="settings"&&<SettingsTab userCtx={userCtx} installPrompt={installPrompt} onInstalled={()=>setInstallPrompt(null)}/>}

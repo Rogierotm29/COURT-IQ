@@ -639,6 +639,10 @@ export default async function handler(req, res) {
 
       // ─── SETTLE BETS (auto-score after games finish) ───────
       case "settleBets": {
+        const webpush = await import("web-push");
+        const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
+        const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
+        if (VAPID_PUBLIC && VAPID_PRIVATE) webpush.default.setVapidDetails("mailto:courtiq@app.com", VAPID_PUBLIC, VAPID_PRIVATE);
         const activeBets = await supabase("bets", { filters: `?status=eq.active&limit=100` });
         if (!activeBets?.length) return res.json({ ok: true, settled: 0 });
         // Fetch last 3 days of scoreboards to cover multi-day bets
@@ -679,6 +683,18 @@ export default async function handler(req, res) {
           }
           await supabase(`bets?id=eq.${bet.id}`, { method: "PATCH", body: { status: "settled", winner_id: winnerId, actual_winner: winner } });
           grantAchievement(winnerId, "bet_won");
+          // Push notification al ganador
+          if (VAPID_PUBLIC && VAPID_PRIVATE) {
+            const winSub = await supabase("push_subscriptions", { filters: `?user_id=eq.${winnerId}&limit=1` });
+            if (winSub?.length) {
+              try {
+                await webpush.default.sendNotification(
+                  { endpoint: winSub[0].endpoint, keys: { p256dh: winSub[0].p256dh, auth: winSub[0].auth } },
+                  JSON.stringify({ title: "🏆 ¡Ganaste la apuesta!", body: `${winner} ganó — ¡cobras 🪙${bet.amount * 2} monedas!`, tag: `bet-won-${bet.id}`, url: "/?tab=apuestas" })
+                );
+              } catch (_) {}
+            }
+          }
           settled++;
         }
         return res.json({ ok: true, settled });
