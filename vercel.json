@@ -3,12 +3,10 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "crons": [
-    { "path": "/api/pickem?action=scoreGames", "schedule": "0 4 * * *" },
-    { "path": "/api/pickem?action=scoreGames", "schedule": "0 12 * * *" },
-    { "path": "/api/pickem?action=settleBets", "schedule": "0 5 * * *" },
-    { "path": "/api/pickem?action=settleBets", "schedule": "0 13 * * *" },
-    { "path": "/api/pickem?action=sendReminders", "schedule": "*/30 * * * *" },
-    { "path": "/api/pickem?action=streakAlert", "schedule": "0 17 * * *" },
-    { "path": "/api/pickem?action=weeklySummary", "schedule": "0 4 * * 1" }
+    { "path": "/api/pickem?action=scoreGames", "schedule": "0 5 * * *" },
+    { "path": "/api/pickem?action=settleBets", "schedule": "0 6 * * *" },
+    { "path": "/api/pickem?action=sendReminders", "schedule": "0 23 * * *" },
+    { "path": "/api/pickem?action=streakAlert", "schedule": "0 22 * * *" },
+    { "path": "/api/pickem?action=weeklySummary", "schedule": "0 7 * * 1" }
   ]
 }
