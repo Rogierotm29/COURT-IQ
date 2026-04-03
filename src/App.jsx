@@ -795,6 +795,14 @@ const PickemTab=({games,userCtx,initSubTab,standalone})=>{
     pickemAPI("checkAchievements",{params:{userId:user.id,groupId:localStorage.getItem("courtiq_lastgroup")||""}}).catch(()=>{});
   },[user]);
 
+  // Recargar shopItems cuando se compra algo en ShopTab
+  useEffect(()=>{
+    if(!user) return;
+    const handler=()=>pickemAPI("myShopItems",{params:{userId:user.id}}).then(d=>{if(d.ok)setShopItems(d.items||[]);});
+    window.addEventListener("courtiq_items_purchased",handler);
+    return()=>window.removeEventListener("courtiq_items_purchased",handler);
+  },[user]);
+
   // Refrescar grupo picks cuando cambia el status de los juegos (para que no desaparezcan los % al iniciar un partido)
   useEffect(()=>{
     if(!user||!selGroup||subTab!=="grupo") return;
@@ -2411,7 +2419,7 @@ const ShopTab=({userCtx})=>{
     const d=await pickemAPI("purchaseItem",{body:{userId:user.id,groupId,itemKey:item.key,itemCost:item.cost}});
     if(d.ok){
       if(item.type==="shield"){setShields(s=>s+1);setMsg("✅ +1 escudo de racha agregado");}
-      else{setShopItems(s=>[...s,item.key]);setMsg(`✅ ¡${item.name} aplicado en el ranking!`);}
+      else{setShopItems(s=>[...s,item.key]);setMsg(`✅ ¡${item.name} aplicado en el ranking!`);window.dispatchEvent(new CustomEvent("courtiq_items_purchased",{detail:{userId:user.id}}));}
       setBalance(b=>b-item.cost);
     }else setMsg(d.error||"Error");
     setLoading(false);
