@@ -189,14 +189,16 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
   useEffect(()=>{
     if(!user)return;
     const today=new Date().toISOString().split("T")[0];
-    // Restore lock synchronously before any async call — prevents flicker
     const savedGid=localStorage.getItem("courtiq_lastgroup");
+    // Restaurar grupo del cache sincrónico — picks funcionan de inmediato
+    try{const cached=localStorage.getItem("courtiq_lastgroup_obj");if(cached)setGroup(JSON.parse(cached));}catch(_){}
     if(savedGid&&localStorage.getItem(`courtiq_locked_${savedGid}_${today}`)) setLockedPicks(true);
 
     pickemAPI("myGroups",{params:{userId:user.id}}).then(d=>{
       if(d.ok&&d.groups?.length){
         const g=d.groups.find(x=>x.id===savedGid)||d.groups[0];
         setGroup(g);
+        localStorage.setItem("courtiq_lastgroup_obj",JSON.stringify(g));
         pickemAPI("myPicks",{params:{userId:user.id,groupId:g.id,date:today}}).then(r=>{
           if(r.ok){const m={};(r.picks||[]).forEach(p=>{m[p.game_id]=p.picked_team;});setPicks(m);}
           setLoaded(true);
@@ -733,6 +735,7 @@ const PickemTab=({games,userCtx,initSubTab,standalone})=>{
   useEffect(()=>{
     if(selGroup){
       localStorage.setItem("courtiq_lastgroup",selGroup.id);
+      localStorage.setItem("courtiq_lastgroup_obj",JSON.stringify(selGroup));
       window.dispatchEvent(new CustomEvent("courtiq_group_changed",{detail:selGroup}));
     }
   },[selGroup]);
