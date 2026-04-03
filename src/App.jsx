@@ -301,7 +301,7 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         const gp=grpPicks.filter(p=>p.game_id===g.id);
         const forAway=gp.filter(p=>p.picked_team===g.away);
         const forHome=gp.filter(p=>p.picked_team===g.home);
-        const canPick=user&&group&&isUpcoming;
+        const canPick=user&&group&&isUpcoming&&!lockedPicks;
         const conf=confidence[g.id]||1;
         return <Card key={g.id} style={{padding:16,borderColor:isFinal&&picked?(correct?"#00FF9D55":"#ff444455"):isLive&&picked?`${tm(picked).color}55`:picked?`${tm(picked).color}44`:C.border,borderWidth:picked?2:1}}>
 
@@ -698,6 +698,7 @@ const PickemTab=({games,userCtx,initSubTab,standalone})=>{
   const [shields,setShields]=useState(0);
   const [parlay,setParlay]=useState(null);const [parlaySelections,setParlaySelections]=useState({});const [parlayLoading,setParlayLoading]=useState(false);
   const [shopItems,setShopItems]=useState([]);
+  const [lockedPicks,setLockedPicks]=useState(false);
   const [editGroup,setEditGroup]=useState(false);const [editGroupName,setEditGroupName]=useState("");const [editGroupEmoji,setEditGroupEmoji]=useState("");
   const [profileModal,setProfileModal]=useState(null);const [profileData,setProfileData]=useState(null);
   const now=new Date();
@@ -744,6 +745,8 @@ const PickemTab=({games,userCtx,initSubTab,standalone})=>{
   useEffect(()=>{
     if(!user||!selGroup) return;
     const today=new Date().toISOString().split("T")[0];
+    if(localStorage.getItem(`courtiq_locked_${selGroup.id}_${today}`)) setLockedPicks(true);
+    else setLockedPicks(false);
     pickemAPI("myPicks",{params:{userId:user.id,groupId:selGroup.id,date:today}}).then(d=>{
       if(d.ok){const map={};(d.picks||[]).forEach(p=>{map[p.game_id]=p.picked_team;});setPicks(map);}
     });
@@ -1122,7 +1125,7 @@ const PickemTab=({games,userCtx,initSubTab,standalone})=>{
             <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:10,alignItems:"center"}}>
               {[["away",g.away,g.awayScore],["vs"],["home",g.home,g.homeScore]].map((item,idx)=>
                 idx===1?<div key="vs" style={{textAlign:"center",fontSize:12,color:C.muted,fontWeight:800}}>VS</div>
-                :isUpcoming?
+                :isUpcoming&&!lockedPicks?
                   <button key={item[1]} className="btn" onClick={()=>makePick(g.id,item[1],g.home,g.away)} style={{padding:"12px 8px",borderRadius:12,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:picked===item[1]?`${tm(item[1]).color}18`:"transparent",border:`2px solid ${picked===item[1]?tm(item[1]).color:C.border}`,color:picked===item[1]?tm(item[1]).color:C.text,width:"100%"}}>
                     {logo(item[1],36)}<span style={{fontSize:13,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif"}}>{item[1]}</span><span style={{fontSize:10,color:C.dim}}>{tm(item[1]).name}</span>
                   </button>
