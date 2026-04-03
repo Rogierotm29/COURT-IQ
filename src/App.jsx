@@ -761,17 +761,22 @@ const PickemTab=({games,userCtx,initSubTab,standalone})=>{
     pickemAPI("dailyWinner",{params:{groupId:selGroup.id}}).then(d=>{if(d.ok)setDailyWinner(d.winner);});
   },[user,selGroup]);
 
-  // Period leaderboard — enrich with shopItems from season leaderboard (already loaded)
+  // Period/season leaderboard fetch
   useEffect(()=>{
-    if(!selGroup||lbPeriod==="season") return;
-    pickemAPI("periodLeaderboard",{params:{groupId:selGroup.id,period:lbPeriod}}).then(d=>{
-      if(d.ok){
-        // Merge shopItems from season leaderboard
-        const shopMap={};leaderboard.forEach(r=>{if(r.user_id)shopMap[r.user_id]=r.shopItems||[];});
-        setPeriodLb((d.leaderboard||[]).map(r=>({...r,shopItems:shopMap[r.user_id]||[]})));
-      }
-    });
-  },[selGroup,lbPeriod,leaderboard]);
+    if(!selGroup) return;
+    if(lbPeriod==="season"){
+      pickemAPI("leaderboard",{params:{groupId:selGroup.id}}).then(d=>{
+        if(d.ok) setLeaderboard(d.leaderboard||[]);
+      });
+    } else {
+      pickemAPI("periodLeaderboard",{params:{groupId:selGroup.id,period:lbPeriod}}).then(d=>{
+        if(d.ok){
+          const shopMap={};leaderboard.forEach(r=>{if(r.user_id)shopMap[r.user_id]=r.shopItems||[];});
+          setPeriodLb((d.leaderboard||[]).map(r=>({...r,shopItems:shopMap[r.user_id]||[]})));
+        }
+      });
+    }
+  },[selGroup,lbPeriod]);
 
   // Sub-tab specific data
   useEffect(()=>{

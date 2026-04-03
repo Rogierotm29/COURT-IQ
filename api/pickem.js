@@ -204,7 +204,7 @@ export default async function handler(req, res) {
         const rows = Object.values(agg).map(r => ({ ...r, accuracy: r.total_picks > 0 ? Math.round(r.correct_picks / r.total_picks * 100) : 0 })).sort((a, b) => b.total_points - a.total_points);
         // Attach shop cosmetics
         const userIds = rows.map(r => r.user_id).filter(Boolean).join(",");
-        const cosmetics = userIds ? await supabase("user_achievements", { filters: `?user_id=in.(${userIds})&achievement_key=like.shop_%&select=user_id,achievement_key` }) : [];
+        const cosmetics = userIds ? await supabase("user_achievements", { filters: `?user_id=in.(${userIds})&achievement_key=like.shop_%25&select=user_id,achievement_key` }) : [];
         const cosmeticsByUser = {};
         for (const c of cosmetics || []) {
           if (!cosmeticsByUser[c.user_id]) cosmeticsByUser[c.user_id] = [];
@@ -1303,7 +1303,7 @@ export default async function handler(req, res) {
       case "myShopItems": {
         const { userId } = req.query;
         if (!userId) return res.json({ ok: false, error: "userId requerido" });
-        const items = await supabase("user_achievements", { filters: `?user_id=eq.${userId}&achievement_key=like.shop_%&select=achievement_key` });
+        const items = await supabase("user_achievements", { filters: `?user_id=eq.${userId}&achievement_key=like.shop_%25&select=achievement_key` });
         return res.json({ ok: true, items: (items || []).map(i => i.achievement_key.replace("shop_", "")) });
       }
 
