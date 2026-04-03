@@ -31,4 +31,14 @@ export default defineConfig({
     }),
   ],
   server: { proxy: {} },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "react-vendor": ["react", "react-dom"],
+          "recharts": ["recharts"],
+        },
+      },
+    },
+  },
 });

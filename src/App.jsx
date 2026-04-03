@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { AreaChart, Area, BarChart, Bar, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 //Consts
 const C={bg:"#07090f",card:"#0d1117",border:"#1a2535",muted:"#3d5166",dim:"#566880",text:"#e0eaf5",accent:"#00C2FF"};
-const GS=()=><style>{`@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;500;600;700;800;900&display=swap');*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}body{background:#07090f}::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:#1e2d40;border-radius:4px}@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}@keyframes spin{to{transform:rotate(360deg)}}.fade-up{animation:fadeUp .35s ease both}.btn{cursor:pointer;border:none;outline:none;transition:all .15s;font-family:inherit}.btn:hover{filter:brightness(1.15)}.card{transition:transform .15s,box-shadow .15s}.card:hover{transform:translateY(-2px);box-shadow:0 8px 28px #00000055}input,select{outline:none;font-family:inherit}.spin{animation:spin 1s linear infinite}`}</style>;
+const GS=()=><style>{`@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;500;600;700;800;900&display=swap');*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}body{background:#07090f}::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:#1e2d40;border-radius:4px}@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}@keyframes spin{to{transform:rotate(360deg)}}@keyframes bounceIn{0%{transform:scale(.85);opacity:0}60%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-5px)}40%,80%{transform:translateX(5px)}}.fade-up{animation:fadeUp .35s ease both}.pick-correct{animation:bounceIn .5s ease both}.pick-wrong{animation:shake .4s ease both}.btn{cursor:pointer;border:none;outline:none;transition:all .15s;font-family:inherit}.btn:hover{filter:brightness(1.15)}.card{transition:transform .15s,box-shadow .15s}.card:hover{transform:translateY(-2px);box-shadow:0 8px 28px #00000055}input,select{outline:none;font-family:inherit}.spin{animation:spin 1s linear infinite}`}</style>;
 const Tag=({c="#00C2FF",children})=><span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:`${c}22`,color:c,letterSpacing:.8}}>{children}</span>;
 const Card=({children,style={}})=><div className="card" style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:18,...style}}>{children}</div>;
 const ST=({children,sub})=><div style={{marginBottom:16}}><div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:2}}>{sub}</div><div style={{fontSize:22,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1,color:C.text}}>{children}</div></div>;
@@ -609,6 +609,22 @@ async function autoSubscribePush(userId){
   const result=await pickemAPI("subscribePush",{body:{userId,subscription:sub.toJSON()}});
   if(!result?.ok) throw new Error(result?.error||"Error guardando suscripción en el servidor");
 }
+const ACHIEVEMENT_DEFS=[
+  {key:"first_pick",emoji:"🎯",name:"Primer Pick",desc:"Hiciste tu primera predicción",color:"#00C2FF"},
+  {key:"first_win",emoji:"✅",name:"Primer Acierto",desc:"Atinaste una predicción",color:"#00FF9D"},
+  {key:"streak_3",emoji:"🔥",name:"En Racha",desc:"3 picks correctos seguidos",color:"#FF6B35"},
+  {key:"streak_5",emoji:"🔥🔥",name:"En Llamas",desc:"5 picks correctos seguidos",color:"#FF6B35"},
+  {key:"streak_7",emoji:"⚡🔥",name:"Imparable",desc:"7 picks correctos seguidos — ganas un escudo",color:"#FFB800"},
+  {key:"perfect_day",emoji:"💎",name:"Día Perfecto",desc:"100% en un día (mín. 2 picks)",color:"#00C2FF"},
+  {key:"bet_won",emoji:"🪙",name:"Apostador",desc:"Ganaste tu primera apuesta",color:"#FFB800"},
+  {key:"joined_group",emoji:"👥",name:"Social",desc:"Te uniste a un grupo",color:"#00C2FF"},
+  {key:"challenge_sent",emoji:"⚡",name:"Retador",desc:"Enviaste un reto de apuesta",color:"#FFB800"},
+  {key:"parlay_win",emoji:"🎰",name:"Parlay Perfecto",desc:"Acertaste todos los picks de tu parlay",color:"#FF6B35"},
+  {key:"shop_gold_border",emoji:"✨",name:"Borde Dorado",desc:"Marco dorado en el leaderboard",color:"#FFB800"},
+  {key:"shop_fire_color",emoji:"🔥",name:"Color Fuego",desc:"Nombre en naranja fuego",color:"#FF6B35"},
+  {key:"shop_crown_badge",emoji:"👑",name:"Corona",desc:"Badge de corona en tu nombre",color:"#FFB800"},
+  {key:"shop_100_badge",emoji:"💯",name:"Badge 100",desc:"Badge especial 100 en tu nombre",color:"#00FF9D"},
+];
 const PickemTab=({games,userCtx,initSubTab})=>{
   const {user,save}=userCtx;
   const [name,setName]=useState("");const [groups,setGroups]=useState([]);const [selGroup,setSelGroup]=useState(null);
@@ -642,6 +658,7 @@ const PickemTab=({games,userCtx,initSubTab})=>{
   const [parlay,setParlay]=useState(null);const [parlaySelections,setParlaySelections]=useState({});const [parlayLoading,setParlayLoading]=useState(false);
   const [shopItems,setShopItems]=useState([]);
   const [editGroup,setEditGroup]=useState(false);const [editGroupName,setEditGroupName]=useState("");const [editGroupEmoji,setEditGroupEmoji]=useState("");
+  const [profileModal,setProfileModal]=useState(null);const [profileData,setProfileData]=useState(null);
   const now=new Date();
   const upcoming=games.filter(g=>g.startTime?now<new Date(g.startTime):g.status==="Upcoming");
   const finished=games.filter(g=>g.status==="Final");const liveGames=games.filter(g=>g.status==="LIVE");
@@ -783,9 +800,9 @@ const PickemTab=({games,userCtx,initSubTab})=>{
   const shareGroup=()=>{
     if(!selGroup) return;
     const url=`${window.location.origin}?join=${selGroup.code}`;
-    const text=`¡Únete a mi grupo "${selGroup.name}" en Court IQ y compite conmigo en los picks de la NBA! 🏀`;
+    const text=`¡Únete a mi grupo "${selGroup.name}" en Court IQ! 🏀 Código: ${selGroup.code}\n${url}`;
     if(navigator.share){navigator.share({title:"Court IQ — "+selGroup.name,text,url}).catch(()=>{});}
-    else{navigator.clipboard?.writeText(`${text}\n${url}`).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);}).catch(()=>{});}
+    else{window.open(`https://wa.me/?text=${encodeURIComponent(text)}`,"_blank");}
   };
 
 
@@ -830,6 +847,52 @@ const PickemTab=({games,userCtx,initSubTab})=>{
     setH2hUser(r);setH2hData(null);
     const d=await pickemAPI("headToHead",{params:{userId:user.id,opponentId:r.user_id,groupId:selGroup.id}});
     if(d.ok) setH2hData(d);
+  };
+  const openProfile=async(r)=>{
+    setProfileModal(r);setProfileData(null);
+    const d=await pickemAPI("userProfile",{params:{userId:user.id,targetId:r.user_id}});
+    if(d.ok) setProfileData(d);
+  };
+  const sharePicksImage=(date,dayPicks)=>{
+    const W=400,ROW=52,HEADER=80,FOOTER=50;
+    const H=HEADER+dayPicks.length*ROW+FOOTER;
+    const canvas=document.createElement("canvas");
+    canvas.width=W*2;canvas.height=H*2; // 2x for retina
+    const ctx=canvas.getContext("2d");
+    ctx.scale(2,2);
+    // Background
+    ctx.fillStyle="#07090f";ctx.fillRect(0,0,W,H);
+    // Top accent bar
+    ctx.fillStyle="#00C2FF";ctx.fillRect(0,0,W,3);
+    // Title
+    ctx.fillStyle="#00C2FF";ctx.font="bold 15px Arial,sans-serif";ctx.fillText("🏀 Court IQ Picks",16,28);
+    ctx.fillStyle="#566880";ctx.font="11px Arial,sans-serif";
+    ctx.fillText(new Date(date+"T12:00:00").toLocaleDateString("es",{weekday:"long",month:"short",day:"numeric"}),16,46);
+    const correct=dayPicks.filter(p=>p.correct).length;
+    const pts=dayPicks.reduce((s,p)=>s+(p.points||0),0);
+    ctx.fillStyle="#FFB800";ctx.font="bold 11px Arial,sans-serif";ctx.textAlign="right";
+    ctx.fillText(`${correct}/${dayPicks.length} ✓  +${pts}pts`,W-16,28);
+    ctx.textAlign="left";
+    // Picks
+    dayPicks.forEach((p,i)=>{
+      const y=HEADER+i*ROW;
+      const rival=p.picked_team===p.home_team?p.away_team:p.home_team;
+      const accent=p.scored?(p.correct?"#00FF9D":"#ff4444"):"#3d5166";
+      ctx.fillStyle=accent+"44";ctx.fillRect(0,y,W,ROW-2);
+      ctx.fillStyle=accent;ctx.fillRect(0,y,3,ROW-2);
+      ctx.fillStyle="#e0eaf5";ctx.font="bold 14px Arial,sans-serif";ctx.fillText(p.picked_team,16,y+22);
+      ctx.fillStyle="#566880";ctx.font="11px Arial,sans-serif";ctx.fillText(`vs ${rival}`,16,y+38);
+      if(p.scored){ctx.fillStyle=accent;ctx.font="bold 14px Arial,sans-serif";ctx.textAlign="right";ctx.fillText(p.correct?"✅":"❌",W-16,y+26);ctx.textAlign="left";}
+    });
+    // Footer
+    ctx.fillStyle="#0d1117";ctx.fillRect(0,H-FOOTER,W,FOOTER);
+    ctx.fillStyle="#566880";ctx.font="10px Arial,sans-serif";ctx.textAlign="center";ctx.fillText("court-iq.vercel.app",W/2,H-16);ctx.textAlign="left";
+    canvas.toBlob(async blob=>{
+      if(navigator.share&&blob&&navigator.canShare?.({files:[new File([blob],"picks.png",{type:"image/png"})]})){
+        try{await navigator.share({files:[new File([blob],"picks.png",{type:"image/png"})],title:"Mis picks Court IQ"});return;}catch(_){}
+      }
+      const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`picks-${date}.png`;a.click();URL.revokeObjectURL(url);
+    },"image/png");
   };
   const doChallengeBet=async()=>{
     if(!betGame||!betTeam||betAmt<10||!betOpponent) return;
@@ -982,14 +1045,14 @@ const PickemTab=({games,userCtx,initSubTab})=>{
           const winner=isFinal?(g.homeScore>g.awayScore?g.home:g.away):null;
           const correct=isFinal&&picked===winner;
           const minsLeft=g.startTime&&isUpcoming?Math.max(0,Math.round((new Date(g.startTime)-new Date())/60000)):null;
-          return <Card key={g.id} style={{marginBottom:10,borderColor:isFinal?(correct?"#00FF9D33":"#ff444433"):isLive?"#ff444433":picked?`${tm(picked).color}33`:C.border}}>
+          return <Card key={g.id} className={isFinal&&picked?(correct?"pick-correct":"pick-wrong"):""} style={{marginBottom:10,borderColor:isFinal?(correct?"#00FF9D33":"#ff444433"):isLive?"#ff444433":picked?`${tm(picked).color}33`:C.border}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
               <div style={{display:"flex",gap:6}}>
                 {isLive?<Tag c="#ff4444">● LIVE {g.detail}</Tag>:isFinal?<Tag c={C.muted}>Final</Tag>
                 :minsLeft!==null?(minsLeft<=1?<Tag c="#ff4444">⏱ Iniciando...</Tag>:minsLeft<=60?<Tag c={minsLeft<=15?"#ff6666":"#FF6B35"}>⏱ {minsLeft} min</Tag>:<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>)
                 :<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>}
               </div>
-              {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?"✅ +10":"❌"}</Tag>}
+              {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?`✅ +${(confidence[g.id]||1)*10}`:"❌"}</Tag>}
               {isLive&&picked&&<Tag c={tm(picked).color}>● {picked}</Tag>}
               {isUpcoming&&picked&&<Tag c="#00FF9D">✓ {picked}</Tag>}
               {isUpcoming&&!picked&&<Tag c={C.accent}>Elige</Tag>}
@@ -1024,7 +1087,7 @@ const PickemTab=({games,userCtx,initSubTab})=>{
             const isMe=r.user_id===user.id;const mc=["#FFB800","#C0C0C0","#CD7F32"];
             return <div key={r.user_id||i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 8px",marginBottom:4,borderRadius:10,background:isMe?`${C.accent}11`:i<3?"#FFB80008":"transparent",border:isMe?`1px solid ${C.accent}33`:"1px solid transparent"}}>
               <div style={{width:32,height:32,borderRadius:"50%",background:i<3?`${mc[i]}22`:"#0a1018",border:`2px solid ${i<3?mc[i]:C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:i<3?14:12,fontWeight:900,color:i<3?mc[i]:C.dim,flexShrink:0}}>{i<3?["🥇","🥈","🥉"][i]:i+1}</div>
-              <div style={{flex:1}}>
+              <div style={{flex:1,cursor:isMe?undefined:"pointer"}} onClick={()=>!isMe&&openProfile(r)}>
                 <div style={{fontSize:13,fontWeight:isMe?800:600,color:isMe?C.accent:C.text}}>{isMe?(user.avatar_emoji||"🏀"):(r.avatar_emoji||"🏀")} {r.name||r.user_name}{isMe?" (tú)":""}</div>
                 <div style={{fontSize:10,color:C.dim}}>{r.correct_picks??r.correct??0} aciertos · {r.accuracy}% precisión{(streaks[r.user_id]||0)>=3&&<span style={{fontSize:9,color:"#FF6B35",fontWeight:700}}> 🔥{streaks[r.user_id]} en racha</span>}</div>
               </div>
@@ -1081,7 +1144,10 @@ const PickemTab=({games,userCtx,initSubTab})=>{
           return <Card key={date} style={{marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
               <div style={{fontSize:12,fontWeight:700,color:C.text}}>{new Date(date+"T12:00:00").toLocaleDateString("es",{weekday:"long",month:"short",day:"numeric"})}</div>
-              <div style={{display:"flex",gap:8}}><Tag c={correct===dayPicks.length&&dayPicks.length>0?"#00FF9D":"#FFB800"}>{correct}/{dayPicks.length} ✅</Tag><Tag c={C.accent}>+{pts} pts</Tag></div>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+              <Tag c={correct===dayPicks.length&&dayPicks.length>0?"#00FF9D":"#FFB800"}>{correct}/{dayPicks.length} ✅</Tag><Tag c={C.accent}>+{pts} pts</Tag>
+              <button className="btn" onClick={()=>sharePicksImage(date,dayPicks)} style={{padding:"3px 8px",borderRadius:8,background:"#ffffff11",border:"1px solid #ffffff22",color:C.dim,fontSize:10}}>📸</button>
+            </div>
             </div>
             {dayPicks.map(p=><div key={p.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderBottom:`1px solid ${C.border}`}}>
               {logo(p.picked_team,20)}<span style={{flex:1,fontSize:12,color:C.text}}>{p.picked_team}</span>
@@ -1312,6 +1378,52 @@ const PickemTab=({games,userCtx,initSubTab})=>{
         {[["✅ 1x","10 pts"],["🔥 2x","20 pts"],["⚡ 3x","30 pts"]].map(([l,v])=><div key={l} style={{background:C.card,borderRadius:9,padding:"10px",textAlign:"center"}}><div style={{fontSize:10,color:C.dim,marginBottom:4}}>{l}</div><div style={{fontSize:15,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.accent}}>{v}</div></div>)}
       </div>
     </Card>
+
+    {/* ─── PROFILE MODAL ─── */}
+    {profileModal&&<div style={{position:"fixed",inset:0,zIndex:2000,background:"#000000bb",display:"flex",alignItems:"flex-end"}} onClick={()=>{setProfileModal(null);setProfileData(null);}}>
+      <div style={{background:C.card,borderRadius:"20px 20px 0 0",padding:24,width:"100%",maxHeight:"75vh",overflowY:"auto",border:`1px solid ${C.border}`}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:52,height:52,borderRadius:"50%",background:`${C.accent}20`,border:`2px solid ${C.accent}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>{profileModal.avatar_emoji||"🏀"}</div>
+            <div><div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text}}>{profileModal.name||profileModal.user_name}</div>
+              {(streaks[profileModal.user_id]||0)>=3&&<div style={{fontSize:12,color:"#FF6B35",fontWeight:700}}>🔥 {streaks[profileModal.user_id]} en racha</div>}
+            </div>
+          </div>
+          <button className="btn" onClick={()=>{setProfileModal(null);setProfileData(null);}} style={{background:"none",color:C.muted,fontSize:24,lineHeight:1}}>×</button>
+        </div>
+        {!profileData?<div style={{textAlign:"center",padding:30}}><Spin/></div>:<>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginBottom:16}}>
+            {[["🎯 Picks",profileData.stats?.totalPicks||0,C.accent],["✅ Aciertos",profileData.stats?.totalCorrect||0,"#00FF9D"],["📊 Precisión",`${profileData.stats?.accuracy||0}%`,"#FFB800"],["⭐ Puntos",profileData.stats?.totalPoints||0,"#FF6B35"]].map(([l,v,c])=><div key={l} style={{background:"#0a1018",borderRadius:10,padding:"10px 6px",textAlign:"center"}}>
+              <div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:c}}>{v}</div>
+              <div style={{fontSize:9,color:C.muted,marginTop:2}}>{l}</div>
+            </div>)}
+          </div>
+          {profileData.stats?.favoriteTeam&&<div style={{marginBottom:14}}>
+            <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:1.5,marginBottom:8}}>Equipos favoritos</div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {profileData.stats.topTeams?.slice(0,5).map(t=><div key={t.team} style={{background:`${tm(t.team).color}18`,border:`1px solid ${tm(t.team).color}44`,borderRadius:20,padding:"5px 10px",display:"flex",alignItems:"center",gap:6}}>
+                {logo(t.team,18)}<span style={{fontSize:11,fontWeight:700,color:tm(t.team).color}}>{t.team}</span><span style={{fontSize:9,color:C.dim}}>{t.acc}%</span>
+              </div>)}
+            </div>
+          </div>}
+          {profileData.achievements?.filter(a=>!a.achievement_key.startsWith("shop_")).length>0&&<div>
+            <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:1.5,marginBottom:8}}>Logros</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {profileData.achievements.filter(a=>!a.achievement_key.startsWith("shop_")).map(a=>{
+                const def=ACHIEVEMENT_DEFS.find(d=>d.key===a.achievement_key);
+                return def?<div key={a.achievement_key} style={{background:`${def.color||C.accent}18`,border:`1px solid ${def.color||C.accent}44`,borderRadius:10,padding:"6px 10px",textAlign:"center"}} title={def.desc}>
+                  <div style={{fontSize:18}}>{def.emoji}</div>
+                  <div style={{fontSize:9,color:C.dim,marginTop:2}}>{def.name}</div>
+                </div>:null;
+              })}
+            </div>
+          </div>}
+          <div style={{display:"flex",gap:8,marginTop:14}}>
+            <button className="btn" onClick={()=>loadH2H(profileModal)} style={{flex:1,padding:"10px",borderRadius:10,background:`${C.accent}22`,border:`1px solid ${C.accent}44`,color:C.accent,fontSize:12,fontWeight:700}}>⚡ Ver H2H</button>
+          </div>
+        </>}
+      </div>
+    </div>}
   </div>);
 };
 
@@ -1655,23 +1767,6 @@ const BracketTab=({userCtx,standings})=>{
 };
 
 /* ═══ ACHIEVEMENT DEFS ═══ */
-const ACHIEVEMENT_DEFS=[
-  {key:"first_pick",emoji:"🎯",name:"Primer Pick",desc:"Hiciste tu primera predicción"},
-  {key:"first_win",emoji:"✅",name:"Primer Acierto",desc:"Atinaste una predicción"},
-  {key:"streak_3",emoji:"🔥",name:"En Racha",desc:"3 picks correctos seguidos"},
-  {key:"streak_5",emoji:"🔥🔥",name:"En Llamas",desc:"5 picks correctos seguidos"},
-  {key:"streak_7",emoji:"⚡🔥",name:"Imparable",desc:"7 picks correctos seguidos — ganas un escudo"},
-  {key:"perfect_day",emoji:"💎",name:"Día Perfecto",desc:"100% en un día (mín. 2 picks)"},
-  {key:"bet_won",emoji:"🪙",name:"Apostador",desc:"Ganaste tu primera apuesta"},
-  {key:"joined_group",emoji:"👥",name:"Social",desc:"Te uniste a un grupo"},
-  {key:"challenge_sent",emoji:"⚡",name:"Retador",desc:"Enviaste un reto de apuesta"},
-  {key:"parlay_win",emoji:"🎰",name:"Parlay Perfecto",desc:"Acertaste todos los picks de tu parlay"},
-  {key:"shop_gold_border",emoji:"✨",name:"Borde Dorado",desc:"Marco dorado en el leaderboard"},
-  {key:"shop_fire_color",emoji:"🔥",name:"Color Fuego",desc:"Nombre en naranja fuego"},
-  {key:"shop_crown_badge",emoji:"👑",name:"Corona",desc:"Badge de corona en tu nombre"},
-  {key:"shop_100_badge",emoji:"💯",name:"Badge 100",desc:"Badge especial 100 en tu nombre"},
-];
-
 /* ═══ MINI GAMES TAB ═══ */
 const TRIVIA_ALL=[
   /* ── Campeones ── */

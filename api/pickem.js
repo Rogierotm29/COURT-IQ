@@ -1209,6 +1209,109 @@ export default async function handler(req, res) {
         return res.json({ ok: true, items: (items || []).map(i => i.achievement_key.replace("shop_", "")) });
       }
 
+      // ─── USER PROFILE ───────────────────────────────────────
+      case "userProfile": {
+        const { targetId } = req.query;
+        if (!targetId) return res.json({ ok: false, error: "targetId requerido" });
+        const [u] = await supabase("users", { filters: `?id=eq.${targetId}&select=id,name,avatar_emoji&limit=1` }) || [];
+        const picks = await supabase("picks", { filters: `?user_id=eq.${targetId}&scored=eq.true&select=picked_team,correct,points&limit=500` });
+        const achievements = await supabase("user_achievements", { filters: `?user_id=eq.${targetId}&select=achievement_key,unlocked_at` });
+        const total = picks?.length || 0;
+        const correct = picks?.filter(p => p.correct).length || 0;
+        const pts = picks?.reduce((s, p) => s + (p.points || 0), 0) || 0;
+        const byTeam = {};
+        for (const p of picks || []) {
+          if (!byTeam[p.picked_team]) byTeam[p.picked_team] = { team: p.picked_team, correct: 0, total: 0 };
+          byTeam[p.picked_team].total++;
+          if (p.correct) byTeam[p.picked_team].correct++;
+        }
+        const topTeams = Object.values(byTeam).map(t => ({ ...t, acc: Math.round(t.correct / t.total * 100) })).sort((a, b) => b.total - a.total).slice(0, 5);
+        return res.json({ ok: true, user: u, stats: { totalPicks: total, totalCorrect: correct, accuracy: total ? Math.round(correct / total * 100) : 0, totalPoints: pts, topTeams }, achievements: achievements || [] });
+      }
+
+      // ─── STREAK ALERT (cron: 2h before first game) ─────────
+      case "streakAlert": {
+        const webpush = await import("web-push");
+        const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
+        const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
+        if (!VAPID_PUBLIC || !VAPID_PRIVATE) return res.json({ ok: false, error: "VAPID no configurado" });
+        webpush.default.setVapidDetails("mailto:courtiq@app.com", VAPID_PUBLIC, VAPID_PRIVATE);
+        const today = new Date().toISOString().split("T")[0];
+        // Check window: 90–150 min before first game
+        const espnRes = await fetch("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard");
+        const espnData = await espnRes.json();
+        const upcoming = (espnData.events || []).filter(e => e.competitions?.[0]?.status?.type?.state === "pre");
+        if (!upcoming.length) return res.json({ ok: true, sent: 0, reason: "no upcoming games" });
+        const earliest = upcoming.map(e => new Date(e.date)).sort((a, b) => a - b)[0];
+        const minsUntil = (earliest - new Date()) / 60000;
+        if (minsUntil < 90 || minsUntil > 150) return res.json({ ok: true, sent: 0, reason: `not in window (${Math.round(minsUntil)}min)` });
+        // Get users who haven't picked today
+        const pickedToday = await supabase("picks", { filters: `?game_date=eq.${today}&select=user_id` });
+        const pickedIds = new Set((pickedToday || []).map(p => p.user_id));
+        // Get all subscribers
+        const subs = await supabase("push_subscriptions", { filters: `?select=endpoint,p256dh,auth,user_id` });
+        if (!subs?.length) return res.json({ ok: true, sent: 0 });
+        // Get streaks for subscribers who haven't picked
+        let sent = 0;
+        for (const sub of subs) {
+          if (pickedIds.has(sub.user_id)) continue; // already picked
+          const recentPicks = await supabase("picks", { filters: `?user_id=eq.${sub.user_id}&scored=eq.true&select=correct&order=game_date.desc&limit=10` });
+          let streak = 0;
+          for (const p of recentPicks || []) { if (!p.correct) break; streak++; }
+          if (streak < 2) continue; // only alert if streak >= 2
+          const payload = JSON.stringify({
+            title: "⚠️ ¡Tu racha está en peligro!",
+            body: `Llevas ${streak} picks seguidos correctos — ¡haz tus picks antes de que empiece el juego!`,
+            tag: `streak-alert-${today}`, url: "/",
+          });
+          try {
+            await webpush.default.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload);
+            sent++;
+          } catch (_) {}
+        }
+        return res.json({ ok: true, sent });
+      }
+
+      // ─── WEEKLY SUMMARY (cron: Sunday night) ───────────────
+      case "weeklySummary": {
+        const webpush = await import("web-push");
+        const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
+        const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
+        if (!VAPID_PUBLIC || !VAPID_PRIVATE) return res.json({ ok: false, error: "VAPID no configurado" });
+        webpush.default.setVapidDetails("mailto:courtiq@app.com", VAPID_PUBLIC, VAPID_PRIVATE);
+        const d = new Date(); d.setDate(d.getDate() - d.getDay() + 1);
+        const weekStart = d.toISOString().split("T")[0];
+        // Get week picks per user
+        const picks = await supabase("picks", { filters: `?game_date=gte.${weekStart}&scored=eq.true&select=user_id,correct,points,group_id` });
+        if (!picks?.length) return res.json({ ok: true, sent: 0 });
+        const byUser = {};
+        for (const p of picks) {
+          if (!byUser[p.user_id]) byUser[p.user_id] = { correct: 0, total: 0, points: 0 };
+          byUser[p.user_id].total++;
+          byUser[p.user_id].points += p.points || 0;
+          if (p.correct) byUser[p.user_id].correct++;
+        }
+        // Get leaderboard rank for each user in their group (simplified: by points this week)
+        const subs = await supabase("push_subscriptions", { filters: `?select=endpoint,p256dh,auth,user_id` });
+        if (!subs?.length) return res.json({ ok: true, sent: 0 });
+        let sent = 0;
+        for (const sub of subs) {
+          const stats = byUser[sub.user_id];
+          if (!stats || stats.total === 0) continue;
+          const pct = Math.round(stats.correct / stats.total * 100);
+          const payload = JSON.stringify({
+            title: "📊 Tu resumen semanal · Court IQ",
+            body: `${stats.correct}/${stats.total} picks acertados (${pct}%) · +${stats.points} pts esta semana 🏀`,
+            tag: `weekly-${weekStart}`, url: "/",
+          });
+          try {
+            await webpush.default.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload);
+            sent++;
+          } catch (_) {}
+        }
+        return res.json({ ok: true, sent });
+      }
+
       default:
         return res.json({ ok: false, error: `Acción desconocida: ${action}` });
     }
