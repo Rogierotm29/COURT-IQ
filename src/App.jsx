@@ -186,6 +186,8 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
   const [showPctInfo,setShowPctInfo]=useState(false);
   const [bonusClaimed,setBonusClaimed]=useState(null);
   const [bonusMsg,setBonusMsg]=useState("");
+  const [streak,setStreak]=useState(0);
+  const [weeklyStats,setWeeklyStats]=useState(null);
   useEffect(()=>{
     if(!user)return;
     const today=new Date().toISOString().split("T")[0];
@@ -207,6 +209,8 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         pickemAPI("groupBets",{params:{groupId:g.id}}).then(r=>{
           if(r.ok){const challenges=(r.bets||[]).filter(b=>b.status==="pending"&&b.opponent_id===user.id);setPendingBets(challenges);}
         });
+        pickemAPI("getStreak",{params:{userId:user.id,groupId:g.id}}).then(r=>{if(r.ok)setStreak(r.streak||0);});
+        pickemAPI("periodLeaderboard",{params:{groupId:g.id,period:"week"}}).then(r=>{if(r.ok){const me=(r.leaderboard||[]).find(x=>x.user_id===user.id);setWeeklyStats(me||null);}});
         if(localStorage.getItem(`courtiq_locked_${g.id}_${today}`)) setLockedPicks(true);
       } else setLoaded(true);
     });
@@ -260,11 +264,15 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
     {user&&<div onClick={group?goToGroup:undefined} style={{cursor:group?"pointer":"default",marginBottom:pendingBets.length?10:22}}>
       <Card style={{background:"linear-gradient(135deg,#00FF9D08,#0d1117)",borderColor:group?"#00FF9D55":"#FFB80044",padding:"14px 18px",transition:"border-color .2s"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
-          <div>
-            <div style={{fontSize:10,color:"#00FF9D",fontWeight:700,letterSpacing:2}}>PICK'EM ACTIVO</div>
-            <div style={{fontSize:15,fontWeight:700,color:C.text,marginTop:2}}>👋 {user.name} — Toca un equipo para elegir ganador</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
+              <div style={{fontSize:10,color:"#00FF9D",fontWeight:700,letterSpacing:2}}>PICK'EM ACTIVO</div>
+              {streak>=3&&<div style={{fontSize:10,fontWeight:900,color:"#FF6B35",background:"#FF6B3520",border:"1px solid #FF6B3544",borderRadius:20,padding:"1px 8px"}}>🔥 {streak} en racha</div>}
+              {streak>=1&&streak<3&&<div style={{fontSize:10,fontWeight:700,color:"#FFB800",background:"#FFB80015",border:"1px solid #FFB80033",borderRadius:20,padding:"1px 8px"}}>⚡ {streak} correcto{streak!==1?"s":""}</div>}
+            </div>
+            <div style={{fontSize:15,fontWeight:700,color:C.text}}>👋 {user.name} — Toca un equipo para elegir ganador</div>
           </div>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
             {lockedPicks&&<Tag c="#FF6B35">🔒 Picks cerrados</Tag>}
             {group?<Tag c="#00FF9D">👥 {group.name} →</Tag>:<Tag c="#FFB800">Ve a Grupos para crear uno</Tag>}
           </div>
@@ -279,6 +287,19 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
       <button className="btn" onClick={claimBonus} style={{padding:"8px 16px",borderRadius:10,background:"linear-gradient(135deg,#FFB800,#ff9500)",color:"#07090f",fontSize:12,fontWeight:900,flexShrink:0}}>Reclamar</button>
     </div>}
     {bonusMsg&&<div style={{marginBottom:10,padding:"8px 14px",background:"#00FF9D11",border:"1px solid #00FF9D44",borderRadius:10,fontSize:12,color:"#00FF9D"}}>{bonusMsg}</div>}
+    {user&&group&&weeklyStats&&weeklyStats.total>0&&<div style={{marginBottom:14,padding:"12px 16px",background:"linear-gradient(135deg,#0055ff11,#0d1117)",border:"1px solid #0055ff33",borderRadius:12,display:"flex",alignItems:"center",gap:12}}>
+      <div style={{fontSize:26,lineHeight:1}}>📊</div>
+      <div style={{flex:1}}>
+        <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:1.5,marginBottom:3}}>ESTA SEMANA</div>
+        <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
+          <span style={{fontSize:13,fontWeight:800,color:C.text}}>{weeklyStats.correct}/{weeklyStats.total} ✅</span>
+          <span style={{fontSize:12,color:"#FFB800",fontWeight:700}}>+{weeklyStats.points} pts</span>
+          <span style={{fontSize:11,color:C.dim}}>{weeklyStats.accuracy}% precisión</span>
+          {weeklyStats.rank<=3&&<Tag c="#FFB800">#{weeklyStats.rank} en el grupo</Tag>}
+        </div>
+      </div>
+      <button className="btn" onClick={goToGroup} style={{padding:"6px 12px",borderRadius:8,background:"#0055ff22",border:"1px solid #0055ff44",color:C.accent,fontSize:11,fontWeight:700,flexShrink:0}}>Ver →</button>
+    </div>}
     {user&&pendingBets.length>0&&<div style={{marginBottom:22}}>
       {pendingBets.map(b=><div key={b.id} onClick={goToBets} style={{cursor:"pointer",padding:"10px 14px",background:"linear-gradient(135deg,#FFB80012,#0d1117)",border:"1px solid #FFB80055",borderRadius:10,marginBottom:6,display:"flex",alignItems:"center",gap:10}}>
         <span style={{fontSize:16}}>⚡</span>
@@ -1176,46 +1197,60 @@ const PickemTab=({games,userCtx,initSubTab,standalone})=>{
       </>}
 
       {/* ─── HISTORIAL ─── */}
-      {subTab==="historial"&&<>
-        {Object.keys(histByDate).length>0&&(()=>{
-          const chartData=Object.entries(histByDate).slice(-7).map(([date,dp])=>({
-            day:new Date(date+"T12:00:00").toLocaleDateString("es",{weekday:"short",day:"numeric"}),
-            pct:dp.length?Math.round(dp.filter(p=>p.correct).length/dp.length*100):0,
-            pts:dp.reduce((s,p)=>s+(p.points||0),0),
-          }));
-          return <Card style={{marginBottom:14}}>
-            <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:1.5,marginBottom:10}}>Precisión últimos días</div>
-            <ResponsiveContainer width="100%" height={110}>
-              <BarChart data={chartData} margin={{top:4,right:4,left:-24,bottom:0}}>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.border}/>
-                <XAxis dataKey="day" tick={{fill:C.muted,fontSize:9}} axisLine={false} tickLine={false}/>
-                <YAxis domain={[0,100]} tick={{fill:C.muted,fontSize:9}} axisLine={false} tickLine={false}/>
-                <Tooltip content={({active,payload,label})=>active&&payload?.length?<div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px"}}><p style={{color:C.muted,fontSize:9,marginBottom:2}}>{label}</p><p style={{color:C.accent,fontSize:12,fontWeight:700}}>{payload[0].value}% precisión</p></div>:null}/>
-                <Bar dataKey="pct" fill={C.accent} radius={[4,4,0,0]} maxBarSize={32}/>
-              </BarChart>
-            </ResponsiveContainer>
-          </Card>;
-        })()}
-        {Object.keys(histByDate).length===0?<Card style={{textAlign:"center",padding:40}}><div style={{fontSize:36,marginBottom:8}}>📅</div><div style={{fontSize:15,fontWeight:700,color:C.text}}>Sin historial aún</div><div style={{fontSize:12,color:C.dim,marginTop:6}}>Tus picks de los últimos 7 días aparecerán aquí</div></Card>
-        :Object.entries(histByDate).map(([date,dayPicks])=>{
-          const correct=dayPicks.filter(p=>p.correct).length;
-          const pts=dayPicks.reduce((s,p)=>s+(p.points||0),0);
-          return <Card key={date} style={{marginBottom:12}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <div style={{fontSize:12,fontWeight:700,color:C.text}}>{new Date(date+"T12:00:00").toLocaleDateString("es",{weekday:"long",month:"short",day:"numeric"})}</div>
-              <div style={{display:"flex",gap:6,alignItems:"center"}}>
-              <Tag c={correct===dayPicks.length&&dayPicks.length>0?"#00FF9D":"#FFB800"}>{correct}/{dayPicks.length} ✅</Tag><Tag c={C.accent}>+{pts} pts</Tag>
-              <button className="btn" onClick={()=>sharePicksImage(date,dayPicks)} style={{padding:"3px 8px",borderRadius:8,background:"#ffffff11",border:"1px solid #ffffff22",color:C.dim,fontSize:10}}>📸</button>
+      {subTab==="historial"&&(()=>{
+        const allScoredPicks=history.filter(p=>p.scored);
+        const totalCorrect=allScoredPicks.filter(p=>p.correct).length;
+        const totalPts=allScoredPicks.reduce((s,p)=>s+(p.points||0),0);
+        const overallAcc=allScoredPicks.length?Math.round(totalCorrect/allScoredPicks.length*100):0;
+        return<>
+          {allScoredPicks.length>0&&<Card style={{marginBottom:14,background:"linear-gradient(135deg,#00C2FF08,#0d1117)"}}>
+            <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:1.5,marginBottom:10}}>Últimos 30 días</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:14}}>
+              {[[totalCorrect+"/"+allScoredPicks.length,"Aciertos","#00FF9D"],[totalPts+" pts","Puntos","#FFB800"],[overallAcc+"%","Precisión",C.accent]].map(([v,l,c])=>(
+                <div key={l} style={{background:"#0a1018",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
+                  <div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:c}}>{v}</div>
+                  <div style={{fontSize:9,color:C.muted,marginTop:2,letterSpacing:.5}}>{l}</div>
+                </div>
+              ))}
             </div>
-            </div>
-            {dayPicks.map(p=><div key={p.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderBottom:`1px solid ${C.border}`}}>
-              {logo(p.picked_team,20)}<span style={{flex:1,fontSize:12,color:C.text}}>{p.picked_team}</span>
-              <span style={{fontSize:11,color:C.dim}}>vs {p.picked_team===p.home_team?p.away_team:p.home_team}</span>
-              {p.scored?<Tag c={p.correct?"#00FF9D":"#ff6666"}>{p.correct?"✅":"❌"}</Tag>:<Tag c={C.muted}>Pend.</Tag>}
-            </div>)}
-          </Card>;
-        })}
-      </>}
+            {Object.keys(histByDate).length>0&&(()=>{
+              const chartData=Object.entries(histByDate).slice(-14).map(([date,dp])=>({
+                day:new Date(date+"T12:00:00").toLocaleDateString("es",{weekday:"short",day:"numeric"}),
+                pct:dp.length?Math.round(dp.filter(p=>p.correct).length/dp.length*100):0,
+              }));
+              return<ResponsiveContainer width="100%" height={100}>
+                <BarChart data={chartData} margin={{top:4,right:4,left:-24,bottom:0}}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.border}/>
+                  <XAxis dataKey="day" tick={{fill:C.muted,fontSize:9}} axisLine={false} tickLine={false}/>
+                  <YAxis domain={[0,100]} tick={{fill:C.muted,fontSize:9}} axisLine={false} tickLine={false}/>
+                  <Tooltip content={({active,payload,label})=>active&&payload?.length?<div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px"}}><p style={{color:C.muted,fontSize:9,marginBottom:2}}>{label}</p><p style={{color:C.accent,fontSize:12,fontWeight:700}}>{payload[0].value}% precisión</p></div>:null}/>
+                  <Bar dataKey="pct" fill={C.accent} radius={[4,4,0,0]} maxBarSize={28}/>
+                </BarChart>
+              </ResponsiveContainer>;
+            })()}
+          </Card>}
+          {Object.keys(histByDate).length===0?<Card style={{textAlign:"center",padding:40}}><div style={{fontSize:36,marginBottom:8}}>📅</div><div style={{fontSize:15,fontWeight:700,color:C.text}}>Sin historial aún</div><div style={{fontSize:12,color:C.dim,marginTop:6}}>Tus picks de los últimos 30 días aparecerán aquí</div></Card>
+          :Object.entries(histByDate).map(([date,dayPicks])=>{
+            const correct=dayPicks.filter(p=>p.correct).length;
+            const pts=dayPicks.reduce((s,p)=>s+(p.points||0),0);
+            return <Card key={date} style={{marginBottom:12}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <div style={{fontSize:12,fontWeight:700,color:C.text}}>{new Date(date+"T12:00:00").toLocaleDateString("es",{weekday:"long",month:"short",day:"numeric"})}</div>
+                <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <Tag c={correct===dayPicks.length&&dayPicks.length>0?"#00FF9D":"#FFB800"}>{correct}/{dayPicks.length} ✅</Tag><Tag c={C.accent}>{pts>=0?"+":""}{pts} pts</Tag>
+                <button className="btn" onClick={()=>sharePicksImage(date,dayPicks)} style={{padding:"3px 8px",borderRadius:8,background:"#ffffff11",border:"1px solid #ffffff22",color:C.dim,fontSize:10}}>📸</button>
+              </div>
+              </div>
+              {dayPicks.map(p=><div key={p.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderBottom:`1px solid ${C.border}`}}>
+                {logo(p.picked_team,20)}<span style={{flex:1,fontSize:12,color:C.text}}>{p.picked_team}</span>
+                <span style={{fontSize:11,color:C.dim}}>vs {p.picked_team===p.home_team?p.away_team:p.home_team}</span>
+                {p.confidence>1&&<Tag c={p.confidence===2?"#FFB800":"#FF6B35"}>{p.confidence}x</Tag>}
+                {p.scored?<Tag c={p.correct?"#00FF9D":"#ff6666"}>{p.correct?`✅ +${p.points||0}`:`❌ ${p.points||0}`}</Tag>:<Tag c={C.muted}>Pend.</Tag>}
+              </div>)}
+            </Card>;
+          })}
+        </>;
+      })()}
 
       {/* ─── GRUPO — apuestas del grupo ─── */}
       {subTab==="grupo"&&<>

@@ -448,14 +448,14 @@ export default async function handler(req, res) {
         return res.json({ ok: true, available: !existing?.length });
       }
 
-      // ─── PICK HISTORY (last 7 days) ───────────────────────
+      // ─── PICK HISTORY (last 30 days) ──────────────────────
       case "pickHistory": {
         const { userId, groupId } = req.query;
         if (!userId || !groupId) return res.json({ ok: false, error: "userId y groupId requeridos" });
         const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - 7);
+        cutoff.setDate(cutoff.getDate() - 30);
         const picks = await supabase("picks", {
-          filters: `?user_id=eq.${userId}&group_id=eq.${groupId}&game_date=gte.${cutoff.toISOString().split("T")[0]}&order=game_date.desc,created_at.desc&limit=100`,
+          filters: `?user_id=eq.${userId}&group_id=eq.${groupId}&game_date=gte.${cutoff.toISOString().split("T")[0]}&order=game_date.desc,created_at.desc&limit=300`,
         });
         return res.json({ ok: true, picks: picks || [] });
       }
