@@ -172,6 +172,20 @@ function useUser() {
   return { user, save, logout };
 }
 
+/* ═══ WIN PROBABILITY + DYNAMIC PTS ═══ */
+const calcWinPct=(g,side,st)=>{
+  if(!st?.length)return 50;
+  if(g.status==="Final")return side==="away"?(g.awayScore>g.homeScore?100:0):(g.homeScore>g.awayScore?100:0);
+  if(g.status==="LIVE"){const diff=side==="away"?g.awayScore-g.homeScore:g.homeScore-g.awayScore;return Math.min(95,Math.max(5,50+diff*2.5));}
+  const homeT=st.find(s=>s.abbr===g.home);const awayT=st.find(s=>s.abbr===g.away);
+  const hR=homeT&&(homeT.w+homeT.l)>0?homeT.w/(homeT.w+homeT.l):0.5;
+  const aR=awayT&&(awayT.w+awayT.l)>0?awayT.w/(awayT.w+awayT.l):0.5;
+  const hProb=Math.min(95,Math.max(5,Math.round((hR+0.03)/(hR+0.03+aR)*100)));
+  return side==="home"?hProb:100-hProb;
+};
+const dynBase=(pct)=>Math.min(18,Math.max(3,Math.round(10-(pct-50)/5)));
+const dynPts=(pct,conf=1)=>dynBase(pct)*conf;
+
 /* ═══ HOME TAB ═══ */
 const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
   const {user}=userCtx||{};
@@ -186,6 +200,7 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
   const [showPctInfo,setShowPctInfo]=useState(false);
   const [bonusClaimed,setBonusClaimed]=useState(null);
   const [bonusMsg,setBonusMsg]=useState("");
+  const [picksPoints,setPicksPoints]=useState({});
   const [streak,setStreak]=useState(0);
   const [weeklyStats,setWeeklyStats]=useState(null);
   useEffect(()=>{
@@ -202,7 +217,7 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         setGroup(g);
         localStorage.setItem("courtiq_lastgroup_obj",JSON.stringify(g));
         pickemAPI("myPicks",{params:{userId:user.id,groupId:g.id,date:today}}).then(r=>{
-          if(r.ok){const m={};(r.picks||[]).forEach(p=>{m[p.game_id]=p.picked_team;});setPicks(m);}
+          if(r.ok){const m={},pts={};(r.picks||[]).forEach(p=>{m[p.game_id]=p.picked_team;if(p.points!=null)pts[p.game_id]=p.points;});setPicks(m);setPicksPoints(pts);}
           setLoaded(true);
         });
         pickemAPI("groupPicks",{params:{groupId:g.id}}).then(r=>{if(r.ok)setGrpPicks(r.picks||[]);});
@@ -226,23 +241,15 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
   };
 
   const anyStarted=games.some(g=>g.status==="LIVE"||g.status==="Final");
-  const winPct=(g,side)=>{
-    if(g.status==="Final") return side==="away"?(g.awayScore>g.homeScore?100:0):(g.homeScore>g.awayScore?100:0);
-    if(g.status==="LIVE"){const diff=side==="away"?g.awayScore-g.homeScore:g.homeScore-g.awayScore;return Math.min(95,Math.max(5,50+diff*2.5));}
-    const homeT=standings.find(s=>s.abbr===g.home);
-    const awayT=standings.find(s=>s.abbr===g.away);
-    const hR=homeT&&(homeT.w+homeT.l)>0?homeT.w/(homeT.w+homeT.l):0.5;
-    const aR=awayT&&(awayT.w+awayT.l)>0?awayT.w/(awayT.w+awayT.l):0.5;
-    const hProb=Math.min(95,Math.max(5,Math.round((hR+0.03)/(hR+0.03+aR)*100)));
-    return side==="home"?hProb:100-hProb;
-  };
 
-  const makePick=async(gameId,team,home,away)=>{
+  const makePick=async(gameId,team,home,away,g)=>{
     if(!group||!user)return;
     setPicks(p=>({...p,[gameId]:team}));
     const today=new Date().toISOString().split("T")[0];
     const conf=confidence[gameId]||1;
-    await pickemAPI("makePick",{body:{userId:user.id,groupId:group.id,gameId,gameDate:today,pickedTeam:team,homeTeam:home,awayTeam:away,confidence:conf}});
+    const pickedSide=team===home?"home":"away";
+    const wPct=g?.status==="Upcoming"?calcWinPct(g,pickedSide,standings):50;
+    await pickemAPI("makePick",{body:{userId:user.id,groupId:group.id,gameId,gameDate:today,pickedTeam:team,homeTeam:home,awayTeam:away,confidence:conf,winPct:wPct}});
   };
 
   const claimBonus=async()=>{
@@ -316,7 +323,6 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         const isUpcoming=g.startTime?new Date()<new Date(g.startTime):g.status==="Upcoming";
         const winner=isFinal?(g.homeScore>g.awayScore?g.home:g.away):null;
         const correct=isFinal&&picked===winner;
-        const awayPct=winPct(g,"away");const homePct=winPct(g,"home");
         const minsLeft=g.startTime&&isUpcoming?Math.max(0,Math.round((new Date(g.startTime)-new Date())/60000)):null;
         const showGrpSection=lockedPicks&&expandedCard===g.id;
         const gp=grpPicks.filter(p=>p.game_id===g.id);
@@ -324,6 +330,8 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         const forHome=gp.filter(p=>p.picked_team===g.home);
         const canPick=user&&group&&isUpcoming&&!lockedPicks&&!anyStarted;
         const conf=confidence[g.id]||1;
+        const awayPct=calcWinPct(g,"away",standings);const homePct=calcWinPct(g,"home",standings);
+        const pickedPct=picked?(picked===g.home?homePct:awayPct):50;
         return <Card key={g.id} style={{padding:16,borderColor:isFinal&&picked?(correct?"#00FF9D55":"#ff444455"):isLive&&picked?`${tm(picked).color}55`:picked?`${tm(picked).color}44`:C.border,borderWidth:picked?2:1}}>
 
         {/* Header: estado + tu pick */}
@@ -334,25 +342,25 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
             :<Tag c={C.accent}>{g.detail||"Hoy"}</Tag>}
           </div>
           <div style={{display:"flex",gap:6,alignItems:"center"}}>
-            {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{(()=>{const c2=confidence[g.id]||1;return correct?`✅ +${c2*10} pts`:(c2>=2?`❌ -${c2*10} pts`:"❌ 0 pts");})()}</Tag>}
+            {isFinal&&picked&&(()=>{const ap=picksPoints[g.id];const c2=conf;return<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?`✅ +${ap??dynPts(pickedPct,c2)} pts`:(c2>=2?`❌ ${ap??-dynPts(pickedPct,c2)} pts`:"❌ 0 pts")}</Tag>;})()}
             {isLive&&picked&&<Tag c={tm(picked).color}>● {picked}</Tag>}
-            {!isFinal&&!isLive&&picked&&!lockedPicks&&<Tag c="#00FF9D">✓ {picked}</Tag>}
+            {!isFinal&&!isLive&&picked&&!lockedPicks&&<Tag c="#00FF9D">✓ {picked} · +{dynPts(pickedPct,conf)} pts</Tag>}
             {lockedPicks&&picked&&!isFinal&&<Tag c="#FF6B35">🔒 {picked}</Tag>}
           </div>
         </div>
 
         {/* Vista del juego — siempre visible */}
         <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:10,alignItems:"center"}}>
-          {[["away",g.away,g.awayScore],["vs"],["home",g.home,g.homeScore]].map((item,idx)=>
+          {[["away",g.away,g.awayScore,awayPct],["vs"],["home",g.home,g.homeScore,homePct]].map((item,idx)=>
             idx===1
               ?<div key="vs" style={{textAlign:"center",fontSize:14,color:C.muted,fontWeight:900}}>VS</div>
               :canPick
-                ?<button key={item[1]} className="btn" onClick={()=>makePick(g.id,item[1],g.home,g.away)} style={{padding:"14px 8px",borderRadius:14,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:5,background:picked===item[1]?`${tm(item[1]).color}22`:"#0a1018",border:`2.5px solid ${picked===item[1]?tm(item[1]).color:C.border}`,color:picked===item[1]?tm(item[1]).color:C.text,width:"100%",position:"relative"}}>
+                ?<button key={item[1]} className="btn" onClick={()=>makePick(g.id,item[1],g.home,g.away,g)} style={{padding:"14px 8px",borderRadius:14,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:5,background:picked===item[1]?`${tm(item[1]).color}22`:"#0a1018",border:`2.5px solid ${picked===item[1]?tm(item[1]).color:C.border}`,color:picked===item[1]?tm(item[1]).color:C.text,width:"100%",position:"relative"}}>
                     {picked===item[1]&&<div style={{position:"absolute",top:6,right:6,width:18,height:18,borderRadius:"50%",background:tm(item[1]).color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:"#07090f",fontWeight:900}}>✓</div>}
                     {logo(item[1],44)}
                     <span style={{fontSize:15,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif"}}>{item[1]}</span>
                     <span style={{fontSize:10,color:picked===item[1]?tm(item[1]).color:C.dim}}>{tm(item[1]).name}</span>
-                    {!picked&&<span style={{fontSize:9,color:C.muted,marginTop:2}}>Toca para elegir</span>}
+                    <span style={{fontSize:10,fontWeight:700,color:picked===item[1]?tm(item[1]).color:"#FFB800",background:picked===item[1]?"transparent":"#FFB80015",borderRadius:8,padding:"1px 6px",marginTop:2}}>+{dynBase(item[3]??50)} pts</span>
                   </button>
                 :<div key={item[1]} style={{textAlign:"center",padding:"12px 8px",opacity:picked&&picked!==item[1]?0.35:1}}>
                     {logo(item[1],44)}
@@ -365,7 +373,7 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         {/* Confidence multiplier — visible al hacer pick */}
         {canPick&&picked&&<div style={{marginTop:10,display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}>
           <span style={{fontSize:10,color:C.muted}}>Confianza:</span>
-          {[1,2,3].map(c=>{const labels={1:"✅ +10",2:"🔥 ±20",3:"⚡ ±30"};const descs={1:"seguro",2:"riesgo",3:"alto riesgo"};return<button key={c} className="btn" onClick={()=>{setConfidence(cf=>({...cf,[g.id]:c}));pickemAPI("makePick",{body:{userId:user.id,groupId:group.id,gameId:g.id,gameDate:new Date().toISOString().split("T")[0],pickedTeam:picked,homeTeam:g.home,awayTeam:g.away,confidence:c}});}} style={{padding:"5px 10px",borderRadius:8,background:conf===c?(c===1?`#00FF9D22`:c===2?`#FF6B3522`:`#ff444422`):"#0a1018",border:`1px solid ${conf===c?(c===1?"#00FF9D44":c===2?"#FF6B3544":"#ff444444"):C.border}`,color:conf===c?(c===1?"#00FF9D":c===2?"#FF6B35":"#ff4444"):C.muted,fontSize:10,fontWeight:700,display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><span>{labels[c]}</span><span style={{fontSize:8,opacity:.7}}>{descs[c]}</span></button>;})}
+          {[1,2,3].map(c=>{const pts=dynPts(pickedPct,c);const labels={1:`✅ +${pts}`,2:`🔥 ±${pts}`,3:`⚡ ±${pts}`};const descs={1:"seguro",2:"riesgo",3:"alto riesgo"};return<button key={c} className="btn" onClick={()=>{setConfidence(cf=>({...cf,[g.id]:c}));pickemAPI("makePick",{body:{userId:user.id,groupId:group.id,gameId:g.id,gameDate:new Date().toISOString().split("T")[0],pickedTeam:picked,homeTeam:g.home,awayTeam:g.away,confidence:c,winPct:pickedPct}});}} style={{padding:"5px 10px",borderRadius:8,background:conf===c?(c===1?`#00FF9D22`:c===2?`#FF6B3522`:`#ff444422`):"#0a1018",border:`1px solid ${conf===c?(c===1?"#00FF9D44":c===2?"#FF6B3544":"#ff444444"):C.border}`,color:conf===c?(c===1?"#00FF9D":c===2?"#FF6B35":"#ff4444"):C.muted,fontSize:10,fontWeight:700,display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><span>{labels[c]}</span><span style={{fontSize:8,opacity:.7}}>{descs[c]}</span></button>;})}
         </div>}
 
         {/* Consenso del grupo — visible siempre cuando hay picks */}
@@ -687,7 +695,7 @@ const getBorderColor=(items=[])=>{
   if(items.includes("border_neon"))return "#00C2FF";
   return null;
 };
-const PickemTab=({games,userCtx,initSubTab,standalone})=>{
+const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
   const {user,save}=userCtx;
   const [name,setName]=useState("");const [groups,setGroups]=useState([]);const [selGroup,setSelGroup]=useState(null);
   const [picks,setPicks]=useState({});const [leaderboard,setLeaderboard]=useState([]);
@@ -699,6 +707,7 @@ const PickemTab=({games,userCtx,initSubTab,standalone})=>{
   const [copied,setCopied]=useState(false);
   const [nameStatus,setNameStatus]=useState(null);
   // New features state
+  const [picksPoints,setPicksPoints]=useState({});
   const [history,setHistory]=useState([]);
   const [grpPicks,setGrpPicks]=useState([]);
   const [balance,setBalance]=useState(null);
@@ -770,7 +779,7 @@ const PickemTab=({games,userCtx,initSubTab,standalone})=>{
     if(localStorage.getItem(`courtiq_locked_${selGroup.id}_${today}`)) setLockedPicks(true);
     else setLockedPicks(false);
     pickemAPI("myPicks",{params:{userId:user.id,groupId:selGroup.id,date:today}}).then(d=>{
-      if(d.ok){const map={};(d.picks||[]).forEach(p=>{map[p.game_id]=p.picked_team;});setPicks(map);}
+      if(d.ok){const map={},pts={};(d.picks||[]).forEach(p=>{map[p.game_id]=p.picked_team;if(p.points!=null)pts[p.game_id]=p.points;});setPicks(map);setPicksPoints(pts);}
     });
     pickemAPI("leaderboard",{params:{groupId:selGroup.id}}).then(d=>{
       if(d.ok){
@@ -862,11 +871,13 @@ const PickemTab=({games,userCtx,initSubTab,standalone})=>{
     setLoading(false);
   };
 
-  const makePick=async(gameId,team,homeTeam,awayTeam,conf=1)=>{
+  const makePick=async(gameId,team,homeTeam,awayTeam,conf=1,g=null)=>{
     if(!selGroup) return;
     const today=new Date().toISOString().split("T")[0];
     setPicks(p=>({...p,[gameId]:team}));
-    await pickemAPI("makePick",{body:{userId:user.id,groupId:selGroup.id,gameId,gameDate:today,pickedTeam:team,homeTeam,awayTeam,confidence:conf}});
+    const pickedSide=team===homeTeam?"home":"away";
+    const wPct=g?.status==="Upcoming"?calcWinPct(g,pickedSide,standings):50;
+    await pickemAPI("makePick",{body:{userId:user.id,groupId:selGroup.id,gameId,gameDate:today,pickedTeam:team,homeTeam,awayTeam,confidence:conf,winPct:wPct}});
   };
 
   const copyCode=()=>{
@@ -1129,7 +1140,7 @@ const PickemTab=({games,userCtx,initSubTab,standalone})=>{
                 :minsLeft!==null?(minsLeft<=1?<Tag c="#ff4444">⏱ Iniciando...</Tag>:minsLeft<=60?<Tag c={minsLeft<=15?"#ff6666":"#FF6B35"}>⏱ {minsLeft} min</Tag>:<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>)
                 :<Tag c={C.accent}>{g.detail||"Próximo"}</Tag>}
               </div>
-              {isFinal&&picked&&<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?`✅ +${(confidence[g.id]||1)*10}`:"❌"}</Tag>}
+              {isFinal&&picked&&(()=>{const c2=confidence[g.id]||1;const ap=picksPoints[g.id];const pPct=picked===g.home?calcWinPct(g,"home",standings):calcWinPct(g,"away",standings);return<Tag c={correct?"#00FF9D":"#ff4444"}>{correct?`✅ +${ap??dynPts(pPct,c2)} pts`:(c2>=2?`❌ ${ap??-dynPts(pPct,c2)} pts`:"❌ 0 pts")}</Tag>;})()}
               {isLive&&picked&&<Tag c={tm(picked).color}>● {picked}</Tag>}
               {isUpcoming&&picked&&<Tag c="#00FF9D">✓ {picked}</Tag>}
               {isUpcoming&&!picked&&<Tag c={C.accent}>Elige</Tag>}
@@ -1139,8 +1150,9 @@ const PickemTab=({games,userCtx,initSubTab,standalone})=>{
               {[["away",g.away,g.awayScore],["vs"],["home",g.home,g.homeScore]].map((item,idx)=>
                 idx===1?<div key="vs" style={{textAlign:"center",fontSize:12,color:C.muted,fontWeight:800}}>VS</div>
                 :isUpcoming&&!lockedPicks&&!anyStarted?
-                  <button key={item[1]} className="btn" onClick={()=>makePick(g.id,item[1],g.home,g.away)} style={{padding:"12px 8px",borderRadius:12,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:picked===item[1]?`${tm(item[1]).color}18`:"transparent",border:`2px solid ${picked===item[1]?tm(item[1]).color:C.border}`,color:picked===item[1]?tm(item[1]).color:C.text,width:"100%"}}>
+                  <button key={item[1]} className="btn" onClick={()=>makePick(g.id,item[1],g.home,g.away,confidence[g.id]||1,g)} style={{padding:"12px 8px",borderRadius:12,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:picked===item[1]?`${tm(item[1]).color}18`:"transparent",border:`2px solid ${picked===item[1]?tm(item[1]).color:C.border}`,color:picked===item[1]?tm(item[1]).color:C.text,width:"100%"}}>
                     {logo(item[1],36)}<span style={{fontSize:13,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif"}}>{item[1]}</span><span style={{fontSize:10,color:C.dim}}>{tm(item[1]).name}</span>
+                    <span style={{fontSize:10,fontWeight:700,color:picked===item[1]?tm(item[1]).color:"#FFB800"}}>+{dynBase(calcWinPct(g,item[0]==="away"?"away":"home",standings))} pts</span>
                   </button>
                 :<div key={item[1]} style={{textAlign:"center",padding:"12px 8px",opacity:picked&&picked!==item[1]?0.4:1}}>
                     {logo(item[1],36)}<div style={{fontSize:13,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:picked===item[1]?tm(item[1]).color:C.text,marginTop:4}}>{item[1]}</div>
@@ -2919,9 +2931,9 @@ export default function App(){
       {tab==="home"&&<HomeTab games={games} live={live} userCtx={userCtx} standings={standings} goToBets={()=>setTab("apuestas")} goToGroup={()=>setTab("pickem")}/>}
       {tab==="teams"&&<TeamsTab standings={standings} live={live}/>}
       {tab==="players"&&<PlayersTab players={players} live={live}/>}
-      {tab==="pickem"&&<PickemTab games={games} userCtx={userCtx} initSubTab="picks"/>}
-      {tab==="apuestas"&&<PickemTab games={games} userCtx={userCtx} initSubTab="apuestas" standalone/>}
-      {tab==="parlay"&&<PickemTab games={games} userCtx={userCtx} initSubTab="parlay" standalone/>}
+      {tab==="pickem"&&<PickemTab games={games} standings={standings} userCtx={userCtx} initSubTab="picks"/>}
+      {tab==="apuestas"&&<PickemTab games={games} standings={standings} userCtx={userCtx} initSubTab="apuestas" standalone/>}
+      {tab==="parlay"&&<PickemTab games={games} standings={standings} userCtx={userCtx} initSubTab="parlay" standalone/>}
       {tab==="shop"&&<ShopTab userCtx={userCtx}/>}
       {tab==="bracket"&&<BracketTab userCtx={userCtx} standings={standings}/>}
       {tab==="games"&&<MiniGamesTab players={players} userCtx={userCtx}/>}

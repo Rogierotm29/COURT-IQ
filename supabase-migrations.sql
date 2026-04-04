@@ -12,8 +12,9 @@ alter table users add column if not exists avatar_emoji text default '🏀';
 alter table users add column if not exists last_daily_bonus date;
 alter table users add column if not exists streak_shields int default 0;
 
--- picks: confianza (1x/2x/3x)
+-- picks: confianza (1x/2x/3x) y probabilidad al momento del pick
 alter table picks add column if not exists confidence int default 1;
+alter table picks add column if not exists win_pct int default 50;
 
 -- groups: emoji
 alter table groups add column if not exists emoji text default '🏀';

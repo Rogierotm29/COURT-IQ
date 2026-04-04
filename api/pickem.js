@@ -147,16 +147,17 @@ export default async function handler(req, res) {
 
       // ─── MAKE PICK ────────────────────────────────────────
       case "makePick": {
-        const { userId, groupId, gameId, gameDate, pickedTeam, homeTeam, awayTeam, confidence } = body;
+        const { userId, groupId, gameId, gameDate, pickedTeam, homeTeam, awayTeam, confidence, winPct } = body;
         if (!userId || !groupId || !gameId || !pickedTeam)
           return res.json({ ok: false, error: "Faltan datos" });
         const conf = Math.min(3, Math.max(1, parseInt(confidence) || 1));
+        const wPct = Math.min(95, Math.max(5, parseInt(winPct) || 50));
         const existing = await supabase("picks", {
           filters: `?user_id=eq.${userId}&group_id=eq.${groupId}&game_id=eq.${gameId}`,
         });
         if (existing?.length) {
           await supabase(`picks?id=eq.${existing[0].id}`, {
-            method: "PATCH", body: { picked_team: pickedTeam, confidence: conf },
+            method: "PATCH", body: { picked_team: pickedTeam, confidence: conf, win_pct: wPct },
           });
           return res.json({ ok: true, updated: true });
         }
@@ -165,7 +166,7 @@ export default async function handler(req, res) {
           body: {
             user_id: userId, group_id: groupId, game_id: gameId,
             game_date: gameDate || new Date().toISOString().split("T")[0],
-            picked_team: pickedTeam, home_team: homeTeam, away_team: awayTeam, confidence: conf,
+            picked_team: pickedTeam, home_team: homeTeam, away_team: awayTeam, confidence: conf, win_pct: wPct,
           },
         });
         grantAchievement(userId, "first_pick");
@@ -256,8 +257,12 @@ export default async function handler(req, res) {
           if (!winner) continue;
           const correct = pick.picked_team === winner;
           const conf = pick.confidence || 1;
-          // conf=1 es seguro (sin penalización), conf>=2 tiene riesgo
-          const points = correct ? conf * 10 : (conf >= 2 ? -(conf * 10) : 0);
+          // Dynamic base pts: more reward for underdogs, less for favorites
+          // base = clamp(10 - (winPct - 50) / 5, 3, 18)
+          const wPct = pick.win_pct || 50;
+          const base = Math.min(18, Math.max(3, Math.round(10 - (wPct - 50) / 5)));
+          // conf=1 safe (no penalty), conf>=2 risk/reward scaled by base
+          const points = correct ? base * conf : (conf >= 2 ? -(base * conf) : 0);
           await supabase(`picks?id=eq.${pick.id}`, {
             method: "PATCH", body: { correct, scored: true, points },
           });
@@ -315,7 +320,7 @@ export default async function handler(req, res) {
                 const sub = { endpoint: subs[0].endpoint, keys: { p256dh: subs[0].p256dh, auth: subs[0].auth } };
                 await webpush.default.sendNotification(sub, JSON.stringify({
                   title: "✅ ¡Acertaste!",
-                  body: `Tu pick de ${pick.picked_team} fue correcto — +${conf * 10} pts 🏀${conf > 1 ? ` (${conf}x 🔥)` : ""}`,
+                  body: `Tu pick de ${pick.picked_team} fue correcto — +${points} pts 🏀${conf > 1 ? ` (${conf}x 🔥)` : ""}`,
                   tag: "pick-correct-" + pick.id, url: "/",
                 })).catch(() => {});
               }
