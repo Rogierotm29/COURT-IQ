@@ -287,7 +287,7 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
       </div>)}
     </div>}
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><ST sub="NBA 2025-26 · Hoy">Partidos del Día</ST><LiveBadge live={live.games}/></div>
-    {user&&group&&anyStarted&&games.some(g=>g.status==="Upcoming")&&<div style={{marginBottom:12,padding:"10px 14px",background:"#00C2FF11",border:"1px solid #00C2FF33",borderRadius:10,fontSize:11,color:C.accent,display:"flex",alignItems:"center",gap:8}}>🎯 Algunos partidos ya empezaron — todavía puedes elegir en los que <b>aún no han iniciado</b></div>}
+    {user&&group&&anyStarted&&<div style={{marginBottom:12,padding:"10px 14px",background:"#ff444411",border:"1px solid #ff444433",borderRadius:10,fontSize:11,color:"#ff6666",display:"flex",alignItems:"center",gap:8}}>🔒 Un partido ya empezó — picks cerrados para hoy</div>}
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:10,marginBottom:28}}>
       {games.length===0?<div style={{color:C.muted,fontSize:13}}>No hay partidos programados.</div>
       :games.map(g=>{
@@ -301,7 +301,7 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         const gp=grpPicks.filter(p=>p.game_id===g.id);
         const forAway=gp.filter(p=>p.picked_team===g.away);
         const forHome=gp.filter(p=>p.picked_team===g.home);
-        const canPick=user&&group&&isUpcoming&&!lockedPicks;
+        const canPick=user&&group&&isUpcoming&&!lockedPicks&&!anyStarted;
         const conf=confidence[g.id]||1;
         return <Card key={g.id} style={{padding:16,borderColor:isFinal&&picked?(correct?"#00FF9D55":"#ff444455"):isLive&&picked?`${tm(picked).color}55`:picked?`${tm(picked).color}44`:C.border,borderWidth:picked?2:1}}>
 
@@ -1092,8 +1092,8 @@ const PickemTab=({games,userCtx,initSubTab,standalone})=>{
 
       {/* ─── PICKS ─── */}
       {subTab==="picks"&&<>
-        {upcoming.length>0&&<div style={{padding:"10px 14px",background:"#00C2FF11",border:"1px solid #00C2FF33",borderRadius:10,marginBottom:14,fontSize:11,color:C.accent}}>🎯 {upcoming.length} partido{upcoming.length!==1?"s":""} abierto{upcoming.length!==1?"s":""} — toca un equipo para elegir ganador</div>}
-        {anyStarted&&upcoming.length===0&&<div style={{padding:"10px 14px",background:"#ff444411",border:"1px solid #ff444433",borderRadius:10,marginBottom:14,fontSize:11,color:"#ff6666"}}>🔒 Todos los partidos de hoy ya empezaron · Los picks están cerrados</div>}
+        {!anyStarted&&!lockedPicks&&upcoming.length>0&&<div style={{padding:"10px 14px",background:"#00C2FF11",border:"1px solid #00C2FF33",borderRadius:10,marginBottom:14,fontSize:11,color:C.accent}}>🎯 {upcoming.length} partido{upcoming.length!==1?"s":""} abierto{upcoming.length!==1?"s":""} — toca un equipo para elegir ganador</div>}
+        {(anyStarted||lockedPicks)&&<div style={{padding:"10px 14px",background:"#ff444411",border:"1px solid #ff444433",borderRadius:10,marginBottom:14,fontSize:11,color:"#ff6666"}}>🔒 {anyStarted?"Un partido ya empezó — picks":"Picks"} cerrados para hoy</div>}
         {allGames.length===0?<Card style={{textAlign:"center",padding:40}}><div style={{fontSize:36,marginBottom:8}}>🌙</div><div style={{fontSize:15,fontWeight:700,color:C.text}}>No hay partidos hoy</div></Card>
         :allGames.map(g=>{
           const picked=picks[g.id];const isFinal=g.status==="Final";const isLive=g.status==="LIVE";
@@ -1117,7 +1117,7 @@ const PickemTab=({games,userCtx,initSubTab,standalone})=>{
             <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:10,alignItems:"center"}}>
               {[["away",g.away,g.awayScore],["vs"],["home",g.home,g.homeScore]].map((item,idx)=>
                 idx===1?<div key="vs" style={{textAlign:"center",fontSize:12,color:C.muted,fontWeight:800}}>VS</div>
-                :isUpcoming&&!lockedPicks?
+                :isUpcoming&&!lockedPicks&&!anyStarted?
                   <button key={item[1]} className="btn" onClick={()=>makePick(g.id,item[1],g.home,g.away)} style={{padding:"12px 8px",borderRadius:12,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:picked===item[1]?`${tm(item[1]).color}18`:"transparent",border:`2px solid ${picked===item[1]?tm(item[1]).color:C.border}`,color:picked===item[1]?tm(item[1]).color:C.text,width:"100%"}}>
                     {logo(item[1],36)}<span style={{fontSize:13,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif"}}>{item[1]}</span><span style={{fontSize:10,color:C.dim}}>{tm(item[1]).name}</span>
                   </button>
