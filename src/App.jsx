@@ -699,6 +699,7 @@ const PickemTab=({games,userCtx,initSubTab,standalone})=>{
   const [parlay,setParlay]=useState(null);const [parlaySelections,setParlaySelections]=useState({});const [parlayLoading,setParlayLoading]=useState(false);
   const [shopItems,setShopItems]=useState([]);
   const [lockedPicks,setLockedPicks]=useState(false);
+  const [confidence,setConfidence]=useState({});
   const [editGroup,setEditGroup]=useState(false);const [editGroupName,setEditGroupName]=useState("");const [editGroupEmoji,setEditGroupEmoji]=useState("");
   const [profileModal,setProfileModal]=useState(null);const [profileData,setProfileData]=useState(null);
   const now=new Date();
@@ -764,21 +765,12 @@ const PickemTab=({games,userCtx,initSubTab,standalone})=>{
     pickemAPI("dailyWinner",{params:{groupId:selGroup.id}}).then(d=>{if(d.ok)setDailyWinner(d.winner);});
   },[user,selGroup]);
 
-  // Period/season leaderboard fetch
+  // Period leaderboard (mes/semana) — temporada usa el estado leaderboard ya cargado
   useEffect(()=>{
-    if(!selGroup) return;
-    if(lbPeriod==="season"){
-      pickemAPI("leaderboard",{params:{groupId:selGroup.id}}).then(d=>{
-        if(d.ok) setLeaderboard(d.leaderboard||[]);
-      });
-    } else {
-      pickemAPI("periodLeaderboard",{params:{groupId:selGroup.id,period:lbPeriod}}).then(d=>{
-        if(d.ok){
-          const shopMap={};leaderboard.forEach(r=>{if(r.user_id)shopMap[r.user_id]=r.shopItems||[];});
-          setPeriodLb((d.leaderboard||[]).map(r=>({...r,shopItems:shopMap[r.user_id]||[]})));
-        }
-      });
-    }
+    if(!selGroup||lbPeriod==="season") return;
+    pickemAPI("periodLeaderboard",{params:{groupId:selGroup.id,period:lbPeriod}}).then(d=>{
+      if(d.ok) setPeriodLb(d.leaderboard||[]);
+    });
   },[selGroup,lbPeriod]);
 
   // Sub-tab specific data
@@ -849,11 +841,11 @@ const PickemTab=({games,userCtx,initSubTab,standalone})=>{
     setLoading(false);
   };
 
-  const makePick=async(gameId,team,homeTeam,awayTeam)=>{
+  const makePick=async(gameId,team,homeTeam,awayTeam,conf=1)=>{
     if(!selGroup) return;
     const today=new Date().toISOString().split("T")[0];
     setPicks(p=>({...p,[gameId]:team}));
-    await pickemAPI("makePick",{body:{userId:user.id,groupId:selGroup.id,gameId,gameDate:today,pickedTeam:team,homeTeam,awayTeam}});
+    await pickemAPI("makePick",{body:{userId:user.id,groupId:selGroup.id,gameId,gameDate:today,pickedTeam:team,homeTeam,awayTeam,confidence:conf}});
   };
 
   const copyCode=()=>{
