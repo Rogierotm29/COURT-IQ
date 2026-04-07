@@ -1,11 +1,24 @@
 import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching'
 import { clientsClaim } from 'workbox-core'
+import { NavigationRoute, registerRoute } from 'workbox-routing'
+import { NetworkFirst } from 'workbox-strategies'
 
 self.skipWaiting()
 clientsClaim()
 
 precacheAndRoute(self.__WB_MANIFEST)
 cleanupOutdatedCaches()
+
+// ─── OFFLINE FALLBACK ─────────────────────────────────────────────────────
+// For navigation requests (page loads), try network first, fall back to cached shell
+registerRoute(
+  new NavigationRoute(
+    new NetworkFirst({
+      cacheName: 'navigation-cache',
+      networkTimeoutSeconds: 5,
+    })
+  )
+)
 
 // ─── PUSH NOTIFICATIONS ───────────────────────────────────────────────────
 self.addEventListener('push', (event) => {

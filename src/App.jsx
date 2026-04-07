@@ -761,6 +761,9 @@ const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
       }
     });
     pickemAPI("getAchievements",{params:{userId:user.id}}).then(d=>{if(d.ok)setAchievements(d.achievements||[]);});
+    // Auto-fill invite code if arrived via invite link
+    const invite=localStorage.getItem("courtiq_invite_code");
+    if(invite){localStorage.removeItem("courtiq_invite_code");setJoinCode(invite);setPanel("join");}
   },[user]);
 
   // Save last selected group and notify FloatingChat
@@ -2524,6 +2527,8 @@ const SettingsTab=({userCtx,installPrompt,onInstalled})=>{
   const [notifLoading,setNotifLoading]=useState(false);
   const [msg,setMsg]=useState("");
   const [achievements,setAchievements]=useState([]);
+  const [showDeleteConfirm,setShowDeleteConfirm]=useState(false);
+  const [deleteLoading,setDeleteLoading]=useState(false);
 
   useEffect(()=>{
     if(!user) return;
@@ -2570,6 +2575,19 @@ const SettingsTab=({userCtx,installPrompt,onInstalled})=>{
     setShowEmojiPicker(false);
     save({...user,avatar_emoji:emoji});
     await pickemAPI("updateProfile",{body:{userId:user.id,avatarEmoji:emoji}});
+  };
+
+  const deleteAccount=async()=>{
+    setDeleteLoading(true);
+    const d=await pickemAPI("deleteAccount",{body:{userId:user.id}});
+    if(d.ok){
+      logout();
+      localStorage.clear();
+    } else {
+      setMsg("Error al eliminar: "+d.error);
+      setShowDeleteConfirm(false);
+    }
+    setDeleteLoading(false);
   };
 
   if(!user) return(
@@ -2680,7 +2698,7 @@ const SettingsTab=({userCtx,installPrompt,onInstalled})=>{
 
     {/* Logros */}
     <ST sub="Logros">Mis Badges</ST>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8,marginBottom:24}}>
       {ACHIEVEMENT_DEFS.filter(a=>!a.key.startsWith("shop_")).map(a=>{
         const unlocked=achievements.some(x=>x.achievement_key===a.key);
         return<Card key={a.key} style={{textAlign:"center",padding:"14px 10px",opacity:unlocked?1:0.35,borderColor:unlocked?`${C.accent}44`:C.border}}>
@@ -2691,6 +2709,43 @@ const SettingsTab=({userCtx,installPrompt,onInstalled})=>{
         </Card>;
       })}
     </div>
+
+    {/* Legal */}
+    <ST sub="Legal">Privacidad</ST>
+    <Card style={{marginBottom:18}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:700,color:C.text}}>Política de Privacidad</div>
+          <div style={{fontSize:10,color:C.dim,marginTop:2}}>Qué datos guardamos y cómo los usamos</div>
+        </div>
+        <a href="/privacy.html" target="_blank" style={{padding:"8px 14px",borderRadius:8,background:`${C.accent}15`,border:`1px solid ${C.accent}33`,color:C.accent,fontSize:12,fontWeight:700,textDecoration:"none",flexShrink:0}}>Ver →</a>
+      </div>
+    </Card>
+
+    {/* Zona peligrosa */}
+    <ST sub="Zona peligrosa">Cuenta</ST>
+    <Card style={{marginBottom:18,borderColor:"#ff444433"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:700,color:"#ff6666"}}>Eliminar cuenta</div>
+          <div style={{fontSize:10,color:C.dim,marginTop:2}}>Borra permanentemente todos tus datos</div>
+        </div>
+        <button className="btn" onClick={()=>setShowDeleteConfirm(true)} style={{padding:"8px 14px",borderRadius:8,background:"#ff444422",border:"1px solid #ff444444",color:"#ff6666",fontSize:12,fontWeight:700,flexShrink:0}}>Eliminar</button>
+      </div>
+    </Card>
+
+    {/* Modal confirmar eliminar */}
+    {showDeleteConfirm&&<div onClick={()=>!deleteLoading&&setShowDeleteConfirm(false)} style={{position:"fixed",inset:0,background:"#00000099",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.card,border:"1px solid #ff444444",borderRadius:20,padding:28,maxWidth:320,width:"100%",textAlign:"center"}}>
+        <div style={{fontSize:44,marginBottom:12}}>⚠️</div>
+        <div style={{fontSize:17,fontWeight:900,color:C.text,marginBottom:8}}>¿Eliminar tu cuenta?</div>
+        <div style={{fontSize:12,color:C.dim,lineHeight:1.6,marginBottom:20}}>Esta acción es <b style={{color:"#ff6666"}}>permanente e irreversible</b>. Se eliminarán todos tus picks, monedas, logros y mensajes.</div>
+        <div style={{display:"flex",gap:10}}>
+          <button className="btn" onClick={()=>setShowDeleteConfirm(false)} disabled={deleteLoading} style={{flex:1,padding:"13px",borderRadius:10,background:"#0a1018",border:`1px solid ${C.border}`,color:C.dim,fontWeight:700,fontSize:13}}>Cancelar</button>
+          <button className="btn" onClick={deleteAccount} disabled={deleteLoading} style={{flex:1,padding:"13px",borderRadius:10,background:"#ff444422",border:"1px solid #ff444444",color:"#ff6666",fontWeight:900,fontSize:13}}>{deleteLoading?<Spin s={13}/>:"Sí, eliminar"}</button>
+        </div>
+      </div>
+    </div>}
   </div>);
 };
 
@@ -2837,12 +2892,21 @@ export default function App(){
   const [pickemInitSubTab,setPickemInitSubTab]=useState("picks");
   const [live,setLive]=useState({games:false,standings:false,players:false});const [loading,setLoading]=useState(false);const [lastUpd,setLastUpd]=useState(null);
   const [installPrompt,setInstallPrompt]=useState(null);
+  const [isOffline,setIsOffline]=useState(!navigator.onLine);
   const userCtx=useUser();
 
   useEffect(()=>{
     const handler=(e)=>{e.preventDefault();setInstallPrompt(e);};
     window.addEventListener("beforeinstallprompt",handler);
     return()=>window.removeEventListener("beforeinstallprompt",handler);
+  },[]);
+
+  useEffect(()=>{
+    const on=()=>setIsOffline(false);
+    const off=()=>setIsOffline(true);
+    window.addEventListener("online",on);
+    window.addEventListener("offline",off);
+    return()=>{window.removeEventListener("online",on);window.removeEventListener("offline",off);};
   },[]);
 
   const refreshAll=useCallback(async()=>{
@@ -2865,15 +2929,23 @@ export default function App(){
   // Auto-score picks on load
   useEffect(()=>{pickemAPI("scoreGames").catch(()=>{});},[]);
 
-  // Handle deep-link URL params from push notifications
+  // Handle deep-link URL params from push notifications and invite links
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search);
     const tabParam=params.get("tab");
     const subtabParam=params.get("subtab");
+    const joinCode=params.get("join");
+    const url=new URL(window.location.href);
+    if(joinCode){
+      // Store invite code so PickemTab auto-fills it, then navigate to Grupos
+      localStorage.setItem("courtiq_invite_code",joinCode.toUpperCase());
+      setTab("pickem");
+      url.searchParams.delete("join");
+      window.history.replaceState({},"",url.toString());
+    }
     if(tabParam){
       setTab(tabParam);
       if(subtabParam&&["apuestas","parlay","picks","ranking","historial","estadisticas"].includes(subtabParam)) setTab(subtabParam);
-      const url=new URL(window.location.href);
       url.searchParams.delete("tab");url.searchParams.delete("subtab");
       window.history.replaceState({},"",url.toString());
     }
@@ -2916,6 +2988,10 @@ export default function App(){
           {[{id:"settings",icon:"⚙️",label:"Configuración"}].map(n=><button key={n.id} className="btn" onClick={()=>{setTab(n.id);setMenuOpen(false);}} style={{padding:"14px 12px",borderRadius:12,background:tab===n.id?`${C.accent}22`:"#0a1018",border:`1.5px solid ${tab===n.id?C.accent:C.border}`,color:tab===n.id?C.accent:C.text,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:8}}>{n.icon} {n.label}</button>)}
         </div>
       </div>
+    </div>}
+    {isOffline&&<div style={{background:"#ff444422",borderBottom:"1px solid #ff444444",padding:"8px 18px",display:"flex",alignItems:"center",gap:10}}>
+      <span style={{fontSize:16}}>📡</span>
+      <span style={{fontSize:12,color:"#ff8888",fontWeight:700}}>Sin conexión — los datos pueden estar desactualizados</span>
     </div>}
     {installPrompt&&<div style={{background:`linear-gradient(135deg,${C.accent}22,#0055ff22)`,borderBottom:`1px solid ${C.accent}33`,padding:"8px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
       <div style={{display:"flex",alignItems:"center",gap:8}}>

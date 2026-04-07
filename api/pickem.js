@@ -784,6 +784,16 @@ export default async function handler(req, res) {
         return res.json({ ok: true });
       }
 
+      // ─── DELETE ACCOUNT ───────────────────────────────────
+      case "deleteAccount": {
+        const { userId } = body;
+        if (!userId) return res.json({ ok: false, error: "userId requerido" });
+        // Cascade deletes handle picks, group_members, coin_balances, bets, chat_messages,
+        // user_achievements, push_subscriptions, notification_prefs via ON DELETE CASCADE
+        await supabase(`users?id=eq.${userId}`, { method: "DELETE" });
+        return res.json({ ok: true });
+      }
+
       // ─── GLOBAL LEADERBOARD ────────────────────────────────
       case "globalLeaderboard": {
         const today = new Date().toISOString().split("T")[0];
