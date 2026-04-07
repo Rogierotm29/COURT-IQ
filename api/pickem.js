@@ -1,8 +1,33 @@
 // /api/pickem.js — Pick'em social system (Supabase backend)
 // Handles: register, createGroup, joinGroup, myGroups, makePick, myPicks, leaderboard, scoreGames
 
+import { createHash } from "crypto";
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY;
+
+// ─── RATE LIMITER (in-memory, resets per cold start) ─────────────────────────
+const rateLimits = new Map();
+function rateLimit(ip, action, max = 30, windowMs = 60_000) {
+  const key = `${ip}:${action}`;
+  const now = Date.now();
+  const entry = rateLimits.get(key) || { count: 0, start: now };
+  if (now - entry.start > windowMs) { entry.count = 0; entry.start = now; }
+  entry.count++;
+  rateLimits.set(key, entry);
+  return entry.count > max;
+}
+
+// ─── PIN HASHING ──────────────────────────────────────────────────────────────
+function hashPin(pin) {
+  return createHash("sha256").update(pin + "courtiq_salt_2026").digest("hex");
+}
+
+// ─── INPUT SANITIZATION ───────────────────────────────────────────────────────
+function sanitize(str, maxLen = 100) {
+  if (typeof str !== "string") return "";
+  return str.trim().slice(0, maxLen).replace(/[<>]/g, "");
+}
 
 async function supabase(path, { method = "GET", body, filters = "" } = {}) {
   const url = `${SUPABASE_URL}/rest/v1/${path}${filters}`;
@@ -57,48 +82,68 @@ export default async function handler(req, res) {
   const { action } = req.query;
   const body = req.method === "POST" ? req.body : {};
 
+  // Rate limiting — stricter on auth, looser on reads
+  const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || "unknown";
+  const authActions = ["register"];
+  const writeActions = ["makePick","createGroup","joinGroup","createBet","acceptBet","sendChat","claimDailyBonus","deleteAccount"];
+  const maxReqs = authActions.includes(action) ? 10 : writeActions.includes(action) ? 60 : 120;
+  if (rateLimit(ip, action, maxReqs)) {
+    return res.status(429).json({ ok: false, error: "Demasiadas solicitudes. Espera un momento." });
+  }
+
   try {
     switch (action) {
       // ─── REGISTER ─────────────────────────────────────────
       case "register": {
-              const { name, emoji, pin } = body;
-              if (!name) return res.json({ ok: false, error: "Nombre requerido" });
-              if (!pin || pin.length !== 4) return res.json({ ok: false, error: "PIN de 4 dígitos requerido" });
-              // Check if user exists
-              const existing = await supabase("users", {
-                filters: `?name=eq.${encodeURIComponent(name.trim())}&limit=1`,
-              });
-              if (existing && existing.length > 0) {
-                // Verify PIN
-                if (existing[0].pin !== pin) {
-                  return res.json({ ok: false, error: "PIN incorrecto" });
-                }
-                return res.json({ ok: true, user: existing[0], reconnected: true });
-              }
-              // Create new user with PIN
-              const [user] = await supabase("users", {
-                method: "POST",
-                body: { name: name.trim(), avatar_emoji: emoji || "🏀", pin },
-              });
-              return res.json({ ok: true, user });
+        const rawName = sanitize(body.name, 30);
+        const rawPin = sanitize(body.pin, 4);
+        const rawEmoji = sanitize(body.emoji || "🏀", 8);
+        if (!rawName) return res.json({ ok: false, error: "Nombre requerido" });
+        if (!rawPin || !/^\d{4}$/.test(rawPin)) return res.json({ ok: false, error: "PIN de 4 dígitos requerido" });
+        const pinHash = hashPin(rawPin);
+        // Check if user exists
+        const existing = await supabase("users", {
+          filters: `?name=eq.${encodeURIComponent(rawName)}&limit=1`,
+        });
+        if (existing && existing.length > 0) {
+          // Verify PIN — support both hashed (new) and plain (legacy migration)
+          const storedPin = existing[0].pin || "";
+          const match = storedPin === pinHash || storedPin === rawPin;
+          if (!match) return res.json({ ok: false, error: "PIN incorrecto" });
+          // Migrate plain PIN to hash on successful login
+          if (storedPin === rawPin) {
+            await supabase(`users?id=eq.${existing[0].id}`, { method: "PATCH", body: { pin: pinHash } });
+          }
+          const { pin: _p, ...safeUser } = existing[0];
+          return res.json({ ok: true, user: safeUser, reconnected: true });
+        }
+        // Create new user with hashed PIN
+        const [newUser] = await supabase("users", {
+          method: "POST",
+          body: { name: rawName, avatar_emoji: rawEmoji, pin: pinHash },
+        });
+        const { pin: _p2, ...safeNewUser } = newUser;
+        return res.json({ ok: true, user: safeNewUser });
       }
 
       // ─── GET USER ─────────────────────────────────────────
       case "getUser": {
         const { userId } = req.query;
         if (!userId) return res.json({ ok: false, error: "userId requerido" });
-        const users = await supabase("users", { filters: `?id=eq.${userId}` });
+        const users = await supabase("users", { filters: `?id=eq.${userId}&select=id,name,avatar_emoji,streak_shields,last_daily_bonus` });
         return res.json({ ok: true, user: users?.[0] || null });
       }
 
       // ─── CREATE GROUP ─────────────────────────────────────
       case "createGroup": {
-        const { name, emoji, userId } = body;
+        const { userId } = body;
+        const name = sanitize(body.name, 40);
+        const emoji = sanitize(body.emoji || "🏀", 8);
         if (!name || !userId) return res.json({ ok: false, error: "name y userId requeridos" });
         const code = genCode();
         const [group] = await supabase("groups", {
           method: "POST",
-          body: { name: name.trim(), code, emoji: emoji || "🏀", owner_id: userId },
+          body: { name, code, emoji, owner_id: userId },
         });
         // Auto-join owner
         await supabase("group_members", {
@@ -147,9 +192,14 @@ export default async function handler(req, res) {
 
       // ─── MAKE PICK ────────────────────────────────────────
       case "makePick": {
-        const { userId, groupId, gameId, gameDate, pickedTeam, homeTeam, awayTeam, confidence, winPct } = body;
+        const { userId, groupId, gameId, gameDate, confidence, winPct } = body;
+        const pickedTeam = sanitize(body.pickedTeam, 5).toUpperCase();
+        const homeTeam = sanitize(body.homeTeam, 5).toUpperCase();
+        const awayTeam = sanitize(body.awayTeam, 5).toUpperCase();
         if (!userId || !groupId || !gameId || !pickedTeam)
           return res.json({ ok: false, error: "Faltan datos" });
+        if (pickedTeam !== homeTeam && pickedTeam !== awayTeam)
+          return res.json({ ok: false, error: "Equipo inválido" });
         const conf = Math.min(3, Math.max(1, parseInt(confidence) || 1));
         const wPct = Math.min(95, Math.max(5, parseInt(winPct) || 50));
         const existing = await supabase("picks", {
@@ -971,7 +1021,8 @@ export default async function handler(req, res) {
 
       // ─── SEND CHAT ─────────────────────────────────────────
       case "sendChat": {
-        const { userId, groupId, content } = body;
+        const { userId, groupId } = body;
+        const content = sanitize(body.content, 500);
         if (!userId || !groupId || !content) return res.json({ ok: false, error: "Faltan datos" });
 
         // Save the message
