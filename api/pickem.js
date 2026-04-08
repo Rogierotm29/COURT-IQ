@@ -206,19 +206,39 @@ export default async function handler(req, res) {
           filters: `?user_id=eq.${userId}&group_id=eq.${groupId}&game_id=eq.${gameId}`,
         });
         if (existing?.length) {
-          await supabase(`picks?id=eq.${existing[0].id}`, {
-            method: "PATCH", body: { picked_team: pickedTeam, confidence: conf, win_pct: wPct },
-          });
+          // Try with win_pct first, fall back without it if column doesn't exist
+          try {
+            await supabase(`picks?id=eq.${existing[0].id}`, {
+              method: "PATCH", body: { picked_team: pickedTeam, confidence: conf, win_pct: wPct },
+            });
+          } catch {
+            await supabase(`picks?id=eq.${existing[0].id}`, {
+              method: "PATCH", body: { picked_team: pickedTeam, confidence: conf },
+            });
+          }
           return res.json({ ok: true, updated: true });
         }
-        const [pick] = await supabase("picks", {
-          method: "POST",
-          body: {
-            user_id: userId, group_id: groupId, game_id: gameId,
-            game_date: gameDate || new Date().toISOString().split("T")[0],
-            picked_team: pickedTeam, home_team: homeTeam, away_team: awayTeam, confidence: conf, win_pct: wPct,
-          },
-        });
+        // Try with win_pct first, fall back without it if column doesn't exist
+        let pick;
+        try {
+          [pick] = await supabase("picks", {
+            method: "POST",
+            body: {
+              user_id: userId, group_id: groupId, game_id: gameId,
+              game_date: gameDate || new Date().toISOString().split("T")[0],
+              picked_team: pickedTeam, home_team: homeTeam, away_team: awayTeam, confidence: conf, win_pct: wPct,
+            },
+          });
+        } catch {
+          [pick] = await supabase("picks", {
+            method: "POST",
+            body: {
+              user_id: userId, group_id: groupId, game_id: gameId,
+              game_date: gameDate || new Date().toISOString().split("T")[0],
+              picked_team: pickedTeam, home_team: homeTeam, away_team: awayTeam, confidence: conf,
+            },
+          });
+        }
         grantAchievement(userId, "first_pick");
         return res.json({ ok: true, pick });
       }

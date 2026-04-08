@@ -217,7 +217,7 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         setGroup(g);
         localStorage.setItem("courtiq_lastgroup_obj",JSON.stringify(g));
         pickemAPI("myPicks",{params:{userId:user.id,groupId:g.id,date:today}}).then(r=>{
-          if(r.ok){const m={},pts={};(r.picks||[]).forEach(p=>{m[p.game_id]=p.picked_team;if(p.points!=null)pts[p.game_id]=p.points;});setPicks(m);setPicksPoints(pts);}
+          if(r.ok){const m={},pts={},conf={};(r.picks||[]).forEach(p=>{m[p.game_id]=p.picked_team;if(p.points!=null)pts[p.game_id]=p.points;if(p.confidence)conf[p.game_id]=p.confidence;});setPicks(m);setPicksPoints(pts);setConfidence(conf);}
           setLoaded(true);
         });
         pickemAPI("groupPicks",{params:{groupId:g.id}}).then(r=>{if(r.ok)setGrpPicks(r.picks||[]);});
@@ -782,7 +782,7 @@ const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
     if(localStorage.getItem(`courtiq_locked_${selGroup.id}_${today}`)) setLockedPicks(true);
     else setLockedPicks(false);
     pickemAPI("myPicks",{params:{userId:user.id,groupId:selGroup.id,date:today}}).then(d=>{
-      if(d.ok){const map={},pts={};(d.picks||[]).forEach(p=>{map[p.game_id]=p.picked_team;if(p.points!=null)pts[p.game_id]=p.points;});setPicks(map);setPicksPoints(pts);}
+      if(d.ok){const map={},pts={},conf={};(d.picks||[]).forEach(p=>{map[p.game_id]=p.picked_team;if(p.points!=null)pts[p.game_id]=p.points;if(p.confidence)conf[p.game_id]=p.confidence;});setPicks(map);setPicksPoints(pts);setConfidence(conf);}
     });
     pickemAPI("leaderboard",{params:{groupId:selGroup.id}}).then(d=>{
       if(d.ok){
