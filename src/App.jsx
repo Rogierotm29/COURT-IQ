@@ -625,6 +625,137 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
   </div>);
 };
 
+/* ═══ OVER/UNDER TAB ═══ */
+const OUTab=({games,userCtx})=>{
+  const {user}=userCtx||{};
+  const [picks,setPicks]=useState({}); // {gameId: "over"|"under"}
+  const [saved,setSaved]=useState({});
+  const [loading,setLoading]=useState({});
+  const [msg,setMsg]=useState("");
+  const [lines,setLines]=useState({}); // {gameId: number}
+
+  // Load today's OU picks and generate lines
+  useEffect(()=>{
+    if(!user)return;
+    const savedPicks=JSON.parse(localStorage.getItem(`courtiq_ou_${user.id}_${new Date().toISOString().split("T")[0]}`)||"{}");
+    setPicks(savedPicks);setSaved(savedPicks);
+    // Generate stable O/U lines from game ids (deterministic seed)
+    const newLines={};
+    games.filter(g=>g.status==="Upcoming"||g.status==="LIVE"||g.status==="Final").forEach(g=>{
+      // Line between 210–230 based on a hash of the game id
+      const seed=g.id.split("").reduce((a,c)=>a+c.charCodeAt(0),0);
+      newLines[g.id]=210+((seed%21));
+    });
+    setLines(newLines);
+  },[user,games]);
+
+  const makePick=async(game,choice)=>{
+    if(!user){setMsg("Inicia sesión primero");return;}
+    const today=new Date().toISOString().split("T")[0];
+    if(game.status!=="Upcoming"){setMsg("Solo puedes hacer picks en partidos próximos");return;}
+    const next={...picks,[game.id]:choice};
+    setPicks(next);
+    setLoading(l=>({...l,[game.id]:true}));
+    localStorage.setItem(`courtiq_ou_${user.id}_${today}`,JSON.stringify(next));
+    // Score immediately if game is final
+    await pickemAPI("makeOUPick",{body:{userId:user.id,gameId:game.id,gameDate:today,choice,line:lines[game.id]}});
+    setSaved(next);
+    setLoading(l=>({...l,[game.id]:false}));
+  };
+
+  const getResult=(game,choice)=>{
+    if(game.status!=="Final"||game.awayScore==null||game.homeScore==null)return null;
+    const total=(parseInt(game.awayScore)||0)+(parseInt(game.homeScore)||0);
+    const line=lines[game.id]||220;
+    const actual=total>line?"over":"under";
+    return choice===actual?"correct":"wrong";
+  };
+
+  const upcoming=games.filter(g=>g.status==="Upcoming");
+  const finished=games.filter(g=>g.status==="Final"&&picks[g.id]);
+
+  return(<div className="fade-up">
+    <ST sub="Predice el total de puntos">Over / Under 🎰</ST>
+
+    {!user&&<Card style={{textAlign:"center",padding:40}}>
+      <div style={{fontSize:48,marginBottom:12}}>🎰</div>
+      <div style={{fontSize:15,fontWeight:700,color:C.text}}>Inicia sesión para hacer picks O/U</div>
+    </Card>}
+
+    {user&&<>
+      {msg&&<div style={{marginBottom:12,padding:"10px 14px",background:"#ff444411",border:"1px solid #ff444433",borderRadius:10,fontSize:12,color:"#ff6666"}}>{msg}</div>}
+
+      {/* Cómo funciona */}
+      <Card style={{marginBottom:14,background:"#0a1018",borderColor:C.border}}>
+        <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:8}}>Cómo funciona</div>
+        <div style={{fontSize:11,color:C.dim,lineHeight:1.7}}>
+          Cada partido tiene una línea de puntos totales (ej: 218.5). Predice si el total final será <b style={{color:"#00FF9D"}}>OVER</b> (más puntos) o <b style={{color:"#FF6B35"}}>UNDER</b> (menos puntos). +5 pts si aciertas 🎯
+        </div>
+      </Card>
+
+      {/* Partidos próximos */}
+      {upcoming.length>0&&<>
+        <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>Partidos de hoy</div>
+        {upcoming.map(game=>{
+          const picked=picks[game.id];
+          const line=lines[game.id]||220;
+          const isLoading=loading[game.id];
+          return<Card key={game.id} style={{marginBottom:10,borderColor:picked?`${C.accent}44`:C.border}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                {logo(game.away,22)}<span style={{fontSize:13,fontWeight:800,color:C.text}}>{game.away}</span>
+                <span style={{fontSize:11,color:C.muted}}>vs</span>
+                <span style={{fontSize:13,fontWeight:800,color:C.text}}>{game.home}</span>{logo(game.home,22)}
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1}}>Línea</div>
+                <div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800"}}>{line}</div>
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <button className="btn" onClick={()=>makePick(game,"over")} disabled={isLoading} style={{padding:"12px",borderRadius:12,background:picked==="over"?"#00FF9D22":"#0d1117",border:`2px solid ${picked==="over"?"#00FF9D":C.border}`,color:picked==="over"?"#00FF9D":C.muted,fontWeight:900,fontSize:13}}>
+                📈 OVER {line}
+              </button>
+              <button className="btn" onClick={()=>makePick(game,"under")} disabled={isLoading} style={{padding:"12px",borderRadius:12,background:picked==="under"?"#FF6B3522":"#0d1117",border:`2px solid ${picked==="under"?"#FF6B35":C.border}`,color:picked==="under"?"#FF6B35":C.muted,fontWeight:900,fontSize:13}}>
+                📉 UNDER {line}
+              </button>
+            </div>
+            {picked&&<div style={{textAlign:"center",fontSize:10,color:C.dim,marginTop:8}}>
+              {isLoading?<Spin s={10}/>:<span>Pick guardado · {picked==="over"?"Predices más de":"Predices menos de"} {line} pts</span>}
+            </div>}
+          </Card>;
+        })}
+      </>}
+
+      {upcoming.length===0&&<Card style={{textAlign:"center",padding:30}}><div style={{fontSize:32,marginBottom:8}}>🏀</div><div style={{fontSize:14,color:C.dim}}>No hay partidos próximos hoy</div></Card>}
+
+      {/* Resultados */}
+      {finished.length>0&&<>
+        <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginTop:16,marginBottom:10}}>Tus resultados</div>
+        {finished.map(game=>{
+          const picked=picks[game.id];
+          const result=getResult(game,picked);
+          const total=(parseInt(game.awayScore)||0)+(parseInt(game.homeScore)||0);
+          const line=lines[game.id]||220;
+          return<Card key={game.id} style={{marginBottom:8,borderColor:result==="correct"?"#00FF9D44":result==="wrong"?"#ff444444":C.border,background:result==="correct"?"#00FF9D08":result==="wrong"?"#ff444408":undefined}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:6}}>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                {logo(game.away,18)}<span style={{fontSize:12,fontWeight:700,color:C.text}}>{game.away}</span>
+                <span style={{fontSize:11,color:"#FFB800",fontWeight:900}}>{game.awayScore}–{game.homeScore}</span>
+                <span style={{fontSize:12,fontWeight:700,color:C.text}}>{game.home}</span>{logo(game.home,18)}
+              </div>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <span style={{fontSize:11,color:C.dim}}>Total: <b style={{color:total>line?"#00FF9D":"#FF6B35"}}>{total}</b> / línea {line}</span>
+                <span style={{fontSize:13,fontWeight:900,color:result==="correct"?"#00FF9D":"#ff6666"}}>{result==="correct"?"✅ +5 pts":"❌"}</span>
+              </div>
+            </div>
+          </Card>;
+        })}
+      </>}
+    </>}
+  </div>);
+};
+
 /* ═══ ESPN TEAM IDs ═══ */
 const ESPN_ID={ATL:1,BOS:2,NOP:3,CHI:4,CLE:5,DAL:6,DEN:7,DET:8,GSW:9,HOU:10,IND:11,LAC:12,LAL:13,MIA:14,MIL:15,MIN:16,BKN:17,NYK:18,ORL:19,PHI:20,PHX:21,POR:22,SAC:23,SAS:24,OKC:25,UTA:26,WAS:27,TOR:28,MEM:29,CHA:30};
 
@@ -1509,6 +1640,28 @@ const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
 
       {/* ─── RANKING ─── */}
       {subTab==="ranking"&&<>
+        {/* Banner temporada */}
+        {lbPeriod==="season"&&activeLb.length>=3&&<Card style={{marginBottom:12,background:"linear-gradient(135deg,#FFB80014,#0d1117)",borderColor:"#FFB80033"}}>
+          <div style={{fontSize:9,color:"#FFB800",textTransform:"uppercase",letterSpacing:2,marginBottom:8}}>🏆 Temporada 2024–25 · Top 3</div>
+          <div style={{display:"flex",gap:10,justifyContent:"center",alignItems:"flex-end",marginBottom:8}}>
+            {[1,0,2].map((pos)=>{
+              const r=activeLb[pos];if(!r)return null;
+              const h=[56,72,48][pos];
+              const mc=["#FFB800","#C0C0C0","#CD7F32"];
+              const medals=["🥇","🥈","🥉"];
+              const rItems=r.user_id===user.id?[...shopItems,...(r.shopItems||[])]:r.shopItems||[];
+              const nameClr=getNameColor(rItems,r.user_id===user.id?myEquipped:(r.equipped||{}));
+              return<div key={pos} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+                <div style={{fontSize:9,fontWeight:700,color:nameClr||C.text,maxWidth:70,textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.avatar_emoji||"🏀"} {r.name}</div>
+                <div style={{width:h*0.75,height:h,background:`linear-gradient(180deg,${mc[pos]}22,${mc[pos]}44)`,border:`1px solid ${mc[pos]}66`,borderRadius:"8px 8px 0 0",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-start",paddingTop:6}}>
+                  <div style={{fontSize:pos===0?18:14}}>{medals[pos]}</div>
+                  <div style={{fontSize:pos===0?14:11,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:mc[pos],marginTop:2}}>{r.total_points??0}</div>
+                </div>
+              </div>;
+            })}
+          </div>
+          <div style={{fontSize:9,color:C.dim,textAlign:"center"}}>La temporada NBA 24–25 termina en Junio 2025 — sigue acumulando puntos 🏀</div>
+        </Card>}
         <div style={{display:"flex",gap:8,marginBottom:14}}>
           {[["season","🏀 Temporada"],["month","📅 Mes"],["week","📆 Semana"]].map(([p,l])=><button key={p} className="btn" onClick={()=>setLbPeriod(p)} style={{padding:"7px 14px",borderRadius:20,background:lbPeriod===p?C.accent:"#0d1117",border:`1px solid ${lbPeriod===p?C.accent:C.border}`,color:lbPeriod===p?"#07090f":C.dim,fontWeight:700,fontSize:11}}>{l}</button>)}
         </div>
@@ -3516,7 +3669,7 @@ export default function App(){
         </div>
         <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>Pick'em</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:18}}>
-          {[{id:"pickem",icon:"👥",label:"Grupos"},{id:"apuestas",icon:"🪙",label:"Apuestas"},{id:"parlay",icon:"🎰",label:"Parlay"},{id:"shop",icon:"🛍️",label:"Shop"}].map(n=><button key={n.id} className="btn" onClick={()=>{setTab(n.id);setMenuOpen(false);}} style={{padding:"14px 12px",borderRadius:12,background:tab===n.id?`${C.accent}22`:"#0a1018",border:`1.5px solid ${tab===n.id?C.accent:C.border}`,color:tab===n.id?C.accent:C.text,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:8}}>{n.icon} {n.label}</button>)}
+          {[{id:"pickem",icon:"👥",label:"Grupos"},{id:"apuestas",icon:"🪙",label:"Apuestas"},{id:"parlay",icon:"🎰",label:"Parlay"},{id:"ou",icon:"🎯",label:"Over/Under"},{id:"shop",icon:"🛍️",label:"Shop"}].map(n=><button key={n.id} className="btn" onClick={()=>{setTab(n.id);setMenuOpen(false);}} style={{padding:"14px 12px",borderRadius:12,background:tab===n.id?`${C.accent}22`:"#0a1018",border:`1.5px solid ${tab===n.id?C.accent:C.border}`,color:tab===n.id?C.accent:C.text,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:8}}>{n.icon} {n.label}</button>)}
         </div>
         <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>NBA</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:18}}>
@@ -3548,6 +3701,7 @@ export default function App(){
       {tab==="pickem"&&<PickemTab games={games} standings={standings} userCtx={userCtx} initSubTab="picks"/>}
       {tab==="apuestas"&&<PickemTab games={games} standings={standings} userCtx={userCtx} initSubTab="apuestas" standalone/>}
       {tab==="parlay"&&<PickemTab games={games} standings={standings} userCtx={userCtx} initSubTab="parlay" standalone/>}
+      {tab==="ou"&&<OUTab games={games} userCtx={userCtx}/>}
       {tab==="shop"&&<ShopTab userCtx={userCtx}/>}
       {tab==="bracket"&&<BracketTab userCtx={userCtx} standings={standings}/>}
       {tab==="games"&&<MiniGamesTab players={players} userCtx={userCtx}/>}

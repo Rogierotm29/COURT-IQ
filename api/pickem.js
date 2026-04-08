@@ -18,6 +18,27 @@ function rateLimit(ip, action, max = 30, windowMs = 60_000) {
   return entry.count > max;
 }
 
+// ─── WEBPUSH HELPER ───────────────────────────────────────────────────────────
+let _wp = null;
+async function initWebPush() {
+  if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) return null;
+  if (!_wp) {
+    _wp = await import("web-push");
+    _wp.default.setVapidDetails("mailto:courtiq@app.com", process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
+  }
+  return _wp.default;
+}
+async function sendPush(wp, sub, payload) {
+  if (!wp || !sub?.endpoint) return;
+  try {
+    await wp.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, JSON.stringify(payload));
+  } catch (e) {
+    if (e.statusCode === 410) {
+      await supabase(`push_subscriptions?user_id=eq.${sub.user_id}`, { method: "DELETE" }).catch(() => {});
+    }
+  }
+}
+
 // ─── PIN HASHING ──────────────────────────────────────────────────────────────
 function hashPin(pin) {
   return createHash("sha256").update(pin + "courtiq_salt_2026").digest("hex");
@@ -493,28 +514,25 @@ export default async function handler(req, res) {
           }
         } catch (_) {}
 
-        // Push notifications for correct picks
-        if (correctPicks.length > 0) {
-          try {
-            const webpush = await import("web-push");
-            const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
-            const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
-            if (VAPID_PUBLIC && VAPID_PRIVATE) {
-              webpush.default.setVapidDetails("mailto:courtiq@app.com", VAPID_PUBLIC, VAPID_PRIVATE);
-              for (const pick of correctPicks) {
-                const subs = await supabase("push_subscriptions", { filters: `?user_id=eq.${pick.user_id}&limit=1` });
-                if (!subs?.length) continue;
-                const conf = pick.confidence || 1;
-                const sub = { endpoint: subs[0].endpoint, keys: { p256dh: subs[0].p256dh, auth: subs[0].auth } };
-                await webpush.default.sendNotification(sub, JSON.stringify({
-                  title: "✅ ¡Acertaste!",
-                  body: `Tu pick de ${pick.picked_team} fue correcto — +${points} pts 🏀${conf > 1 ? ` (${conf}x 🔥)` : ""}`,
-                  tag: "pick-correct-" + pick.id, url: "/",
-                })).catch(() => {});
+        // Push notifications for scored picks
+        try {
+          const wp = await initWebPush();
+          if (wp) {
+            for (const [uid, stats] of Object.entries(userScoreMap)) {
+              const subs = await supabase("push_subscriptions", { filters: `?user_id=eq.${uid}&limit=1` });
+              if (!subs?.length) continue;
+              const sub = subs[0];
+              const pct = Math.round(stats.correct / stats.total * 100);
+              if (stats.correct === stats.total) {
+                await sendPush(wp, sub, { title: "🎯 ¡Día perfecto!", body: `Acertaste ${stats.correct}/${stats.total} picks · ${pct}% de precisión hoy 🏀`, tag: "score-perfect", url: "/" });
+              } else if (stats.correct > 0) {
+                await sendPush(wp, sub, { title: "📊 Picks puntuados", body: `${stats.correct}/${stats.total} picks correctos hoy · ${pct}% 🏀`, tag: "score-daily", url: "/" });
+              } else {
+                await sendPush(wp, sub, { title: "😬 Sin aciertos hoy", body: `Fallaste ${stats.total} picks — ¡mañana es otro día! Sigue intentando 💪`, tag: "score-miss", url: "/" });
               }
             }
-          } catch (_) {}
-        }
+          }
+        } catch (_) {}
 
         return res.json({ ok: true, scored, gamesChecked: Object.keys(finishedGames).length });
       }
@@ -815,23 +833,12 @@ export default async function handler(req, res) {
         await supabase(`bets?id=eq.${betId}`, { method: "PATCH", body: { opponent_id: userId, status: "active" } });
         // Notify requester that their bet was accepted
         try {
-          const webpush = await import("web-push");
-          const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
-          const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
-          if (VAPID_PUBLIC && VAPID_PRIVATE) {
-            webpush.default.setVapidDetails("mailto:courtiq@app.com", VAPID_PUBLIC, VAPID_PRIVATE);
+          const wp = await initWebPush();
+          if (wp) {
             const accepterRows = await supabase("users", { filters: `?id=eq.${userId}&select=name,avatar_emoji&limit=1` });
             const accepter = accepterRows?.[0];
             const subs = await supabase("push_subscriptions", { filters: `?user_id=eq.${bet.requester_id}&limit=1` });
-            if (subs?.length) {
-              const sub = { endpoint: subs[0].endpoint, keys: { p256dh: subs[0].p256dh, auth: subs[0].auth } };
-              await webpush.default.sendNotification(sub, JSON.stringify({
-                title: "🤝 ¡Apuesta aceptada!",
-                body: `${accepter?.avatar_emoji || "🏀"} ${accepter?.name || "Alguien"} aceptó tu apuesta de 🪙${bet.amount}`,
-                tag: "bet_accepted",
-                url: "/?tab=pickem&subtab=apuestas",
-              }));
-            }
+            if (subs?.length) await sendPush(wp, subs[0], { title: "🤝 ¡Apuesta aceptada!", body: `${accepter?.avatar_emoji || "🏀"} ${accepter?.name || "Alguien"} aceptó tu apuesta de 🪙${bet.amount}`, tag: "bet_accepted", url: "/?tab=pickem&subtab=apuestas" });
           }
         } catch (_) {}
         return res.json({ ok: true });
@@ -866,10 +873,7 @@ export default async function handler(req, res) {
 
       // ─── SETTLE BETS (auto-score after games finish) ───────
       case "settleBets": {
-        const webpush = await import("web-push");
-        const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
-        const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
-        if (VAPID_PUBLIC && VAPID_PRIVATE) webpush.default.setVapidDetails("mailto:courtiq@app.com", VAPID_PUBLIC, VAPID_PRIVATE);
+        const wp = await initWebPush();
         const activeBets = await supabase("bets", { filters: `?status=eq.active&limit=100` });
         if (!activeBets?.length) return res.json({ ok: true, settled: 0 });
         // Fetch last 3 days of scoreboards to cover multi-day bets
@@ -911,16 +915,9 @@ export default async function handler(req, res) {
           await supabase(`bets?id=eq.${bet.id}`, { method: "PATCH", body: { status: "settled", winner_id: winnerId, actual_winner: winner } });
           grantAchievement(winnerId, "bet_won");
           // Push notification al ganador
-          if (VAPID_PUBLIC && VAPID_PRIVATE) {
+          if (wp) {
             const winSub = await supabase("push_subscriptions", { filters: `?user_id=eq.${winnerId}&limit=1` });
-            if (winSub?.length) {
-              try {
-                await webpush.default.sendNotification(
-                  { endpoint: winSub[0].endpoint, keys: { p256dh: winSub[0].p256dh, auth: winSub[0].auth } },
-                  JSON.stringify({ title: "🏆 ¡Ganaste la apuesta!", body: `${winner} ganó — ¡cobras 🪙${bet.amount * 2} monedas!`, tag: `bet-won-${bet.id}`, url: "/?tab=apuestas" })
-                );
-              } catch (_) {}
-            }
+            if (winSub?.length) await sendPush(wp, winSub[0], { title: "🏆 ¡Ganaste la apuesta!", body: `${winner} ganó — ¡cobras 🪙${bet.amount * 2} monedas!`, tag: `bet-won-${bet.id}`, url: "/?tab=apuestas" });
           }
           settled++;
         }
@@ -1054,18 +1051,14 @@ export default async function handler(req, res) {
 
       // ─── SEND PUSH NOTIFICATIONS (called by cron) ─────────
       case "sendNotification": {
-        const webpush = await import("web-push");
-        const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
-        const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
-        if (!VAPID_PUBLIC || !VAPID_PRIVATE) return res.json({ ok: false, error: "VAPID keys no configuradas" });
-        webpush.default.setVapidDetails("mailto:courtiq@app.com", VAPID_PUBLIC, VAPID_PRIVATE);
+        const wp = await initWebPush();
+        if (!wp) return res.json({ ok: false, error: "VAPID keys no configuradas" });
 
         const { notifType, groupId: nGroupId } = body;
         let targetUserIds = [];
         let notifData = {};
 
         if (notifType === "picks_reminder") {
-          // Send to all users in group who haven't picked yet
           notifData = { title: "⏰ ¡Faltan 30 minutos!", body: "Haz tus picks antes de que empiece el primer partido", tag: "reminder" };
           const members = await supabase("group_members", { filters: `?group_id=eq.${nGroupId}&select=user_id` });
           targetUserIds = (members || []).map((m) => m.user_id);
@@ -1080,15 +1073,8 @@ export default async function handler(req, res) {
         for (const uid of targetUserIds) {
           const subs = await supabase("push_subscriptions", { filters: `?user_id=eq.${uid}&limit=1` });
           if (!subs?.length) continue;
-          const sub = { endpoint: subs[0].endpoint, keys: { p256dh: subs[0].p256dh, auth: subs[0].auth } };
-          try {
-            await webpush.default.sendNotification(sub, JSON.stringify(notifData));
-            sent++;
-          } catch (e) {
-            if (e.statusCode === 410) {
-              await supabase(`push_subscriptions?user_id=eq.${uid}`, { method: "DELETE" });
-            }
-          }
+          await sendPush(wp, subs[0], notifData);
+          sent++;
         }
         return res.json({ ok: true, sent });
       }
@@ -1125,23 +1111,12 @@ export default async function handler(req, res) {
         // Get requester name
         const requesterRows = await supabase("users", { filters: `?id=eq.${userId}&limit=1` });
         const requesterName = requesterRows?.[0]?.name || "Alguien";
-        // Send push notification to opponent
+        // Push al oponente
         try {
-          const webpush = await import("web-push");
-          const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
-          const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
-          if (VAPID_PUBLIC && VAPID_PRIVATE) {
-            webpush.default.setVapidDetails("mailto:courtiq@app.com", VAPID_PUBLIC, VAPID_PRIVATE);
+          const wp = await initWebPush();
+          if (wp) {
             const subs = await supabase("push_subscriptions", { filters: `?user_id=eq.${opponentId}&limit=1` });
-            if (subs?.length) {
-              const sub = { endpoint: subs[0].endpoint, keys: { p256dh: subs[0].p256dh, auth: subs[0].auth } };
-              await webpush.default.sendNotification(sub, JSON.stringify({
-                title: "🪙 ¡Reto de apuesta!",
-                body: `${requesterName} te reta: 🪙${amount} en ${homeTeam} vs ${awayTeam}`,
-                tag: "bet_challenge",
-                url: "/?tab=pickem&subtab=apuestas",
-              }));
-            }
+            if (subs?.length) await sendPush(wp, subs[0], { title: "🪙 ¡Reto de apuesta!", body: `${requesterName} te reta: 🪙${amount} en ${homeTeam} vs ${awayTeam}`, tag: "bet_challenge", url: "/?tab=pickem&subtab=apuestas" });
           }
         } catch (_) {}
         return res.json({ ok: true });
@@ -1169,46 +1144,21 @@ export default async function handler(req, res) {
           body: { user_id: userId, group_id: groupId, content },
         });
 
-        // Push notifications to all other group members in background
+        // Push a los demás miembros del grupo
         try {
-          const webpush = await import("web-push");
-          const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
-          const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
-          if (VAPID_PUBLIC && VAPID_PRIVATE) {
-            webpush.default.setVapidDetails("mailto:courtiq@app.com", VAPID_PUBLIC, VAPID_PRIVATE);
-
-            // Get sender name
+          const wp = await initWebPush();
+          if (wp) {
             const senderRows = await supabase("users", { filters: `?id=eq.${userId}&select=name,avatar_emoji&limit=1` });
             const sender = senderRows?.[0];
-
-            // Get group name
             const groupRows = await supabase("groups", { filters: `?id=eq.${groupId}&select=name&limit=1` });
             const groupName = groupRows?.[0]?.name || "tu grupo";
-
-            // Get all other members' push subscriptions
-            const members = await supabase("group_members", {
-              filters: `?group_id=eq.${groupId}&user_id=neq.${userId}&select=user_id`,
-            });
+            const members = await supabase("group_members", { filters: `?group_id=eq.${groupId}&user_id=neq.${userId}&select=user_id` });
             if (members?.length) {
-              const memberIds = members.map(m => m.user_id);
-              // Batch fetch subscriptions
-              const subsFilter = memberIds.map(id => `user_id.eq.${id}`).join(",");
-              const subs = await supabase("push_subscriptions", {
-                filters: `?or=(${subsFilter})&select=endpoint,p256dh,auth`,
-              });
+              const subsFilter = members.map(m => `user_id.eq.${m.user_id}`).join(",");
+              const subs = await supabase("push_subscriptions", { filters: `?or=(${subsFilter})&select=endpoint,p256dh,auth,user_id` });
               const shortMsg = content.length > 60 ? content.slice(0, 57) + "…" : content;
-              const notifPayload = JSON.stringify({
-                title: `${sender?.avatar_emoji || "🏀"} ${sender?.name || "Alguien"} — ${groupName}`,
-                body: shortMsg,
-                tag: `chat-${groupId}`,
-                url: `/?chat=${groupId}`,
-              });
-              await Promise.allSettled((subs || []).map(sub =>
-                webpush.default.sendNotification(
-                  { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-                  notifPayload
-                )
-              ));
+              const payload = { title: `${sender?.avatar_emoji || "🏀"} ${sender?.name || "Alguien"} — ${groupName}`, body: shortMsg, tag: `chat-${groupId}`, url: `/?chat=${groupId}` };
+              await Promise.allSettled((subs || []).map(sub => sendPush(wp, sub, payload)));
             }
           }
         } catch (_) {}
@@ -1406,11 +1356,8 @@ export default async function handler(req, res) {
 
       // ─── SEND GAME REMINDERS (cron every 30 min) ──────────
       case "sendReminders": {
-        const webpush = await import("web-push");
-        const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
-        const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
-        if (!VAPID_PUBLIC || !VAPID_PRIVATE) return res.json({ ok: false, error: "VAPID keys no configuradas" });
-        webpush.default.setVapidDetails("mailto:courtiq@app.com", VAPID_PUBLIC, VAPID_PRIVATE);
+        const wp = await initWebPush();
+        if (!wp) return res.json({ ok: false, error: "VAPID keys no configuradas" });
         const now = new Date();
         const in15 = new Date(now.getTime() + 15 * 60 * 1000).toISOString();
         const in45 = new Date(now.getTime() + 45 * 60 * 1000).toISOString();
@@ -1427,14 +1374,8 @@ export default async function handler(req, res) {
           const comp = game.competitions?.[0];
           const home = comp?.competitors?.find(c => c.homeAway === "home");
           const away = comp?.competitors?.find(c => c.homeAway === "away");
-          const payload = JSON.stringify({
-            title: "⏰ ¡Partido en 15 min!",
-            body: `${fix(away?.team?.abbreviation || "")} vs ${fix(home?.team?.abbreviation || "")} — ¡Haz tus picks!`,
-            tag: `reminder-${game.id}`, url: "/",
-          });
-          await Promise.allSettled(subs.map(s =>
-            webpush.default.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload)
-          ));
+          const payload = { title: "⏰ ¡Partido en 15 min!", body: `${fix(away?.team?.abbreviation || "")} vs ${fix(home?.team?.abbreviation || "")} — ¡Haz tus picks!`, tag: `reminder-${game.id}`, url: "/" };
+          await Promise.allSettled(subs.map(s => sendPush(wp, s, payload)));
           remindedGames++;
         }
         return res.json({ ok: true, remindedGames });
@@ -1540,67 +1481,48 @@ export default async function handler(req, res) {
 
       // ─── STREAK ALERT (cron: 2h before first game) ─────────
       case "streakAlert": {
-        const webpush = await import("web-push");
-        const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
-        const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
-        if (!VAPID_PUBLIC || !VAPID_PRIVATE) return res.json({ ok: false, error: "VAPID no configurado" });
-        webpush.default.setVapidDetails("mailto:courtiq@app.com", VAPID_PUBLIC, VAPID_PRIVATE);
+        const wp = await initWebPush();
+        if (!wp) return res.json({ ok: false, error: "VAPID no configurado" });
         const today = new Date().toISOString().split("T")[0];
-        // Check window: 90–150 min before first game
         const espnRes = await fetch("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard");
         const espnData = await espnRes.json();
-        const upcoming = (espnData.events || []).filter(e => e.competitions?.[0]?.status?.type?.state === "pre");
-        if (!upcoming.length) return res.json({ ok: true, sent: 0, reason: "no upcoming games" });
-        const earliest = upcoming.map(e => new Date(e.date)).sort((a, b) => a - b)[0];
+        const upcomingGames = (espnData.events || []).filter(e => e.competitions?.[0]?.status?.type?.state === "pre");
+        if (!upcomingGames.length) return res.json({ ok: true, sent: 0, reason: "no upcoming games" });
+        const earliest = upcomingGames.map(e => new Date(e.date)).sort((a, b) => a - b)[0];
         const minsUntil = (earliest - new Date()) / 60000;
         if (minsUntil < 90 || minsUntil > 150) return res.json({ ok: true, sent: 0, reason: `not in window (${Math.round(minsUntil)}min)` });
-        // Get users who haven't picked today
         const pickedToday = await supabase("picks", { filters: `?game_date=eq.${today}&select=user_id` });
         const pickedIds = new Set((pickedToday || []).map(p => p.user_id));
-        // Get all subscribers
         const subs = await supabase("push_subscriptions", { filters: `?select=endpoint,p256dh,auth,user_id` });
         if (!subs?.length) return res.json({ ok: true, sent: 0 });
-        // Get streaks for subscribers who haven't picked
         let sent = 0;
         for (const sub of subs) {
-          if (pickedIds.has(sub.user_id)) continue; // already picked
+          if (pickedIds.has(sub.user_id)) continue;
           const recentPicks = await supabase("picks", { filters: `?user_id=eq.${sub.user_id}&scored=eq.true&select=correct&order=game_date.desc&limit=10` });
           let streak = 0;
           for (const p of recentPicks || []) { if (!p.correct) break; streak++; }
-          if (streak < 2) continue; // only alert if streak >= 2
-          const payload = JSON.stringify({
-            title: "⚠️ ¡Tu racha está en peligro!",
-            body: `Llevas ${streak} picks seguidos correctos — ¡haz tus picks antes de que empiece el juego!`,
-            tag: `streak-alert-${today}`, url: "/",
-          });
-          try {
-            await webpush.default.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload);
-            sent++;
-          } catch (_) {}
+          if (streak < 2) continue;
+          await sendPush(wp, sub, { title: "⚠️ ¡Tu racha está en peligro!", body: `Llevas ${streak} picks seguidos correctos — ¡haz tus picks antes de que empiece el juego!`, tag: `streak-alert-${today}`, url: "/" });
+          sent++;
         }
         return res.json({ ok: true, sent });
       }
 
       // ─── WEEKLY SUMMARY (cron: Sunday night) ───────────────
       case "weeklySummary": {
-        const webpush = await import("web-push");
-        const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
-        const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
-        if (!VAPID_PUBLIC || !VAPID_PRIVATE) return res.json({ ok: false, error: "VAPID no configurado" });
-        webpush.default.setVapidDetails("mailto:courtiq@app.com", VAPID_PUBLIC, VAPID_PRIVATE);
+        const wp = await initWebPush();
+        if (!wp) return res.json({ ok: false, error: "VAPID no configurado" });
         const d = new Date(); d.setDate(d.getDate() - d.getDay() + 1);
         const weekStart = d.toISOString().split("T")[0];
-        // Get week picks per user
-        const picks = await supabase("picks", { filters: `?game_date=gte.${weekStart}&scored=eq.true&select=user_id,correct,points,group_id` });
-        if (!picks?.length) return res.json({ ok: true, sent: 0 });
+        const weekPicks = await supabase("picks", { filters: `?game_date=gte.${weekStart}&scored=eq.true&select=user_id,correct,points` });
+        if (!weekPicks?.length) return res.json({ ok: true, sent: 0 });
         const byUser = {};
-        for (const p of picks) {
+        for (const p of weekPicks) {
           if (!byUser[p.user_id]) byUser[p.user_id] = { correct: 0, total: 0, points: 0 };
           byUser[p.user_id].total++;
           byUser[p.user_id].points += p.points || 0;
           if (p.correct) byUser[p.user_id].correct++;
         }
-        // Get leaderboard rank for each user in their group (simplified: by points this week)
         const subs = await supabase("push_subscriptions", { filters: `?select=endpoint,p256dh,auth,user_id` });
         if (!subs?.length) return res.json({ ok: true, sent: 0 });
         let sent = 0;
@@ -1608,17 +1530,57 @@ export default async function handler(req, res) {
           const stats = byUser[sub.user_id];
           if (!stats || stats.total === 0) continue;
           const pct = Math.round(stats.correct / stats.total * 100);
-          const payload = JSON.stringify({
-            title: "📊 Tu resumen semanal · Court IQ",
-            body: `${stats.correct}/${stats.total} picks acertados (${pct}%) · +${stats.points} pts esta semana 🏀`,
-            tag: `weekly-${weekStart}`, url: "/",
-          });
-          try {
-            await webpush.default.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload);
-            sent++;
-          } catch (_) {}
+          await sendPush(wp, sub, { title: "📊 Tu resumen semanal · Court IQ", body: `${stats.correct}/${stats.total} picks acertados (${pct}%) · +${stats.points} pts esta semana 🏀`, tag: `weekly-${weekStart}`, url: "/" });
+          sent++;
         }
         return res.json({ ok: true, sent });
+      }
+
+      // ─── OVER/UNDER PICK ──────────────────────────────────
+      case "makeOUPick": {
+        const { userId, gameId, gameDate, choice, line } = body;
+        if (!userId || !gameId || !choice || !line) return res.json({ ok: false, error: "Faltan datos" });
+        // Store as a special pick with game_id prefixed with "ou_"
+        const ouGameId = `ou_${gameId}`;
+        const existing = await supabase("ou_picks", { filters: `?user_id=eq.${userId}&game_id=eq.${ouGameId}&limit=1` });
+        if (existing?.length) {
+          await supabase(`ou_picks?id=eq.${existing[0].id}`, { method: "PATCH", body: { choice, line } });
+        } else {
+          await supabase("ou_picks", { method: "POST", body: { user_id: userId, game_id: ouGameId, game_date: gameDate, choice, line, scored: false } });
+        }
+        return res.json({ ok: true });
+      }
+
+      case "scoreOUPicks": {
+        const today = new Date().toISOString().split("T")[0];
+        const unscored = await supabase("ou_picks", { filters: `?scored=eq.false&game_date=lte.${today}&limit=200` });
+        if (!unscored?.length) return res.json({ ok: true, scored: 0 });
+        const dates = [...new Set(unscored.map(p => p.game_date))];
+        const totals = {};
+        await Promise.all(dates.map(async (date) => {
+          try {
+            const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${date.replace(/-/g, "")}`);
+            const d = await r.json();
+            (d.events || []).forEach(e => {
+              if (!e.competitions?.[0]?.status?.type?.completed) return;
+              const home = e.competitions[0].competitors?.find(c => c.homeAway === "home");
+              const away = e.competitions[0].competitors?.find(c => c.homeAway === "away");
+              totals[e.id] = (parseInt(home?.score || 0)) + (parseInt(away?.score || 0));
+            });
+          } catch (_) {}
+        }));
+        let scored = 0;
+        for (const pick of unscored) {
+          const gameId = pick.game_id.replace("ou_", "");
+          const total = totals[gameId];
+          if (total == null) continue;
+          const correct = (pick.choice === "over" && total > pick.line) || (pick.choice === "under" && total < pick.line);
+          const points = correct ? 5 : 0;
+          await supabase(`ou_picks?id=eq.${pick.id}`, { method: "PATCH", body: { scored: true, correct, total_scored: total, points } });
+          if (correct) grantAchievement(pick.user_id, "first_win");
+          scored++;
+        }
+        return res.json({ ok: true, scored });
       }
 
       default:
