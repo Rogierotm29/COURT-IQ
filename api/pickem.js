@@ -1,7 +1,7 @@
 // /api/pickem.js — Pick'em social system (Supabase backend)
 // Handles: register, createGroup, joinGroup, myGroups, makePick, myPicks, leaderboard, scoreGames
 
-import { createHash } from "crypto";
+import { createHash, randomInt } from "crypto";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY;
@@ -30,6 +30,37 @@ function recoveryCodeFor(userId, name) {
     .digest("hex")
     .slice(0, 8)
     .toUpperCase();
+}
+
+// ─── EMAIL RESET ──────────────────────────────────────────────────────────────
+function generateResetCode() {
+  return randomInt(100000, 999999).toString();
+}
+
+async function sendResetEmail(email, name, code) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return false;
+  const from = process.env.RESEND_FROM || "Court IQ <onboarding@resend.dev>";
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from,
+      to: [email],
+      subject: "Tu código de recuperación — Court IQ 🏀",
+      html: `<div style="font-family:sans-serif;max-width:420px;margin:0 auto;padding:24px;background:#07090f;color:#e2e8f0;border-radius:12px;border:1px solid #1e2d3d">
+        <h2 style="color:#00C2FF;margin:0 0 16px">🏀 Court IQ</h2>
+        <p style="margin:0 0 8px">Hola <strong>${name}</strong>,</p>
+        <p style="margin:0 0 20px;color:#94a3b8">Alguien solicitó recuperar el PIN de tu cuenta. Si fuiste tú, usa este código:</p>
+        <div style="background:#0a1018;border:2px solid #00C2FF;border-radius:12px;padding:24px;text-align:center;margin:0 0 20px">
+          <div style="font-size:11px;letter-spacing:3px;color:#64748b;margin-bottom:8px">CÓDIGO DE RECUPERACIÓN</div>
+          <div style="font-size:40px;font-weight:900;letter-spacing:14px;color:#00C2FF">${code}</div>
+        </div>
+        <p style="font-size:12px;color:#64748b;margin:0">Válido por <strong>15 minutos</strong>. Si no solicitaste esto, ignora este correo.</p>
+      </div>`,
+    }),
+  });
+  return res.ok;
 }
 
 // ─── INPUT SANITIZATION ───────────────────────────────────────────────────────
@@ -93,7 +124,7 @@ export default async function handler(req, res) {
 
   // Rate limiting — stricter on auth, looser on reads
   const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || "unknown";
-  const authActions = ["register", "resetPin"];
+  const authActions = ["register", "resetPin", "forgotPin", "resetPinByEmail"];
   const writeActions = ["makePick","createGroup","joinGroup","createBet","acceptBet","sendChat","claimDailyBonus","deleteAccount"];
   const maxReqs = authActions.includes(action) ? 10 : writeActions.includes(action) ? 60 : 120;
   if (rateLimit(ip, action, maxReqs)) {
@@ -107,8 +138,10 @@ export default async function handler(req, res) {
         const rawName = sanitize(body.name, 30);
         const rawPin = sanitize(body.pin, 4);
         const rawEmoji = sanitize(body.emoji || "🏀", 8);
+        const rawEmail = body.email ? sanitize(body.email, 100).toLowerCase() : null;
         if (!rawName) return res.json({ ok: false, error: "Nombre requerido" });
         if (!rawPin || !/^\d{4}$/.test(rawPin)) return res.json({ ok: false, error: "PIN de 4 dígitos requerido" });
+        if (rawEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) return res.json({ ok: false, error: "Correo inválido" });
         const pinHash = hashPin(rawPin);
         // Check if user exists
         const existing = await supabase("users", {
@@ -127,10 +160,9 @@ export default async function handler(req, res) {
           return res.json({ ok: true, user: safeUser, reconnected: true });
         }
         // Create new user with hashed PIN
-        const [newUser] = await supabase("users", {
-          method: "POST",
-          body: { name: rawName, avatar_emoji: rawEmoji, pin: pinHash },
-        });
+        const newUserBody = { name: rawName, avatar_emoji: rawEmoji, pin: pinHash };
+        if (rawEmail) newUserBody.email = rawEmail;
+        const [newUser] = await supabase("users", { method: "POST", body: newUserBody });
         const { pin: _p2, ...safeNewUser } = newUser;
         return res.json({ ok: true, user: safeNewUser, recoveryCode: recoveryCodeFor(safeNewUser.id, safeNewUser.name) });
       }
@@ -150,6 +182,66 @@ export default async function handler(req, res) {
         await supabase(`users?id=eq.${target.id}`, { method: "PATCH", body: { pin: hashPin(rawPin) } });
         const { pin: _rp, ...safeTarget } = target;
         return res.json({ ok: true, user: safeTarget });
+      }
+
+      // ─── UPDATE EMAIL ─────────────────────────────────────
+      case "updateEmail": {
+        const { userId } = body;
+        const rawEmail = sanitize(body.email || "", 100).toLowerCase();
+        if (!userId) return res.json({ ok: false, error: "userId requerido" });
+        if (rawEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail))
+          return res.json({ ok: false, error: "Correo inválido" });
+        // Check email not taken by another user
+        if (rawEmail) {
+          const taken = await supabase("users", { filters: `?email=eq.${encodeURIComponent(rawEmail)}&id=neq.${userId}&limit=1` });
+          if (taken?.length) return res.json({ ok: false, error: "Ese correo ya está en uso" });
+        }
+        await supabase(`users?id=eq.${userId}`, { method: "PATCH", body: { email: rawEmail || null } });
+        return res.json({ ok: true });
+      }
+
+      // ─── FORGOT PIN (send reset email) ────────────────────
+      case "forgotPin": {
+        const rawEmail = sanitize(body.email || "", 100).toLowerCase();
+        if (!rawEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail))
+          return res.json({ ok: false, error: "Correo inválido" });
+        const users = await supabase("users", { filters: `?email=eq.${encodeURIComponent(rawEmail)}&limit=1` });
+        // Always respond ok to avoid email enumeration
+        if (!users?.length) return res.json({ ok: true });
+        const target = users[0];
+        const code = generateResetCode();
+        const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+        await supabase(`users?id=eq.${target.id}`, {
+          method: "PATCH",
+          body: { reset_token: hashPin(code), reset_expires_at: expires },
+        });
+        await sendResetEmail(rawEmail, target.name, code);
+        return res.json({ ok: true });
+      }
+
+      // ─── RESET PIN BY EMAIL CODE ───────────────────────────
+      case "resetPinByEmail": {
+        const rawEmail = sanitize(body.email || "", 100).toLowerCase();
+        const rawCode = sanitize(body.code || "", 6);
+        const rawPin = sanitize(body.newPin || "", 4);
+        if (!rawEmail || !rawCode || !/^\d{6}$/.test(rawCode) || !/^\d{4}$/.test(rawPin))
+          return res.json({ ok: false, error: "Datos inválidos" });
+        const users = await supabase("users", {
+          filters: `?email=eq.${encodeURIComponent(rawEmail)}&select=id,name,reset_token,reset_expires_at&limit=1`,
+        });
+        if (!users?.length) return res.json({ ok: false, error: "Correo no encontrado" });
+        const target = users[0];
+        if (!target.reset_token || !target.reset_expires_at)
+          return res.json({ ok: false, error: "No hay código activo. Solicita uno nuevo." });
+        if (new Date() > new Date(target.reset_expires_at))
+          return res.json({ ok: false, error: "El código expiró. Solicita uno nuevo." });
+        if (hashPin(rawCode) !== target.reset_token)
+          return res.json({ ok: false, error: "Código incorrecto" });
+        await supabase(`users?id=eq.${target.id}`, {
+          method: "PATCH",
+          body: { pin: hashPin(rawPin), reset_token: null, reset_expires_at: null },
+        });
+        return res.json({ ok: true });
       }
 
       // ─── GET USER ─────────────────────────────────────────

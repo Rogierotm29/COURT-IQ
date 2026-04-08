@@ -730,12 +730,16 @@ const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
   const [shopItems,setShopItems]=useState([]);
   const [lockedPicks,setLockedPicks]=useState(false);
   const [confidence,setConfidence]=useState({});
-  const [authMode,setAuthMode]=useState("auto"); // "auto"|"recovery"
+  const [authMode,setAuthMode]=useState("auto"); // "auto"|"recovery"|"emailRecovery"|"emailCode"
   const [recCode,setRecCode]=useState(""); // shown once after new registration
   const [recInput,setRecInput]=useState(""); // recovery code input
   const [recNewPin,setRecNewPin]=useState(["","","",""]); // new PIN for recovery
   const [pendingUser,setPendingUser]=useState(null); // user waiting for recovery code ack
   const [biometricAvail,setBiometricAvail]=useState(false);
+  const [regEmail,setRegEmail]=useState(""); // email during registration
+  const [recoveryEmail,setRecoveryEmail]=useState(""); // email for PIN recovery
+  const [recoveryCode6,setRecoveryCode6]=useState(""); // 6-digit code from email
+  const [recoveryNewPin,setRecoveryNewPin]=useState(["","","",""]);
   const [editGroup,setEditGroup]=useState(false);const [editGroupName,setEditGroupName]=useState("");const [editGroupEmoji,setEditGroupEmoji]=useState("");
   const [profileModal,setProfileModal]=useState(null);const [profileData,setProfileData]=useState(null);
   const now=new Date();
@@ -866,9 +870,9 @@ const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
     if(!name.trim()) return;
     setLoading(true);
     const rawPin=pin.join("");
-    const d=await pickemAPI("register",{body:{name:name.trim(),pin:rawPin}});
+    const emailToSend=regEmail.trim()||undefined;
+    const d=await pickemAPI("register",{body:{name:name.trim(),pin:rawPin,email:emailToSend}});
     if(d.ok){
-      // Save to browser credential manager (triggers biometric on future visits)
       if('PasswordCredential' in window){try{const c=new PasswordCredential({id:name.trim(),password:rawPin,name:name.trim()});navigator.credentials.store(c);}catch{}}
       if(!d.reconnected&&d.recoveryCode){setPendingUser(d.user);setRecCode(d.recoveryCode);}
       else{save(d.user);autoSubscribePush(d.user.id);}
@@ -881,6 +885,24 @@ const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
     setLoading(true);
     const d=await pickemAPI("resetPin",{body:{name:name.trim(),recoveryCode:recInput,newPin:recNewPin.join("")}});
     if(d.ok){setAuthMode("auto");setMsg("✅ PIN actualizado. Ya puedes entrar.");setRecInput("");setRecNewPin(["","","",""]);setPin(["","","",""]);}
+    else setMsg(d.error||"Error");
+    setLoading(false);
+  };
+
+  const sendForgotPin=async()=>{
+    if(!recoveryEmail.trim()) return;
+    setLoading(true);
+    const d=await pickemAPI("forgotPin",{body:{email:recoveryEmail.trim()}});
+    if(d.ok){setAuthMode("emailCode");setMsg("");}
+    else setMsg(d.error||"Error");
+    setLoading(false);
+  };
+
+  const confirmEmailReset=async()=>{
+    if(!recoveryEmail.trim()||recoveryCode6.length!==6||recoveryNewPin.join("").length!==4) return;
+    setLoading(true);
+    const d=await pickemAPI("resetPinByEmail",{body:{email:recoveryEmail.trim(),code:recoveryCode6,newPin:recoveryNewPin.join("")}});
+    if(d.ok){setAuthMode("auto");setMsg("✅ PIN actualizado. Ya puedes entrar.");setRecoveryCode6("");setRecoveryNewPin(["","","",""]);}
     else setMsg(d.error||"Error");
     setLoading(false);
   };
@@ -1046,11 +1068,39 @@ const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
         <button className="btn" onClick={()=>{save(pendingUser);autoSubscribePush(pendingUser.id);setRecCode("");setPendingUser(null);}} style={{width:"100%",padding:"14px",borderRadius:11,background:`linear-gradient(135deg,${C.accent},#0066ff)`,color:"#07090f",fontSize:15,fontWeight:900}}>Entendido, entrar →</button>
       </Card>}
 
-      {/* ── Recovery / forgot PIN form ── */}
+      {/* ── Forgot PIN — step 1: enter email ── */}
+      {!recCode&&authMode==="emailRecovery"&&<Card style={{maxWidth:420,margin:"0 auto",textAlign:"center",padding:30}}>
+        <div style={{fontSize:40,marginBottom:12}}>📧</div>
+        <div style={{fontSize:18,fontWeight:800,color:C.text,marginBottom:8}}>Recuperar PIN</div>
+        <div style={{fontSize:12,color:C.dim,marginBottom:20}}>Te mandaremos un código de 6 dígitos al correo vinculado a tu cuenta.</div>
+        <input value={recoveryEmail} onChange={e=>setRecoveryEmail(e.target.value)} type="email" placeholder="tu@correo.com" style={{width:"100%",background:"#0a1018",border:`1px solid ${C.border}`,borderRadius:11,padding:"14px 16px",color:C.text,fontSize:15,textAlign:"center",boxSizing:"border-box",marginBottom:16}}/>
+        <button className="btn" onClick={sendForgotPin} disabled={loading||!recoveryEmail.trim()} style={{width:"100%",padding:"14px",borderRadius:11,background:recoveryEmail.trim()?`linear-gradient(135deg,${C.accent},#0066ff)`:"#1a2535",color:recoveryEmail.trim()?"#07090f":C.muted,fontSize:15,fontWeight:900,marginBottom:12}}>{loading?<Spin s={14}/>:"📨 Enviar código"}</button>
+        <button className="btn" onClick={()=>{setAuthMode("auto");setMsg("");}} style={{background:"none",color:C.dim,fontSize:13,padding:"8px"}}>← Volver</button>
+        {msg&&<div style={{marginTop:10,fontSize:12,color:"#ff6666"}}>{msg}</div>}
+      </Card>}
+
+      {/* ── Forgot PIN — step 2: enter code + new PIN ── */}
+      {!recCode&&authMode==="emailCode"&&<Card style={{maxWidth:420,margin:"0 auto",textAlign:"center",padding:30}}>
+        <div style={{fontSize:40,marginBottom:12}}>✉️</div>
+        <div style={{fontSize:18,fontWeight:800,color:C.text,marginBottom:8}}>Revisa tu correo</div>
+        <div style={{fontSize:12,color:C.dim,marginBottom:4}}>Te enviamos un código a</div>
+        <div style={{fontSize:13,fontWeight:700,color:C.accent,marginBottom:20}}>{recoveryEmail}</div>
+        <div style={{fontSize:10,color:C.muted,marginBottom:6,textAlign:"left",paddingLeft:4}}>Código de 6 dígitos</div>
+        <input value={recoveryCode6} onChange={e=>setRecoveryCode6(e.target.value.replace(/\D/g,"").slice(0,6))} type="tel" placeholder="000000" maxLength={6} style={{width:"100%",background:"#0a1018",border:`1px solid ${recoveryCode6.length===6?C.accent:C.border}`,borderRadius:11,padding:"14px 16px",color:C.accent,fontSize:28,fontWeight:900,textAlign:"center",letterSpacing:10,boxSizing:"border-box",marginBottom:16}}/>
+        <div style={{fontSize:10,color:C.muted,marginBottom:6,textAlign:"left",paddingLeft:4}}>🔒 Nuevo PIN de 4 dígitos</div>
+        <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:16}}>
+          {[0,1,2,3].map(i=><input key={i} id={`epin-${i}`} type="tel" maxLength={1} value={recoveryNewPin[i]||""} onChange={e=>{const v=e.target.value.replace(/\D/g,"");if(v.length<=1){const np=[...recoveryNewPin];np[i]=v;setRecoveryNewPin(np);if(v&&i<3)document.getElementById(`epin-${i+1}`)?.focus();}}} onKeyDown={e=>{if(e.key==="Backspace"&&!recoveryNewPin[i]&&i>0)document.getElementById(`epin-${i-1}`)?.focus();}} style={{width:52,height:56,background:"#0a1018",border:`1px solid ${recoveryNewPin[i]?"#00FF9D":C.border}`,borderRadius:12,color:"#00FF9D",fontSize:24,fontWeight:900,textAlign:"center",fontFamily:"'Bebas Neue',sans-serif"}}/>)}
+        </div>
+        <button className="btn" onClick={confirmEmailReset} disabled={loading||recoveryCode6.length!==6||recoveryNewPin.join("").length!==4} style={{width:"100%",padding:"14px",borderRadius:11,background:recoveryCode6.length===6&&recoveryNewPin.join("").length===4?"linear-gradient(135deg,#00FF9D,#00a366)":"#1a2535",color:recoveryCode6.length===6&&recoveryNewPin.join("").length===4?"#07090f":C.muted,fontSize:15,fontWeight:900,marginBottom:12}}>{loading?<Spin s={14}/>:"🔓 Cambiar PIN"}</button>
+        <button className="btn" onClick={()=>{setAuthMode("emailRecovery");setMsg("");}} style={{background:"none",color:C.dim,fontSize:12,padding:"4px"}}>← Reenviar código</button>
+        {msg&&<div style={{marginTop:10,fontSize:12,color:msg.startsWith("✅")?"#00FF9D":"#ff6666"}}>{msg}</div>}
+      </Card>}
+
+      {/* ── Recovery / forgot PIN (by recovery code) ── */}
       {!recCode&&authMode==="recovery"&&<Card style={{maxWidth:420,margin:"0 auto",textAlign:"center",padding:30}}>
         <div style={{fontSize:40,marginBottom:12}}>🔓</div>
-        <div style={{fontSize:18,fontWeight:800,color:C.text,marginBottom:8}}>Recuperar PIN</div>
-        <div style={{fontSize:12,color:C.dim,marginBottom:20}}>Ingresa tu nombre y el código que guardaste al crear tu cuenta.</div>
+        <div style={{fontSize:18,fontWeight:800,color:C.text,marginBottom:8}}>Recuperar con código</div>
+        <div style={{fontSize:12,color:C.dim,marginBottom:20}}>Ingresa tu nombre y el código de 8 caracteres que guardaste al registrarte.</div>
         <input value={name} onChange={e=>setName(e.target.value)} placeholder="Tu nombre..." style={{width:"100%",background:"#0a1018",border:`1px solid ${C.border}`,borderRadius:11,padding:"14px 16px",color:C.text,fontSize:15,textAlign:"center",boxSizing:"border-box",marginBottom:10}}/>
         <input value={recInput} onChange={e=>setRecInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""))} placeholder="CÓDIGO (8 CARACTERES)" maxLength={8} style={{width:"100%",background:"#0a1018",border:`1px solid ${recInput.length===8?C.accent:C.border}`,borderRadius:11,padding:"14px 16px",color:C.accent,fontSize:20,fontWeight:900,textAlign:"center",letterSpacing:6,boxSizing:"border-box",marginBottom:10}}/>
         <div style={{fontSize:10,color:C.muted,marginBottom:6,textAlign:"left",paddingLeft:4}}>🔒 Nuevo PIN de 4 dígitos</div>
@@ -1074,13 +1124,20 @@ const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
         {nameStatus==="available"&&<div style={{fontSize:11,color:"#22c55e",marginBottom:8,textAlign:"center"}}>✓ Nombre disponible</div>}
         {nameStatus==="taken"&&<div style={{fontSize:11,color:C.accent,marginBottom:8,textAlign:"center"}}>✓ Cuenta encontrada — ingresa tu PIN</div>}
         <div style={{fontSize:10,color:C.muted,marginBottom:6,textAlign:"left",paddingLeft:4}}>{nameStatus==="taken"?"🔒 Tu PIN de 4 dígitos":"🔒 PIN de 4 dígitos (para proteger tu cuenta)"}</div>
-        <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:16}}>
+        <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:nameStatus==="available"?10:16}}>
           {[0,1,2,3].map(i=><input key={i} id={`pin-${i}`} type="tel" maxLength={1} value={pin[i]||""} onChange={e=>{const v=e.target.value.replace(/\D/g,"");if(v.length<=1){const np=[...pin];np[i]=v;setPin(np);if(v&&i<3)document.getElementById(`pin-${i+1}`)?.focus();}}} onKeyDown={e=>{if(e.key==="Backspace"&&!pin[i]&&i>0)document.getElementById(`pin-${i-1}`)?.focus();}} style={{width:52,height:56,background:"#0a1018",border:`1px solid ${pin[i]?C.accent:C.border}`,borderRadius:12,color:C.accent,fontSize:24,fontWeight:900,textAlign:"center",fontFamily:"'Bebas Neue',sans-serif"}}/>)}
         </div>
+        {nameStatus==="available"&&<div style={{marginBottom:16}}>
+          <div style={{fontSize:10,color:C.muted,marginBottom:6,textAlign:"left",paddingLeft:4}}>📧 Correo (opcional — para recuperar tu PIN)</div>
+          <input value={regEmail} onChange={e=>setRegEmail(e.target.value)} type="email" placeholder="tu@correo.com" style={{width:"100%",background:"#0a1018",border:`1px solid ${C.border}`,borderRadius:11,padding:"12px 16px",color:C.text,fontSize:14,textAlign:"center",boxSizing:"border-box"}}/>
+        </div>}
         <button className="btn" onClick={register} disabled={loading||nameStatus==="checking"||!name.trim()} style={{width:"100%",padding:"14px",borderRadius:11,background:pin.join("").length===4&&name.trim()?`linear-gradient(135deg,${C.accent},#0066ff)`:`${C.border}`,color:pin.join("").length===4&&name.trim()?"#07090f":C.muted,fontSize:15,fontWeight:900}}>{loading?<Spin s={14}/>:nameStatus==="taken"?"Entrar con PIN 🔑":"Crear cuenta 🚀"}</button>
         {nameStatus==="taken"&&<div style={{marginTop:12,display:"flex",flexDirection:"column",gap:8,alignItems:"center"}}>
           {biometricAvail&&<button className="btn" onClick={()=>navigator.credentials.get({password:true,mediation:"required"}).then(cred=>{if(cred?.type==="password"){setName(cred.id);const d=cred.password.replace(/\D/g,"").slice(0,4).split("");if(d.length===4)setPin(d);}}).catch(()=>{})} style={{width:"100%",padding:"12px",borderRadius:11,background:`${C.accent}15`,border:`1px solid ${C.accent}44`,color:C.accent,fontSize:14,fontWeight:700}}>🔐 Usar huella / desbloqueo</button>}
-          <button className="btn" onClick={()=>{setAuthMode("recovery");setMsg("");}} style={{background:"none",color:C.dim,fontSize:12,padding:"4px",textDecoration:"underline"}}>¿Olvidaste tu PIN?</button>
+          <div style={{display:"flex",gap:16,fontSize:12,color:C.dim}}>
+            <button className="btn" onClick={()=>{setAuthMode("emailRecovery");setMsg("");}} style={{background:"none",color:C.accent,fontSize:12,padding:"4px",textDecoration:"underline"}}>📧 Recuperar por correo</button>
+            <button className="btn" onClick={()=>{setAuthMode("recovery");setMsg("");}} style={{background:"none",color:C.dim,fontSize:12,padding:"4px",textDecoration:"underline"}}>Tengo código de recuperación</button>
+          </div>
         </div>}
         {msg&&<div style={{marginTop:10,fontSize:12,color:msg.startsWith("✅")?"#00FF9D":"#ff6666"}}>{msg}</div>}
       </Card>}
@@ -2595,12 +2652,26 @@ const SettingsTab=({userCtx,installPrompt,onInstalled})=>{
   const [achievements,setAchievements]=useState([]);
   const [showDeleteConfirm,setShowDeleteConfirm]=useState(false);
   const [deleteLoading,setDeleteLoading]=useState(false);
+  const [emailInput,setEmailInput]=useState("");
+  const [emailLoading,setEmailLoading]=useState(false);
+  const [emailMsg,setEmailMsg]=useState("");
 
   useEffect(()=>{
     if(!user) return;
     pickemAPI("getNotifPrefs",{params:{userId:user.id}}).then(d=>{if(d.ok)setNotifPrefs(d.prefs);});
     pickemAPI("getAchievements",{params:{userId:user.id}}).then(d=>{if(d.ok)setAchievements(d.achievements||[]);});
+    // Pre-fill email from stored user
+    if(user.email) setEmailInput(user.email);
   },[user]);
+
+  const saveEmail=async()=>{
+    setEmailLoading(true);setEmailMsg("");
+    const d=await pickemAPI("updateEmail",{body:{userId:user.id,email:emailInput.trim()}});
+    if(d.ok){setEmailMsg("✅ Correo guardado");save({...user,email:emailInput.trim()||undefined});}
+    else setEmailMsg(d.error||"Error");
+    setEmailLoading(false);
+    setTimeout(()=>setEmailMsg(""),4000);
+  };
 
   const subscribePush=async()=>{
     setNotifLoading(true);setMsg("");
@@ -2786,6 +2857,18 @@ const SettingsTab=({userCtx,installPrompt,onInstalled})=>{
         </div>
         <a href="/privacy.html" target="_blank" style={{padding:"8px 14px",borderRadius:8,background:`${C.accent}15`,border:`1px solid ${C.accent}33`,color:C.accent,fontSize:12,fontWeight:700,textDecoration:"none",flexShrink:0}}>Ver →</a>
       </div>
+    </Card>
+
+    {/* Correo de recuperación */}
+    <ST sub="Seguridad">Correo de recuperación</ST>
+    <Card style={{marginBottom:18}}>
+      <div style={{fontSize:12,color:C.dim,marginBottom:12}}>Vincula un correo para poder recuperar tu PIN si lo olvidas.</div>
+      <div style={{display:"flex",gap:8}}>
+        <input value={emailInput} onChange={e=>setEmailInput(e.target.value)} type="email" placeholder="tu@correo.com" style={{flex:1,background:"#0a1018",border:`1px solid ${user?.email?C.accent:C.border}`,borderRadius:10,padding:"11px 14px",color:C.text,fontSize:13,minWidth:0}}/>
+        <button className="btn" onClick={saveEmail} disabled={emailLoading} style={{padding:"11px 16px",borderRadius:10,background:`linear-gradient(135deg,${C.accent},#0066ff)`,color:"#07090f",fontSize:13,fontWeight:800,flexShrink:0}}>{emailLoading?<Spin s={13}/>:"Guardar"}</button>
+      </div>
+      {user?.email&&<div style={{fontSize:10,color:"#22c55e",marginTop:6}}>✓ Correo vinculado — puedes recuperar tu PIN por email</div>}
+      {emailMsg&&<div style={{fontSize:11,color:emailMsg.startsWith("✅")?"#22c55e":"#ff6666",marginTop:6}}>{emailMsg}</div>}
     </Card>
 
     {/* Zona peligrosa */}
