@@ -21,12 +21,12 @@ const Confetti=({active})=>{
 };
 
 // ─── RESULT BANNER ─────────────────────────────────────────────────────────
-const ResultBanner=({show,correct,pts,streak,onClose})=>{
+const ResultBanner=({show,correct,pts,streak,streakOnly,onClose})=>{
   useEffect(()=>{if(show){const t=setTimeout(onClose,3800);return()=>clearTimeout(t);}},[show]);
   if(!show) return null;
-  const bg=correct?'linear-gradient(135deg,#00FF9D,#00c97a)':'linear-gradient(135deg,#ff4444,#cc2222)';
+  const bg=streakOnly?'linear-gradient(135deg,#FFB800,#ff9500)':correct?'linear-gradient(135deg,#00FF9D,#00c97a)':'linear-gradient(135deg,#ff4444,#cc2222)';
   return <div style={{position:'fixed',bottom:90,left:'50%',transform:'translateX(-50%)',background:bg,color:'#07090f',borderRadius:20,padding:'16px 28px',fontSize:20,fontWeight:900,zIndex:9998,animation:'resultPop .5s ease both',boxShadow:'0 12px 40px #00000088',display:'flex',alignItems:'center',gap:12,whiteSpace:'nowrap'}}>
-    {correct?<>✅ <span>+{pts} pts</span>{streak>=3&&<span style={{background:'#07090f22',borderRadius:10,padding:'2px 10px',fontSize:15}}>🔥 Racha {streak}</span>}</>:<>❌ <span>Mala suerte</span></>}
+    {streakOnly?<>🔥 <span>¡Racha de {streak}!</span></>:correct?<>✅ <span>+{pts} pts</span>{streak>=3&&<span style={{background:'#07090f22',borderRadius:10,padding:'2px 10px',fontSize:15}}>🔥 {streak}</span>}</>:<>❌ <span>Mala suerte</span></>}
   </div>;
 };
 
@@ -230,6 +230,7 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
   const [resultBanner,setResultBanner]=useState({show:false,correct:false,pts:0,streak:0});
   const [floatingPts,setFloatingPts]=useState({}); // {gameId: {pts,correct,key}}
   const prevStatusRef=useRef({});
+  const prevStreakRef=useRef(streak);
 
   const triggerCelebration=(correctPts,str)=>{
     const today=new Date().toISOString().split("T")[0];
@@ -279,6 +280,14 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
     });
     pickemAPI("dailyBonusStatus",{params:{userId:user.id}}).then(d=>{if(d.ok)setBonusClaimed(d.claimed);});
   },[user]);
+
+  // Notificación de racha cuando sube
+  useEffect(()=>{
+    if(streak>prevStreakRef.current&&streak>=2){
+      setResultBanner({show:true,correct:true,pts:0,streak,streakOnly:true});
+    }
+    prevStreakRef.current=streak;
+  },[streak]);
 
   // Detect games going Final → show floating pts animation
   useEffect(()=>{
@@ -565,6 +574,21 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         </div>
         {isLive&&<div style={{fontSize:9,color:"#ff4444",textAlign:"center",marginTop:4}}>● En vivo · basado en marcador</div>}
         {!isLive&&!isFinal&&<div style={{fontSize:9,color:C.muted,textAlign:"center",marginTop:4}}>% estimado de ganar este partido</div>}
+        {/* Picks públicos — visible cuando hay picks del grupo */}
+        {gp.length>0&&!showGrpSection&&<div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
+          <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1.5,marginBottom:6}}>Tu grupo eligió</div>
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            <div style={{flex:1,height:6,borderRadius:3,overflow:"hidden",background:C.border,display:"flex"}}>
+              <div style={{flex:forAway.length||0.01,background:tm(g.away).color,transition:"flex .5s ease"}}/>
+              <div style={{flex:forHome.length||0.01,background:tm(g.home).color,transition:"flex .5s ease"}}/>
+            </div>
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:11,fontWeight:700}}>
+            <span style={{color:tm(g.away).color}}>{g.away} {gp.length?Math.round(forAway.length/gp.length*100):0}%</span>
+            <span style={{color:C.muted,fontSize:10}}>{gp.length} pick{gp.length!==1?"s":""}</span>
+            <span style={{color:tm(g.home).color}}>{gp.length?Math.round(forHome.length/gp.length*100):0}% {g.home}</span>
+          </div>
+        </div>}
       </Card>;})}
     </div>
 
@@ -3181,12 +3205,40 @@ const FloatingChat=({userCtx})=>{
 
 /* ═══ APP ROOT ═══ */
 const TABS=[{id:"home",icon:"🏠",label:"Home"},{id:"pickem",icon:"👥",label:"Grupos"},{id:"apuestas",icon:"🪙",label:"Apuestas"},{id:"parlay",icon:"🎰",label:"Parlay"},{id:"shop",icon:"🛍️",label:"Shop"},{id:"teams",icon:"🏆",label:"Equipos"},{id:"players",icon:"⭐",label:"Jugadores"},{id:"bracket",icon:"🏅",label:"Playoffs"},{id:"games",icon:"🎮",label:"Juegos"},{id:"settings",icon:"⚙️",label:"Config"}];
+// ─── ONBOARDING ───────────────────────────────────────────────────────────────
+const ONBOARD_STEPS=[
+  {icon:"🎯",title:"Haz tus picks",desc:"Antes de que empiece cada partido, elige qué equipo va a ganar. Los favoritos dan menos puntos, los underdogs dan más."},
+  {icon:"🏆",title:"Compite con amigos",desc:"Crea un grupo privado o únete con un código. Todos hacen sus picks y compiten en la misma tabla de posiciones."},
+  {icon:"⭐",title:"Gana puntos y sube",desc:"Cada acierto suma puntos según la dificultad del pick. Mantén tu racha, apuesta monedas y llega al #1 del grupo."},
+];
+const Onboarding=({onDone})=>{
+  const [step,setStep]=useState(0);
+  const s=ONBOARD_STEPS[step];
+  const last=step===ONBOARD_STEPS.length-1;
+  return <div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:5000,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:24,padding:32,maxWidth:360,width:"100%",textAlign:"center"}}>
+      <div style={{fontSize:64,marginBottom:16}}>{s.icon}</div>
+      <div style={{fontSize:22,fontWeight:900,color:C.text,marginBottom:10,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>{s.title}</div>
+      <div style={{fontSize:14,color:C.dim,lineHeight:1.6,marginBottom:28}}>{s.desc}</div>
+      {/* dots */}
+      <div style={{display:"flex",justifyContent:"center",gap:6,marginBottom:24}}>
+        {ONBOARD_STEPS.map((_,i)=><div key={i} style={{width:i===step?20:6,height:6,borderRadius:3,background:i===step?C.accent:C.border,transition:"all .3s"}}/>)}
+      </div>
+      <button className="btn" onClick={()=>last?onDone():setStep(s=>s+1)} style={{width:"100%",padding:"14px",borderRadius:12,background:`linear-gradient(135deg,${C.accent},#0066ff)`,color:"#07090f",fontSize:15,fontWeight:900}}>
+        {last?"¡Empezar! 🚀":"Siguiente →"}
+      </button>
+      {!last&&<button className="btn" onClick={onDone} style={{marginTop:10,background:"none",color:C.muted,fontSize:12,padding:"6px"}}>Saltar</button>}
+    </div>
+  </div>;
+};
+
 export default function App(){
   const [tab,setTab]=useState("home");const [menuOpen,setMenuOpen]=useState(false);const [games,setGames]=useState([]);const [standings,setStandings]=useState(FB_ST);const [players,setPlayers]=useState(FB_PL);
   const [pickemInitSubTab,setPickemInitSubTab]=useState("picks");
   const [live,setLive]=useState({games:false,standings:false,players:false});const [loading,setLoading]=useState(false);const [lastUpd,setLastUpd]=useState(null);
   const [installPrompt,setInstallPrompt]=useState(null);
   const [isOffline,setIsOffline]=useState(!navigator.onLine);
+  const [showOnboarding,setShowOnboarding]=useState(()=>!localStorage.getItem("courtiq_onboarded"));
   const userCtx=useUser();
 
   useEffect(()=>{
@@ -3248,6 +3300,7 @@ export default function App(){
   const liveGame=games.find(g=>g.status==="LIVE");
   return(<div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Outfit','Segoe UI',sans-serif",color:C.text}}>
     <GS/>
+    {showOnboarding&&<Onboarding onDone={()=>{localStorage.setItem("courtiq_onboarded","1");setShowOnboarding(false);}}/>}
     <div style={{background:"#0a0f17ee",borderBottom:`1px solid ${C.border}`,padding:"11px 22px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100,backdropFilter:"blur(16px)"}}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         <button className="btn" onClick={()=>setTab("home")} style={{display:"flex",alignItems:"center",gap:10,background:"none",padding:0}}>
