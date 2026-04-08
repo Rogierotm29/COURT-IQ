@@ -326,6 +326,75 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
     setTimeout(()=>setBonusMsg(""),4000);
   };
 
+  const shareResult=()=>{
+    const finishedWithPick=games.filter(g=>g.status==="Final"&&picks[g.id]);
+    if(!finishedWithPick.length) return;
+    const W=1080,H=finishedWithPick.length*160+340;
+    const cv=document.createElement("canvas");cv.width=W;cv.height=H;
+    const ctx=cv.getContext("2d");
+    // bg
+    const bg=ctx.createLinearGradient(0,0,W,H);bg.addColorStop(0,"#07090f");bg.addColorStop(1,"#0a1520");
+    ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+    // grid dots
+    ctx.fillStyle="#ffffff08";
+    for(let x=0;x<W;x+=50)for(let y=0;y<H;y+=50){ctx.beginPath();ctx.arc(x,y,1.5,0,Math.PI*2);ctx.fill();}
+    // header glow
+    const glow=ctx.createRadialGradient(W/2,100,0,W/2,100,300);glow.addColorStop(0,"#00C2FF18");glow.addColorStop(1,"transparent");
+    ctx.fillStyle=glow;ctx.fillRect(0,0,W,200);
+    // logo
+    ctx.font="900 64px Arial Black,sans-serif";ctx.textAlign="center";ctx.fillStyle="#ffffff";
+    ctx.fillText("COURT",W/2-80,90);
+    const tg=ctx.createLinearGradient(W/2,0,W/2+160,0);tg.addColorStop(0,"#00C2FF");tg.addColorStop(1,"#0066ff");
+    ctx.fillStyle=tg;ctx.fillText("IQ",W/2+110,90);
+    // user + date
+    ctx.fillStyle="#94a3b8";ctx.font="500 30px sans-serif";
+    const today=new Date().toLocaleDateString("es-MX",{weekday:"long",month:"long",day:"numeric"});
+    ctx.fillText(`${user?.name||""} · ${today}`,W/2,140);
+    // divider
+    const dg=ctx.createLinearGradient(60,0,W-60,0);dg.addColorStop(0,"transparent");dg.addColorStop(.5,"#00C2FF44");dg.addColorStop(1,"transparent");
+    ctx.fillStyle=dg;ctx.fillRect(60,160,W-120,1);
+    // picks
+    let correct=0,totalPts=0;
+    finishedWithPick.forEach((g,i)=>{
+      const y=200+i*160;const winner=g.homeScore>g.awayScore?g.home:g.away;const ok=picks[g.id]===winner;
+      const conf=confidence[g.id]||1;const pct=picks[g.id]===g.home?calcWinPct(g,"home",standings):calcWinPct(g,"away",standings);
+      const pts=picksPoints[g.id]??dynPts(pct,conf);if(ok){correct++;totalPts+=pts;}
+      // card bg
+      const cardBg=ctx.createLinearGradient(60,y,W-60,y+130);
+      cardBg.addColorStop(0,ok?"#00FF9D0a":"#ff44440a");cardBg.addColorStop(1,"#0d1117");
+      ctx.fillStyle=cardBg;ctx.beginPath();ctx.roundRect(60,y,W-120,130,16);ctx.fill();
+      ctx.strokeStyle=ok?"#00FF9D44":"#ff444444";ctx.lineWidth=1.5;ctx.beginPath();ctx.roundRect(60,y,W-120,130,16);ctx.stroke();
+      // teams
+      ctx.fillStyle="#e0eaf5";ctx.font="700 36px sans-serif";ctx.textAlign="left";
+      ctx.fillText(`${g.away} vs ${g.home}`,100,y+50);
+      ctx.fillStyle="#64748b";ctx.font="400 26px sans-serif";
+      ctx.fillText(`${g.awayScore} – ${g.homeScore}`,100,y+90);
+      // pick badge
+      const bdg=ok?"#00FF9D":"#ff6666";
+      ctx.fillStyle=bdg+"22";ctx.beginPath();ctx.roundRect(W-280,y+20,180,52,26);ctx.fill();
+      ctx.fillStyle=bdg;ctx.font="700 24px sans-serif";ctx.textAlign="center";
+      ctx.fillText(ok?`✓ +${pts} pts`:`✗ ${picks[g.id]}`,W-190,y+52);
+      ctx.textAlign="left";
+    });
+    // summary bar
+    const sy=200+finishedWithPick.length*160+10;
+    const sbg=ctx.createLinearGradient(60,sy,W-60,sy+90);sbg.addColorStop(0,"#00C2FF15");sbg.addColorStop(1,"#0066ff15");
+    ctx.fillStyle=sbg;ctx.beginPath();ctx.roundRect(60,sy,W-120,90,16);ctx.fill();
+    ctx.strokeStyle="#00C2FF33";ctx.lineWidth=1.5;ctx.beginPath();ctx.roundRect(60,sy,W-120,90,16);ctx.stroke();
+    ctx.fillStyle="#ffffff";ctx.font="900 38px Arial Black,sans-serif";ctx.textAlign="center";
+    ctx.fillText(`${correct}/${finishedWithPick.length} correctos · +${totalPts} pts`,W/2,sy+58);
+    // footer
+    ctx.fillStyle="#334155";ctx.font="400 24px sans-serif";ctx.textAlign="center";
+    ctx.fillText("appbasket.vercel.app",W/2,H-24);
+    // share
+    cv.toBlob(blob=>{
+      if(!blob) return;
+      const file=new File([blob],"court-iq-resultado.png",{type:"image/png"});
+      if(navigator.canShare?.({files:[file]})){navigator.share({title:"Mis picks de hoy — Court IQ 🏀",files:[file]}).catch(()=>{});}
+      else{const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="court-iq-resultado.png";a.click();}
+    },"image/png");
+  };
+
 
   return(<div className="fade-up">
     <Confetti active={showConfetti}/>
@@ -524,6 +593,11 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         <button className="btn" onClick={lockAllPicks} style={{width:"100%",padding:"13px",borderRadius:12,background:"linear-gradient(135deg,#FF6B35,#ff9500)",color:"#07090f",fontWeight:900,fontSize:14,letterSpacing:.5}}>🔒 Cerrar mis picks y ver los del grupo</button>
       </div>
     </>}
+    {user&&games.some(g=>g.status==="Final"&&picks[g.id])&&
+      <button className="btn" onClick={shareResult} style={{width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#ffffff",fontWeight:900,fontSize:15,marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+        📤 Compartir mis resultados
+      </button>
+    }
   </div>);
 };
 
