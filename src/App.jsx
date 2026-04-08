@@ -824,44 +824,89 @@ const ACHIEVEMENT_DEFS=[
 
 // ─── SHOP ITEMS ─────────────────────────────────────────────────────────────
 const SHOP_ITEMS=[
-  // Títulos (aparecen antes del nombre en el ranking)
-  {key:"title_rey",   emoji:"👑",name:"Título Rey",      desc:"👑 antes de tu nombre en el ranking",   cost:200, type:"title",  cat:"Títulos"},
-  {key:"title_mvp",   emoji:"🏅",name:"Título MVP",      desc:"🏅 MVP junto a tu nombre",              cost:350, type:"title",  cat:"Títulos"},
-  {key:"title_fire",  emoji:"🔥",name:"Título Fuego",    desc:"🔥 antes de tu nombre",                cost:120, type:"title",  cat:"Títulos"},
-  {key:"title_goat",  emoji:"🐐",name:"Título GOAT",     desc:"🐐 el más grande, junto a tu nombre",  cost:500, type:"title",  cat:"Títulos"},
+  // Títulos
+  {key:"title_rookie",   emoji:"🐣",name:"Título Rookie",    desc:"🐣 para los que están empezando",        cost:50,  type:"title", cat:"Títulos"},
+  {key:"title_fire",     emoji:"🔥",name:"Título Fuego",     desc:"🔥 antes de tu nombre",                 cost:120, type:"title", cat:"Títulos"},
+  {key:"title_sniper",   emoji:"🎯",name:"Título Sniper",    desc:"🎯 puntería perfecta, junto a tu nombre",cost:150, type:"title", cat:"Títulos"},
+  {key:"title_lightning",emoji:"⚡",name:"Título Rayo",      desc:"⚡ velocidad y energía",                 cost:180, type:"title", cat:"Títulos"},
+  {key:"title_rey",      emoji:"👑",name:"Título Rey",       desc:"👑 antes de tu nombre en el ranking",    cost:200, type:"title", cat:"Títulos"},
+  {key:"title_brain",    emoji:"🧠",name:"Título Cerebro",   desc:"🧠 el más inteligente del grupo",        cost:200, type:"title", cat:"Títulos"},
+  {key:"title_lion",     emoji:"🦁",name:"Título León",      desc:"🦁 domina el ranking con fuerza",        cost:250, type:"title", cat:"Títulos"},
+  {key:"title_shark",    emoji:"🦈",name:"Título Tiburón",   desc:"🦈 implacable en los picks",             cost:300, type:"title", cat:"Títulos"},
+  {key:"title_legend",   emoji:"🌟",name:"Título Leyenda",   desc:"🌟 para las verdaderas leyendas",        cost:400, type:"title", cat:"Títulos"},
+  {key:"title_mvp",      emoji:"🏅",name:"Título MVP",       desc:"🏅 MVP junto a tu nombre",              cost:350, type:"title", cat:"Títulos"},
+  {key:"title_goat",     emoji:"🐐",name:"Título GOAT",      desc:"🐐 el más grande, junto a tu nombre",   cost:500, type:"title", cat:"Títulos"},
+  {key:"title_diamond",  emoji:"💎",name:"Título Diamante",  desc:"💎 raro y exclusivo, el tope del juego", cost:600, type:"title", cat:"Títulos"},
   // Colores de nombre
-  {key:"color_fire",  emoji:"🟠",name:"Nombre Fuego",    desc:"Tu nombre en naranja en el ranking",    cost:150, type:"color",  cat:"Colores",  value:"#FF6B35"},
-  {key:"color_gold",  emoji:"🟡",name:"Nombre Dorado",   desc:"Tu nombre en dorado en el ranking",     cost:250, type:"color",  cat:"Colores",  value:"#FFB800"},
-  {key:"color_green", emoji:"🟢",name:"Nombre Verde",    desc:"Tu nombre en verde en el ranking",      cost:150, type:"color",  cat:"Colores",  value:"#00FF9D"},
-  {key:"color_purple",emoji:"🟣",name:"Nombre Violeta",  desc:"Tu nombre en violeta en el ranking",    cost:200, type:"color",  cat:"Colores",  value:"#9B59B6"},
-  // Marcos del avatar/posición
-  {key:"border_gold", emoji:"✨",name:"Marco Dorado",    desc:"Borde dorado en tu posición del ranking",cost:300, type:"border", cat:"Marcos",   value:"#FFB800"},
-  {key:"border_fire", emoji:"🔴",name:"Marco Fuego",     desc:"Borde rojo en tu posición del ranking", cost:300, type:"border", cat:"Marcos",   value:"#FF4444"},
-  {key:"border_neon", emoji:"🔵",name:"Marco Neón",      desc:"Borde cyan neón en tu posición",        cost:250, type:"border", cat:"Marcos",   value:"#00C2FF"},
-  // Funcional
-  {key:"shield",      emoji:"🛡️",name:"Escudo de Racha",desc:"+1 escudo para proteger tu racha (úsalo en Grupos)",cost:75, type:"shield", cat:"Poderes"},
+  {key:"color_white",  emoji:"⬜",name:"Nombre Blanco",   desc:"Tu nombre en blanco puro",               cost:100, type:"color", cat:"Colores", value:"#FFFFFF"},
+  {key:"color_fire",   emoji:"🟠",name:"Nombre Fuego",    desc:"Tu nombre en naranja en el ranking",     cost:150, type:"color", cat:"Colores", value:"#FF6B35"},
+  {key:"color_red",    emoji:"🔴",name:"Nombre Rojo",     desc:"Tu nombre en rojo intenso",              cost:150, type:"color", cat:"Colores", value:"#FF4444"},
+  {key:"color_green",  emoji:"🟢",name:"Nombre Verde",    desc:"Tu nombre en verde en el ranking",       cost:150, type:"color", cat:"Colores", value:"#00FF9D"},
+  {key:"color_blue",   emoji:"🔵",name:"Nombre Azul",     desc:"Tu nombre en azul neón",                 cost:150, type:"color", cat:"Colores", value:"#00C2FF"},
+  {key:"color_teal",   emoji:"🩵",name:"Nombre Turquesa", desc:"Tu nombre en turquesa vibrante",         cost:180, type:"color", cat:"Colores", value:"#00CED1"},
+  {key:"color_purple", emoji:"🟣",name:"Nombre Violeta",  desc:"Tu nombre en violeta en el ranking",     cost:200, type:"color", cat:"Colores", value:"#9B59B6"},
+  {key:"color_pink",   emoji:"🩷",name:"Nombre Rosa",     desc:"Tu nombre en rosa brillante",            cost:200, type:"color", cat:"Colores", value:"#FF69B4"},
+  {key:"color_gold",   emoji:"🟡",name:"Nombre Dorado",   desc:"Tu nombre en dorado en el ranking",      cost:250, type:"color", cat:"Colores", value:"#FFB800"},
+  // Marcos
+  {key:"border_silver", emoji:"🔘",name:"Marco Plata",    desc:"Borde plateado en tu posición",          cost:200, type:"border", cat:"Marcos", value:"#C0C0C0"},
+  {key:"border_neon",   emoji:"🔵",name:"Marco Neón",     desc:"Borde cyan neón en tu posición",         cost:250, type:"border", cat:"Marcos", value:"#00C2FF"},
+  {key:"border_purple", emoji:"🟣",name:"Marco Violeta",  desc:"Borde violeta brillante",                cost:280, type:"border", cat:"Marcos", value:"#9B59B6"},
+  {key:"border_gold",   emoji:"✨",name:"Marco Dorado",   desc:"Borde dorado en tu posición del ranking",cost:300, type:"border", cat:"Marcos", value:"#FFB800"},
+  {key:"border_fire",   emoji:"🔴",name:"Marco Fuego",    desc:"Borde rojo en tu posición del ranking",  cost:300, type:"border", cat:"Marcos", value:"#FF4444"},
+  {key:"border_electric",emoji:"⚡",name:"Marco Eléctrico",desc:"Borde eléctrico que te hace brillar",   cost:350, type:"border", cat:"Marcos", value:"#FFD700"},
+  {key:"border_rainbow", emoji:"🌈",name:"Marco Arcoíris", desc:"Borde arcoíris animado — exclusivo",    cost:500, type:"border", cat:"Marcos", value:"rainbow"},
+  // Poderes
+  {key:"shield",         emoji:"🛡️",name:"Escudo de Racha",desc:"+1 escudo para proteger tu racha (consumible)", cost:75,  type:"shield", cat:"Poderes"},
+  {key:"extra_pick",     emoji:"🔄",name:"Pick Extra",      desc:"Cambia 1 pick aunque el partido ya cerró (consumible)", cost:200, type:"extra_pick", cat:"Poderes"},
 ];
 
 // Helpers para aplicar cosmetics en el leaderboard
-const getNameColor=(items=[])=>{
-  if(items.includes("color_gold"))return "#FFB800";
-  if(items.includes("color_purple"))return "#9B59B6";
-  if(items.includes("color_fire")||items.includes("fire_color"))return "#FF6B35";
-  if(items.includes("color_green"))return "#00FF9D";
+// equipped = {color:"color_gold", title:"title_rey", border:"border_neon"} — solo 1 activo por tipo
+const getNameColor=(items=[],equipped={})=>{
+  // Si hay item equipado de tipo color, ese tiene prioridad
+  const eq=equipped?.color;
+  const key=eq&&items.includes(eq)?eq:null;
+  const active=key||(()=>{
+    const colorItems=SHOP_ITEMS.filter(i=>i.type==="color");
+    // último comprado que tenga
+    for(const ci of [...colorItems].reverse()){if(items.includes(ci.key))return ci.key;}
+    return null;
+  })();
+  if(!active)return null;
+  const found=SHOP_ITEMS.find(i=>i.key===active);
+  if(found?.value)return found.value;
+  // legacy keys
+  if(active==="fire_color")return "#FF6B35";
   return null;
 };
-const getNamePrefix=(items=[])=>{
-  const p=[];
-  if(items.includes("title_goat"))p.push("🐐");
-  if(items.includes("title_mvp"))p.push("🏅");
-  if(items.includes("title_rey")||items.includes("crown_badge"))p.push("👑");
-  if(items.includes("title_fire"))p.push("🔥");
-  return p.join("");
+const getNamePrefix=(items=[],equipped={})=>{
+  const eq=equipped?.title;
+  const key=eq&&items.includes(eq)?eq:null;
+  const active=key||(()=>{
+    const titleItems=SHOP_ITEMS.filter(i=>i.type==="title");
+    for(const ti of [...titleItems].reverse()){if(items.includes(ti.key))return ti.key;}
+    return null;
+  })();
+  if(!active)return "";
+  const found=SHOP_ITEMS.find(i=>i.key===active);
+  if(found?.emoji)return found.emoji+" ";
+  // legacy
+  if(active==="crown_badge")return "👑 ";
+  return "";
 };
-const getBorderColor=(items=[])=>{
-  if(items.includes("border_gold")||items.includes("gold_border"))return "#FFB800";
-  if(items.includes("border_fire"))return "#FF4444";
-  if(items.includes("border_neon"))return "#00C2FF";
+const getBorderColor=(items=[],equipped={})=>{
+  const eq=equipped?.border;
+  const key=eq&&items.includes(eq)?eq:null;
+  const active=key||(()=>{
+    const borderItems=SHOP_ITEMS.filter(i=>i.type==="border");
+    for(const bi of [...borderItems].reverse()){if(items.includes(bi.key))return bi.key;}
+    return null;
+  })();
+  if(!active)return null;
+  if(active==="gold_border")return "#FFB800";
+  const found=SHOP_ITEMS.find(i=>i.key===active);
+  if(found?.value&&found.value!=="rainbow")return found.value;
+  if(found?.value==="rainbow")return "#FF6B35"; // fallback for rainbow
   return null;
 };
 const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
@@ -897,6 +942,7 @@ const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
   const [shields,setShields]=useState(0);
   const [parlay,setParlay]=useState(null);const [parlaySelections,setParlaySelections]=useState({});const [parlayLoading,setParlayLoading]=useState(false);
   const [shopItems,setShopItems]=useState([]);
+  const [myEquipped,setMyEquipped]=useState(()=>JSON.parse(localStorage.getItem("courtiq_equipped_"+(typeof user!=="undefined"?user?.id:""))||"{}"));
   const [lockedPicks,setLockedPicks]=useState(false);
   const [confidence,setConfidence]=useState({});
   const [authMode,setAuthMode]=useState("auto"); // "auto"|"recovery"|"emailRecovery"|"emailCode"
@@ -1025,8 +1071,10 @@ const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
   useEffect(()=>{
     if(!user) return;
     const handler=()=>pickemAPI("myShopItems",{params:{userId:user.id}}).then(d=>{if(d.ok)setShopItems(d.items||[]);});
+    const eqHandler=()=>setMyEquipped(JSON.parse(localStorage.getItem("courtiq_equipped_"+user.id)||"{}"));
     window.addEventListener("courtiq_items_purchased",handler);
-    return()=>window.removeEventListener("courtiq_items_purchased",handler);
+    window.addEventListener("courtiq_equipped_changed",eqHandler);
+    return()=>{window.removeEventListener("courtiq_items_purchased",handler);window.removeEventListener("courtiq_equipped_changed",eqHandler);};
   },[user]);
 
   // Refrescar grupo picks cuando cambia el status de los juegos (para que no desaparezcan los % al iniciar un partido)
@@ -1471,7 +1519,8 @@ const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
             const isMe=r.user_id===user.id;const mc=["#FFB800","#C0C0C0","#CD7F32"];
             // Para isMe usar shopItems del state local (siempre fresco), para otros usar el del API
             const rItems=isMe?[...shopItems,...(r.shopItems||[])]:r.shopItems||[];
-            const nameClr=getNameColor(rItems);const prefix=getNamePrefix(rItems);const bdClr=getBorderColor(rItems);
+            const rEquipped=isMe?myEquipped:(r.equipped||{});
+            const nameClr=getNameColor(rItems,rEquipped);const prefix=getNamePrefix(rItems,rEquipped);const bdClr=getBorderColor(rItems,rEquipped);
             return <div key={r.user_id||i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 8px",marginBottom:4,borderRadius:10,background:isMe?`${C.accent}11`:i<3?"#FFB80008":"transparent",border:isMe?`1px solid ${C.accent}33`:"1px solid transparent"}}>
               <div style={{width:32,height:32,borderRadius:"50%",background:i<3?`${mc[i]}22`:"#0a1018",border:`2px solid ${bdClr||( i<3?mc[i]:C.border)}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:i<3?14:12,fontWeight:900,color:i<3?mc[i]:C.dim,flexShrink:0,boxShadow:bdClr?`0 0 8px ${bdClr}66`:undefined}}>{i<3?["🥇","🥈","🥉"][i]:i+1}</div>
               <div style={{flex:1,cursor:isMe?undefined:"pointer"}} onClick={()=>!isMe&&openProfile(r)}>
@@ -1567,7 +1616,8 @@ const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
           :leaderboard.map((r,i)=>{
             const isMe=r.user_id===user.id;
             const rItems=isMe?[...shopItems,...(r.shopItems||[])]:r.shopItems||[];
-            const nameClr=getNameColor(rItems);const prefix=getNamePrefix(rItems);const bdClr=getBorderColor(rItems);
+            const rEquipped=isMe?myEquipped:(r.equipped||{});
+            const nameClr=getNameColor(rItems,rEquipped);const prefix=getNamePrefix(rItems,rEquipped);const bdClr=getBorderColor(rItems,rEquipped);
             const streak=streaks[r.user_id]||0;
             return <Card key={r.user_id} style={{marginBottom:8,borderColor:isMe?`${C.accent}44`:C.border,background:isMe?`${C.accent}08`:"#0d1117"}}>
               <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -2735,12 +2785,14 @@ const MiniGamesTab=({players,userCtx})=>{
 const ShopTab=({userCtx})=>{
   const {user}=userCtx||{};
   const [shopItems,setShopItems]=useState([]);
+  const [equipped,setEquipped]=useState(()=>JSON.parse(localStorage.getItem("courtiq_equipped_"+(user?.id||""))||"{}"));
   const [balance,setBalance]=useState(null);
   const [shields,setShields]=useState(0);
   const [loading,setLoading]=useState(false);
   const [msg,setMsg]=useState("");
   const [groupId,setGroupId]=useState(null);
   const [selCat,setSelCat]=useState("Todos");
+  const [showOwned,setShowOwned]=useState(false);
 
   useEffect(()=>{
     if(!user)return;
@@ -2749,7 +2801,20 @@ const ShopTab=({userCtx})=>{
     if(gid) pickemAPI("getBalance",{params:{userId:user.id,groupId:gid}}).then(d=>{if(d.ok)setBalance(d.balance);});
     pickemAPI("myShopItems",{params:{userId:user.id}}).then(d=>{if(d.ok)setShopItems(d.items||[]);});
     pickemAPI("getShields",{params:{userId:user.id}}).then(d=>{if(d.ok)setShields(d.shields||0);});
+    setEquipped(JSON.parse(localStorage.getItem("courtiq_equipped_"+user.id)||"{}"));
   },[user]);
+
+  const equip=(item)=>{
+    const type=item.type;
+    const cur=equipped[type];
+    const next=cur===item.key?null:item.key; // toggle off if already equipped
+    const updated=next?{...equipped,[type]:next}:{...equipped};
+    if(!next)delete updated[type];
+    setEquipped(updated);
+    localStorage.setItem("courtiq_equipped_"+user.id,JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent("courtiq_equipped_changed"));
+    setMsg(next?`⚡ "${item.name}" equipado en tu perfil`:`✅ Item desequipado`);
+  };
 
   const buy=async(item)=>{
     if(!groupId){setMsg("Abre un grupo primero para gastar monedas");return;}
@@ -2758,7 +2823,18 @@ const ShopTab=({userCtx})=>{
     const d=await pickemAPI("purchaseItem",{body:{userId:user.id,groupId,itemKey:item.key,itemCost:item.cost}});
     if(d.ok){
       if(item.type==="shield"){setShields(s=>s+1);setMsg("✅ +1 escudo de racha agregado");}
-      else{setShopItems(s=>[...s,item.key]);setMsg(`✅ ¡${item.name} aplicado en el ranking!`);window.dispatchEvent(new CustomEvent("courtiq_items_purchased",{detail:{userId:user.id}}));}
+      else if(item.type==="extra_pick"){setMsg("✅ +1 pick extra agregado");}
+      else{
+        const newItems=[...shopItems,item.key];
+        setShopItems(newItems);
+        // Auto-equip al comprar
+        const updated={...equipped,[item.type]:item.key};
+        setEquipped(updated);
+        localStorage.setItem("courtiq_equipped_"+user.id,JSON.stringify(updated));
+        window.dispatchEvent(new CustomEvent("courtiq_items_purchased",{detail:{userId:user.id}}));
+        window.dispatchEvent(new CustomEvent("courtiq_equipped_changed"));
+        setMsg(`✅ ¡${item.name} comprado y equipado!`);
+      }
       setBalance(b=>b-item.cost);
     }else setMsg(d.error||"Error");
     setLoading(false);
@@ -2767,43 +2843,96 @@ const ShopTab=({userCtx})=>{
   if(!user)return<div className="fade-up"><Card style={{textAlign:"center",padding:40}}><div style={{fontSize:48,marginBottom:12}}>🛍️</div><div style={{fontSize:16,fontWeight:700,color:C.text}}>Inicia sesión para acceder a la tienda</div></Card></div>;
 
   const cats=["Todos",...new Set(SHOP_ITEMS.map(i=>i.cat))];
-  const filtered=selCat==="Todos"?SHOP_ITEMS:SHOP_ITEMS.filter(i=>i.cat===selCat);
+  const allOwned=SHOP_ITEMS.filter(i=>i.type!=="shield"&&i.type!=="extra_pick"&&shopItems.includes(i.key));
+  const filtered=(showOwned?allOwned:(selCat==="Todos"?SHOP_ITEMS:SHOP_ITEMS.filter(i=>i.cat===selCat)));
+
+  // Preview del jugador con items equipados
+  const previewColor=getNameColor(shopItems,equipped);
+  const previewPrefix=getNamePrefix(shopItems,equipped);
+  const previewBorder=getBorderColor(shopItems,equipped);
 
   return(<div className="fade-up">
     <ST sub="Personaliza tu perfil">Coin Shop 🛍️</ST>
+
     {/* Saldo */}
-    <Card style={{marginBottom:18,background:"linear-gradient(135deg,#FFB80012,#0d1117)",borderColor:"#FFB80044",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
-      <div><div style={{fontSize:9,color:"#FFB800",textTransform:"uppercase",letterSpacing:2}}>Tu saldo</div><div style={{fontSize:40,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800"}}>{balance!==null?balance:<Spin/>} 🪙</div><div style={{fontSize:10,color:C.dim}}>Gana monedas apostando y acertando picks</div></div>
+    <Card style={{marginBottom:14,background:"linear-gradient(135deg,#FFB80012,#0d1117)",borderColor:"#FFB80044",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+      <div><div style={{fontSize:9,color:"#FFB800",textTransform:"uppercase",letterSpacing:2}}>Tu saldo</div><div style={{fontSize:40,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800"}}>{balance!==null?balance:<Spin/>} 🪙</div><div style={{fontSize:10,color:C.dim}}>Gana monedas acertando picks</div></div>
       {shields>0&&<div style={{background:"#00C2FF11",border:"1px solid #00C2FF33",borderRadius:10,padding:"10px 16px",textAlign:"center"}}><div style={{fontSize:9,color:C.accent,textTransform:"uppercase",letterSpacing:1}}>Escudos</div><div style={{fontSize:28,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.accent}}>🛡️ {shields}</div></div>}
     </Card>
-    {msg&&<div style={{marginBottom:14,padding:"10px 14px",background:msg.startsWith("✅")?"#00FF9D11":"#ff444411",border:`1px solid ${msg.startsWith("✅")?"#00FF9D33":"#ff444433"}`,borderRadius:10,fontSize:12,color:msg.startsWith("✅")?"#00FF9D":"#ff6666"}}>{msg}</div>}
-    {/* Categorías */}
+
+    {/* Vista previa del perfil */}
+    {allOwned.length>0&&<Card style={{marginBottom:14,background:"#0a1018",borderColor:C.border}}>
+      <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>Vista previa de tu perfil</div>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <div style={{width:38,height:38,borderRadius:"50%",background:"#0d1117",border:`2px solid ${previewBorder||C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,boxShadow:previewBorder?`0 0 10px ${previewBorder}66`:undefined}}>{user?.emoji||"🏀"}</div>
+        <div>
+          <div style={{fontSize:14,fontWeight:800,color:previewColor||C.text}}>{previewPrefix}{user?.name||"Tú"}</div>
+          <div style={{fontSize:10,color:C.dim}}>Así te ven en el ranking</div>
+        </div>
+      </div>
+    </Card>}
+
+    {/* Mis items equipados */}
+    {allOwned.length>0&&<Card style={{marginBottom:14,borderColor:"#FFB80033",background:"#FFB80008"}}>
+      <div style={{fontSize:9,color:"#FFB800",textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>⚡ Items Equipados</div>
+      {["title","color","border"].map(type=>{
+        const eqKey=equipped[type];
+        const eqItem=eqKey?SHOP_ITEMS.find(i=>i.key===eqKey):null;
+        const ownedOfType=allOwned.filter(i=>i.type===type);
+        if(ownedOfType.length===0)return null;
+        return<div key={type} style={{marginBottom:8}}>
+          <div style={{fontSize:9,color:C.dim,textTransform:"uppercase",letterSpacing:1,marginBottom:5}}>{type==="title"?"Título":type==="color"?"Color de nombre":"Marco"}</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {ownedOfType.map(item=>{
+              const isEq=equipped[type]===item.key;
+              return<button key={item.key} className="btn" onClick={()=>equip(item)} style={{padding:"5px 10px",borderRadius:20,background:isEq?"#FFB80022":"#0d1117",border:`1px solid ${isEq?"#FFB800":C.border}`,color:isEq?"#FFB800":C.dim,fontSize:11,fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
+                <span>{item.emoji}</span><span>{item.name.replace("Título ","").replace("Nombre ","").replace("Marco ","")}</span>
+                {isEq&&<span style={{fontSize:9,color:"#FFB800"}}>✓</span>}
+              </button>;
+            })}
+          </div>
+        </div>;
+      })}
+    </Card>}
+
+    {msg&&<div style={{marginBottom:14,padding:"10px 14px",background:msg.startsWith("✅")||msg.startsWith("⚡")?"#00FF9D11":"#ff444411",border:`1px solid ${msg.startsWith("✅")||msg.startsWith("⚡")?"#00FF9D33":"#ff444433"}`,borderRadius:10,fontSize:12,color:msg.startsWith("✅")||msg.startsWith("⚡")?"#00FF9D":"#ff6666"}}>{msg}</div>}
+
+    {/* Filtros */}
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:14,paddingBottom:4}}>
-      {cats.map(c=><button key={c} className="btn" onClick={()=>setSelCat(c)} style={{padding:"6px 14px",borderRadius:20,background:selCat===c?C.accent:"#0d1117",border:`1px solid ${selCat===c?C.accent:C.border}`,color:selCat===c?"#07090f":C.dim,fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{c}</button>)}
+      <button className="btn" onClick={()=>{setShowOwned(o=>!o);setSelCat("Todos");}} style={{padding:"6px 14px",borderRadius:20,background:showOwned?"#FFB800":"#0d1117",border:`1px solid ${showOwned?"#FFB800":C.border}`,color:showOwned?"#07090f":C.dim,fontSize:11,fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>
+        🎒 Mis items {allOwned.length>0&&`(${allOwned.length})`}
+      </button>
+      {!showOwned&&cats.map(c=><button key={c} className="btn" onClick={()=>setSelCat(c)} style={{padding:"6px 14px",borderRadius:20,background:selCat===c?C.accent:"#0d1117",border:`1px solid ${selCat===c?C.accent:C.border}`,color:selCat===c?"#07090f":C.dim,fontSize:11,fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>{c}</button>)}
     </div>
-    {/* Items */}
+
+    {/* Grid de items */}
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:22}}>
       {filtered.map(item=>{
-        const owned=item.type==="shield"?false:shopItems.includes(item.key);
+        const owned=item.type==="shield"||item.type==="extra_pick"?false:shopItems.includes(item.key);
+        const isEquipped=owned&&equipped[item.type]===item.key;
         const canAfford=balance===null||balance>=item.cost;
-        return<Card key={item.key} style={{padding:"16px 12px",borderColor:owned?`${C.accent}55`:C.border,position:"relative",overflow:"hidden"}}>
-          {owned&&<div style={{position:"absolute",top:8,right:8,background:`${C.accent}22`,border:`1px solid ${C.accent}44`,borderRadius:8,padding:"2px 6px",fontSize:8,fontWeight:700,color:C.accent}}>TUYO</div>}
+        const isRainbow=item.value==="rainbow";
+        return<Card key={item.key} style={{padding:"16px 12px",borderColor:isEquipped?`#FFB80077`:owned?`${C.accent}55`:C.border,position:"relative",overflow:"hidden",background:isEquipped?"#FFB80008":undefined}}>
+          {isEquipped&&<div style={{position:"absolute",top:6,right:6,background:"#FFB80022",border:"1px solid #FFB80066",borderRadius:8,padding:"2px 6px",fontSize:8,fontWeight:700,color:"#FFB800"}}>⚡ PUESTO</div>}
+          {owned&&!isEquipped&&<div style={{position:"absolute",top:6,right:6,background:`${C.accent}22`,border:`1px solid ${C.accent}44`,borderRadius:8,padding:"2px 6px",fontSize:8,fontWeight:700,color:C.accent}}>TUYO</div>}
           <div style={{fontSize:32,marginBottom:6,textAlign:"center"}}>{item.emoji}</div>
           <div style={{fontSize:12,fontWeight:800,color:owned?C.text:C.muted,textAlign:"center",marginBottom:4}}>{item.name}</div>
           <div style={{fontSize:9,color:C.dim,textAlign:"center",marginBottom:10,lineHeight:1.4}}>{item.desc}</div>
           {item.type==="color"&&<div style={{height:4,borderRadius:2,background:item.value,marginBottom:10}}/>}
-          {item.type==="border"&&<div style={{height:4,borderRadius:2,background:`linear-gradient(90deg,transparent,${item.value},transparent)`,marginBottom:10}}/>}
-          {owned&&item.type!=="shield"
-            ?<div style={{textAlign:"center",fontSize:11,color:C.accent,fontWeight:700}}>✅ Aplicado</div>
+          {item.type==="border"&&<div style={{height:4,borderRadius:2,background:isRainbow?"linear-gradient(90deg,#FF0000,#FF7F00,#FFFF00,#00FF00,#00C2FF,#8B00FF)":`linear-gradient(90deg,transparent,${item.value},transparent)`,marginBottom:10}}/>}
+          {owned&&item.type!=="shield"&&item.type!=="extra_pick"
+            ?<button className="btn" onClick={()=>equip(item)} style={{width:"100%",padding:"8px",borderRadius:8,background:isEquipped?"linear-gradient(135deg,#FFB800,#ff9500)":"#0d1117",color:isEquipped?"#07090f":C.muted,fontSize:11,fontWeight:900,border:`1px solid ${isEquipped?"#FFB800":C.border}`}}>
+              {isEquipped?"⚡ Equipado":"Equipar"}
+            </button>
             :<button className="btn" onClick={()=>buy(item)} disabled={loading||(!owned&&!canAfford)} style={{width:"100%",padding:"8px",borderRadius:8,background:canAfford?`linear-gradient(135deg,#FFB800,#ff9500)`:"#0a1018",color:canAfford?"#07090f":C.muted,fontSize:12,fontWeight:900}}>
-              {item.type==="shield"?"🛡️ ":""}🪙{item.cost}
+              {item.type==="shield"?"🛡️ ":item.type==="extra_pick"?"🔄 ":""}🪙{item.cost}
             </button>
           }
         </Card>;
       })}
     </div>
     <div style={{padding:"12px 16px",background:"#0a1018",borderRadius:10,border:`1px solid ${C.border}`,fontSize:11,color:C.dim}}>
-      💡 Los títulos y colores aparecen en el ranking de tu grupo visible para todos. El escudo protege tu racha de aciertos.
+      💡 Equipa solo un título, color y marco a la vez. Se ven en el ranking de tu grupo. El escudo protege tu racha de aciertos.
     </div>
   </div>);
 };
