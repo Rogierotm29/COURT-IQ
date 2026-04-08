@@ -2,13 +2,36 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { AreaChart, Area, BarChart, Bar, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 //Consts
 const C={bg:"#07090f",card:"#0d1117",border:"#1a2535",muted:"#3d5166",dim:"#566880",text:"#e0eaf5",accent:"#00C2FF"};
-const GS=()=><style>{`@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;500;600;700;800;900&display=swap');*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}body{background:#07090f}::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:#1e2d40;border-radius:4px}@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}@keyframes spin{to{transform:rotate(360deg)}}@keyframes bounceIn{0%{transform:scale(.85);opacity:0}60%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-5px)}40%,80%{transform:translateX(5px)}}.fade-up{animation:fadeUp .35s ease both}.pick-correct{animation:bounceIn .5s ease both}.pick-wrong{animation:shake .4s ease both}.btn{cursor:pointer;border:none;outline:none;transition:all .15s;font-family:inherit}.btn:hover{filter:brightness(1.15)}.card{transition:transform .15s,box-shadow .15s}.card:hover{transform:translateY(-2px);box-shadow:0 8px 28px #00000055}input,select{outline:none;font-family:inherit}.spin{animation:spin 1s linear infinite}`}</style>;
+const GS=()=><style>{`@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;500;600;700;800;900&display=swap');*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}body{background:#07090f}::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:#1e2d40;border-radius:4px}@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}@keyframes spin{to{transform:rotate(360deg)}}@keyframes bounceIn{0%{transform:scale(.85);opacity:0}60%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-5px)}40%,80%{transform:translateX(5px)}}@keyframes confettiFall{0%{transform:translateY(-10px) rotate(0deg);opacity:1}100%{transform:translateY(105vh) rotate(720deg);opacity:0}}@keyframes floatUp{0%{transform:translateY(0) scale(1);opacity:1}100%{transform:translateY(-70px) scale(1.2);opacity:0}}@keyframes resultPop{0%{transform:translateX(-50%) scale(.6) translateY(20px);opacity:0}60%{transform:translateX(-50%) scale(1.08) translateY(-4px)}100%{transform:translateX(-50%) scale(1) translateY(0);opacity:1}}@keyframes resultOut{0%{opacity:1;transform:translateX(-50%) scale(1)}100%{opacity:0;transform:translateX(-50%) scale(.9) translateY(10px)}}.fade-up{animation:fadeUp .35s ease both}.pick-correct{animation:bounceIn .5s ease both}.pick-wrong{animation:shake .4s ease both}.btn{cursor:pointer;border:none;outline:none;transition:all .15s;font-family:inherit}.btn:hover{filter:brightness(1.15)}.card{transition:transform .15s,box-shadow .15s}.card:hover{transform:translateY(-2px);box-shadow:0 8px 28px #00000055}input,select{outline:none;font-family:inherit}.spin{animation:spin 1s linear infinite}`}</style>;
 const Tag=({c="#00C2FF",children})=><span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:`${c}22`,color:c,letterSpacing:.8}}>{children}</span>;
 const Card=({children,style={}})=><div className="card" style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:18,...style}}>{children}</div>;
 const ST=({children,sub})=><div style={{marginBottom:16}}><div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:2}}>{sub}</div><div style={{fontSize:22,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1,color:C.text}}>{children}</div></div>;
 const Divider=()=><div style={{height:1,background:C.border,margin:"12px 0"}}/>;
 const Spin=({s=20})=><div className="spin" style={{width:s,height:s,border:`2px solid ${C.border}`,borderTopColor:C.accent,borderRadius:"50%",display:"inline-block"}}/>;
 const TT=({active,payload,label})=>active&&payload?.length?<div style={{background:"#0d1117",border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 14px"}}><p style={{color:C.muted,fontSize:10,marginBottom:4}}>{label}</p>{payload.map((p,i)=><p key={i} style={{color:p.color,fontSize:13,fontWeight:700}}>{p.name}: {p.value}</p>)}</div>:null;
+
+// ─── CONFETTI ──────────────────────────────────────────────────────────────
+const CONF_COLORS=['#00C2FF','#00FF9D','#FFB800','#FF6B35','#a855f7','#ffffff','#ff6b9d'];
+const Confetti=({active})=>{
+  if(!active) return null;
+  const particles=Array.from({length:70},(_,i)=>({id:i,x:Math.random()*100,delay:Math.random()*.9,dur:1.4+Math.random()*1.2,color:CONF_COLORS[i%CONF_COLORS.length],w:5+Math.random()*9,h:3+Math.random()*6,rot:Math.random()*360}));
+  return <div style={{position:'fixed',inset:0,pointerEvents:'none',zIndex:9999,overflow:'hidden'}}>
+    {particles.map(p=><div key={p.id} style={{position:'absolute',left:`${p.x}%`,top:-12,width:p.w,height:p.h,background:p.color,borderRadius:2,opacity:0,animation:`confettiFall ${p.dur}s ${p.delay}s ease-in forwards`,transform:`rotate(${p.rot}deg)`}}/>)}
+  </div>;
+};
+
+// ─── RESULT BANNER ─────────────────────────────────────────────────────────
+const ResultBanner=({show,correct,pts,streak,onClose})=>{
+  useEffect(()=>{if(show){const t=setTimeout(onClose,3800);return()=>clearTimeout(t);}},[show]);
+  if(!show) return null;
+  const bg=correct?'linear-gradient(135deg,#00FF9D,#00c97a)':'linear-gradient(135deg,#ff4444,#cc2222)';
+  return <div style={{position:'fixed',bottom:90,left:'50%',transform:'translateX(-50%)',background:bg,color:'#07090f',borderRadius:20,padding:'16px 28px',fontSize:20,fontWeight:900,zIndex:9998,animation:'resultPop .5s ease both',boxShadow:'0 12px 40px #00000088',display:'flex',alignItems:'center',gap:12,whiteSpace:'nowrap'}}>
+    {correct?<>✅ <span>+{pts} pts</span>{streak>=3&&<span style={{background:'#07090f22',borderRadius:10,padding:'2px 10px',fontSize:15}}>🔥 Racha {streak}</span>}</>:<>❌ <span>Mala suerte</span></>}
+  </div>;
+};
+
+// ─── FLOATING POINTS ───────────────────────────────────────────────────────
+const FloatPts=({pts,correct})=><div style={{position:'absolute',top:'-8px',right:10,fontSize:18,fontWeight:900,color:correct?'#00FF9D':'#ff6666',pointerEvents:'none',animation:'floatUp 1.2s ease forwards',zIndex:100,textShadow:'0 2px 8px #00000088'}}>{correct?`+${pts}`:`-${pts}`}</div>;
 const LiveBadge=({live})=><span style={{fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:20,letterSpacing:.8,background:live?"#00FF9D18":"#1a2535",color:live?"#00FF9D":C.muted}}>{live?"🟢 LIVE":"📦 Cache"}</span>;
 
 /* ═══ TEAM META + LOGOS ═══ */
@@ -203,6 +226,21 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
   const [picksPoints,setPicksPoints]=useState({});
   const [streak,setStreak]=useState(0);
   const [weeklyStats,setWeeklyStats]=useState(null);
+  const [showConfetti,setShowConfetti]=useState(false);
+  const [resultBanner,setResultBanner]=useState({show:false,correct:false,pts:0,streak:0});
+  const [floatingPts,setFloatingPts]=useState({}); // {gameId: {pts,correct,key}}
+  const prevStatusRef=useRef({});
+
+  const triggerCelebration=(correctPts,str)=>{
+    const today=new Date().toISOString().split("T")[0];
+    const cKey=`courtiq_celebrated_${user?.id}_${today}`;
+    if(localStorage.getItem(cKey)) return;
+    localStorage.setItem(cKey,"1");
+    setShowConfetti(true);
+    setResultBanner({show:true,correct:true,pts:correctPts,streak:str});
+    setTimeout(()=>setShowConfetti(false),3500);
+  };
+
   useEffect(()=>{
     if(!user)return;
     const today=new Date().toISOString().split("T")[0];
@@ -217,7 +255,17 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         setGroup(g);
         localStorage.setItem("courtiq_lastgroup_obj",JSON.stringify(g));
         pickemAPI("myPicks",{params:{userId:user.id,groupId:g.id,date:today}}).then(r=>{
-          if(r.ok){const m={},pts={},conf={};(r.picks||[]).forEach(p=>{m[p.game_id]=p.picked_team;if(p.points!=null)pts[p.game_id]=p.points;if(p.confidence)conf[p.game_id]=p.confidence;});setPicks(m);setPicksPoints(pts);setConfidence(conf);}
+          if(r.ok){
+            const m={},pts={},conf={};
+            (r.picks||[]).forEach(p=>{m[p.game_id]=p.picked_team;if(p.points!=null)pts[p.game_id]=p.points;if(p.confidence)conf[p.game_id]=p.confidence;});
+            setPicks(m);setPicksPoints(pts);setConfidence(conf);
+            // Trigger celebration if there are correct picks today
+            const correctPicks=(r.picks||[]).filter(p=>p.correct&&p.points>0);
+            if(correctPicks.length>0){
+              const totalPts=correctPicks.reduce((s,p)=>s+(p.points||0),0);
+              triggerCelebration(totalPts,0);
+            }
+          }
           setLoaded(true);
         });
         pickemAPI("groupPicks",{params:{groupId:g.id}}).then(r=>{if(r.ok)setGrpPicks(r.picks||[]);});
@@ -231,6 +279,25 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
     });
     pickemAPI("dailyBonusStatus",{params:{userId:user.id}}).then(d=>{if(d.ok)setBonusClaimed(d.claimed);});
   },[user]);
+
+  // Detect games going Final → show floating pts animation
+  useEffect(()=>{
+    games.forEach(g=>{
+      const prev=prevStatusRef.current[g.id];
+      if(prev&&prev!=="Final"&&g.status==="Final"&&picks[g.id]){
+        const winner=g.homeScore>g.awayScore?g.home:g.away;
+        const correct=picks[g.id]===winner;
+        const conf=confidence[g.id]||1;
+        const pct=calcWinPct(g,picks[g.id]===g.home?"home":"away",standings);
+        const pts=dynPts(pct,conf);
+        const key=Date.now()+g.id;
+        setFloatingPts(prev=>({...prev,[g.id]:{pts,correct,key}}));
+        setTimeout(()=>setFloatingPts(prev=>{const n={...prev};delete n[g.id];return n;}),1400);
+        if(correct) triggerCelebration(pts,streak);
+      }
+      prevStatusRef.current[g.id]=g.status;
+    });
+  },[games.map(g=>g.status).join(",")]);
 
   const lockAllPicks=()=>{
     if(!group) return;
@@ -261,6 +328,8 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
 
 
   return(<div className="fade-up">
+    <Confetti active={showConfetti}/>
+    <ResultBanner {...resultBanner} onClose={()=>setResultBanner(b=>({...b,show:false}))}/>
     {!user&&<Card style={{marginBottom:22,background:"linear-gradient(135deg,#00C2FF11,#0d1117)",borderColor:"#00C2FF44",textAlign:"center",padding:"30px 20px"}}>
       <div style={{fontSize:44,marginBottom:10}}>🏀🔥</div>
       <div style={{fontSize:22,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,marginBottom:6}}>¡QUÉ SOBRES!</div>
@@ -332,7 +401,9 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         const conf=confidence[g.id]||1;
         const awayPct=calcWinPct(g,"away",standings);const homePct=calcWinPct(g,"home",standings);
         const pickedPct=picked?(picked===g.home?homePct:awayPct):50;
-        return <Card key={g.id} style={{padding:16,borderColor:isFinal&&picked?(correct?"#00FF9D55":"#ff444455"):isLive&&picked?`${tm(picked).color}55`:picked?`${tm(picked).color}44`:C.border,borderWidth:picked?2:1}}>
+        const fp=floatingPts[g.id];
+        return <Card key={g.id} style={{padding:16,position:"relative",borderColor:isFinal&&picked?(correct?"#00FF9D55":"#ff444455"):isLive&&picked?`${tm(picked).color}55`:picked?`${tm(picked).color}44`:C.border,borderWidth:picked?2:1}}>
+        {fp&&<FloatPts key={fp.key} pts={fp.pts} correct={fp.correct}/>}
 
         {/* Header: estado + tu pick */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>

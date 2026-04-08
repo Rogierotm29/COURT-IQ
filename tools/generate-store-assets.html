@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Court IQ — Store Assets Generator</title>
+<style>
+  body { background: #0d1117; color: #e2e8f0; font-family: sans-serif; padding: 24px; }
+  h2 { color: #00C2FF; margin: 32px 0 12px; }
+  .btn { background: linear-gradient(135deg,#00C2FF,#0066ff); color: #07090f; border: none;
+    padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 800; font-size: 14px; margin: 8px 4px; }
+  canvas { display: block; border: 1px solid #1e2d3d; border-radius: 8px; margin: 8px 0; }
+  .section { margin-bottom: 40px; }
+</style>
+</head>
+<body>
+<h1 style="color:#00C2FF;font-size:28px">🏀 Court IQ — Store Assets Generator</h1>
+<p style="color:#64748b">Genera y descarga todos los assets para Google Play Store</p>
+
+<!-- ICON 512x512 -->
+<div class="section">
+  <h2>Ícono de la app — 512×512</h2>
+  <canvas id="icon" width="512" height="512"></canvas>
+  <button class="btn" onclick="download('icon','court-iq-icon-512.png')">⬇ Descargar ícono</button>
+</div>
+
+<!-- FEATURE GRAPHIC 1024x500 -->
+<div class="section">
+  <h2>Gráfico de funciones — 1024×500</h2>
+  <canvas id="feature" width="1024" height="500"></canvas>
+  <button class="btn" onclick="download('feature','court-iq-feature-graphic.png')">⬇ Descargar gráfico</button>
+</div>
+
+<!-- SCREENSHOT 1 -->
+<div class="section">
+  <h2>Captura de pantalla 1 — Picks del día</h2>
+  <canvas id="ss1" width="1080" height="1920"></canvas>
+  <button class="btn" onclick="download('ss1','court-iq-screenshot-1.png')">⬇ Descargar</button>
+</div>
+
+<!-- SCREENSHOT 2 -->
+<div class="section">
+  <h2>Captura de pantalla 2 — Tabla de posiciones</h2>
+  <canvas id="ss2" width="1080" height="1920"></canvas>
+  <button class="btn" onclick="download('ss2','court-iq-screenshot-2.png')">⬇ Descargar</button>
+</div>
+
+<!-- SCREENSHOT 3 -->
+<div class="section">
+  <h2>Captura de pantalla 3 — Grupos y chat</h2>
+  <canvas id="ss3" width="1080" height="1920"></canvas>
+  <button class="btn" onclick="download('ss3','court-iq-screenshot-3.png')">⬇ Descargar</button>
+</div>
+
+<!-- TABLET SCREENSHOT -->
+<div class="section">
+  <h2>Captura tablet — 1200×1920</h2>
+  <canvas id="tablet" width="1200" height="1920"></canvas>
+  <button class="btn" onclick="download('tablet','court-iq-tablet.png')">⬇ Descargar</button>
+</div>
+
+<script>
+const C = { bg: '#07090f', card: '#0d1117', border: '#1e2d3d', accent: '#00C2FF', text: '#e2e8f0', dim: '#64748b', muted: '#334155', green: '#00FF9D', yellow: '#FFB800' };
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+  ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h); ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+  ctx.lineTo(x, y+r); ctx.quadraticCurveTo(x, y, x+r, y);
+  ctx.closePath();
+}
+
+function drawBball(ctx, cx, cy, r, color='#FF6B35') {
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
+  ctx.fillStyle = color; ctx.fill();
+  ctx.strokeStyle = '#00000044'; ctx.lineWidth = r*0.06;
+  // lines
+  ctx.beginPath(); ctx.moveTo(cx-r, cy); ctx.lineTo(cx+r, cy); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, r*0.5, 0, Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx, cy-r); ctx.lineTo(cx, cy+r); ctx.stroke();
+  ctx.restore();
+}
+
+function drawGradBg(ctx, w, h) {
+  const g = ctx.createLinearGradient(0,0,w,h);
+  g.addColorStop(0, '#07090f'); g.addColorStop(1, '#0a1520');
+  ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
+  // subtle grid dots
+  ctx.fillStyle = '#ffffff08';
+  for(let x=0;x<w;x+=40) for(let y=0;y<h;y+=40) { ctx.beginPath(); ctx.arc(x,y,1.5,0,Math.PI*2); ctx.fill(); }
+}
+
+// ─── ICON 512x512 ───────────────────────────────────────────────────────────
+function drawIcon() {
+  const c = document.getElementById('icon'), ctx = c.getContext('2d');
+  const s = 512;
+  // bg gradient
+  const g = ctx.createLinearGradient(0,0,s,s);
+  g.addColorStop(0,'#07090f'); g.addColorStop(1,'#0a1a2e');
+  roundRect(ctx,0,0,s,s,80); ctx.fillStyle=g; ctx.fill();
+  // glow
+  const glow = ctx.createRadialGradient(s/2,s/2,0,s/2,s/2,220);
+  glow.addColorStop(0,'#00C2FF18'); glow.addColorStop(1,'transparent');
+  roundRect(ctx,0,0,s,s,80); ctx.fillStyle=glow; ctx.fill();
+  // border
+  roundRect(ctx,4,4,s-8,s-8,76);
+  ctx.strokeStyle='#00C2FF33'; ctx.lineWidth=3; ctx.stroke();
+  // basketball
+  drawBball(ctx, s/2, s/2-30, 130, '#FF6B35');
+  // accent arc overlay on ball
+  ctx.save();
+  ctx.beginPath(); ctx.arc(s/2, s/2-30, 130, 0, Math.PI*2); ctx.clip();
+  const ballGlow = ctx.createLinearGradient(s/2-130, s/2-160, s/2+130, s/2+100);
+  ballGlow.addColorStop(0,'#ffffff22'); ballGlow.addColorStop(1,'transparent');
+  ctx.fillStyle=ballGlow; ctx.fillRect(s/2-130,s/2-160,260,290);
+  ctx.restore();
+  // text COURT
+  ctx.fillStyle='#ffffff'; ctx.font='900 72px "Arial Black",sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('COURT', s/2, s/2+130);
+  // text IQ accent
+  const tg = ctx.createLinearGradient(s/2-60, 0, s/2+60, 0);
+  tg.addColorStop(0,'#00C2FF'); tg.addColorStop(1,'#0066ff');
+  ctx.fillStyle=tg; ctx.font='900 80px "Arial Black",sans-serif';
+  ctx.fillText('IQ', s/2, s/2+210);
+}
+
+// ─── FEATURE GRAPHIC 1024x500 ───────────────────────────────────────────────
+function drawFeature() {
+  const c = document.getElementById('feature'), ctx = c.getContext('2d');
+  const W=1024, H=500;
+  drawGradBg(ctx,W,H);
+  // glow left
+  const gl = ctx.createRadialGradient(300,H/2,0,300,H/2,300);
+  gl.addColorStop(0,'#00C2FF15'); gl.addColorStop(1,'transparent');
+  ctx.fillStyle=gl; ctx.fillRect(0,0,W,H);
+  // basketball right side
+  drawBball(ctx, W-180, H/2+20, 160, '#FF6B35');
+  // big text
+  ctx.fillStyle='#ffffff'; ctx.font='900 96px "Arial Black",sans-serif';
+  ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText('COURT', 60, H/2-40);
+  const tg = ctx.createLinearGradient(60,0,300,0);
+  tg.addColorStop(0,'#00C2FF'); tg.addColorStop(1,'#0066ff');
+  ctx.fillStyle=tg; ctx.font='900 110px "Arial Black",sans-serif';
+  ctx.fillText('IQ', 60, H/2+70);
+  // tagline
+  ctx.fillStyle='#94a3b8'; ctx.font='400 28px sans-serif';
+  ctx.fillText('Predice • Compite • Gana', 64, H/2+145);
+  // badge
+  roundRect(ctx,64,H/2+175,220,44,22);
+  ctx.fillStyle='#00C2FF22'; ctx.fill();
+  roundRect(ctx,64,H/2+175,220,44,22);
+  ctx.strokeStyle='#00C2FF55'; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.fillStyle='#00C2FF'; ctx.font='700 18px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('🏀 Pick\'em NBA', 174, H/2+198);
+}
+
+// ─── SCREENSHOT helper ───────────────────────────────────────────────────────
+function drawPhone(id, title, subtitle, items, colors) {
+  const c = document.getElementById(id), ctx = c.getContext('2d');
+  const W=1080, H=1920;
+  drawGradBg(ctx,W,H);
+  // status bar
+  ctx.fillStyle='#ffffff20'; ctx.fillRect(0,0,W,60);
+  ctx.fillStyle='#94a3b8'; ctx.font='500 28px sans-serif'; ctx.textAlign='left';
+  ctx.fillText('9:41', 40, 40);
+  ctx.textAlign='right'; ctx.fillText('● ● ▐▐  WiFi', W-40, 40);
+  // header
+  ctx.fillStyle='#00C2FF'; ctx.font='900 52px "Arial Black",sans-serif';
+  ctx.textAlign='center'; ctx.fillText('Court IQ 🏀', W/2, 160);
+  ctx.fillStyle='#64748b'; ctx.font='400 32px sans-serif';
+  ctx.fillText(subtitle, W/2, 215);
+  // cards
+  items.forEach((item, i) => {
+    const y = 280 + i*220;
+    roundRect(ctx, 60, y, W-120, 190, 24);
+    ctx.fillStyle='#0d1117'; ctx.fill();
+    roundRect(ctx, 60, y, W-120, 190, 24);
+    ctx.strokeStyle = colors[i%colors.length]+'44'; ctx.lineWidth=2; ctx.stroke();
+    // content
+    ctx.fillStyle='#ffffff'; ctx.font='700 36px sans-serif'; ctx.textAlign='left';
+    ctx.fillText(item.title, 100, y+65);
+    ctx.fillStyle='#64748b'; ctx.font='400 28px sans-serif';
+    ctx.fillText(item.sub, 100, y+110);
+    // badge
+    if(item.badge) {
+      roundRect(ctx, W-200, y+20, 130, 50, 25);
+      ctx.fillStyle=colors[i%colors.length]+'22'; ctx.fill();
+      ctx.fillStyle=colors[i%colors.length]; ctx.font='700 24px sans-serif'; ctx.textAlign='center';
+      ctx.fillText(item.badge, W-135, y+52);
+    }
+    ctx.textAlign='left';
+  });
+  // bottom title
+  ctx.fillStyle='#ffffff'; ctx.font='900 64px "Arial Black",sans-serif';
+  ctx.textAlign='center';
+  ctx.fillText(title, W/2, H-200);
+  ctx.fillStyle='#00C2FF'; ctx.font='700 34px sans-serif';
+  ctx.fillText('appbasket.vercel.app', W/2, H-140);
+}
+
+// Screenshot 1 — Picks
+drawPhone('ss1', 'Picks del día', 'Elige al ganador antes de que empiece',
+  [
+    {title:'Lakers vs Warriors', sub:'Hoy 7:30 PM', badge:'+8 pts'},
+    {title:'Celtics vs Heat', sub:'Hoy 8:00 PM', badge:'+12 pts'},
+    {title:'Nuggets vs Suns', sub:'Hoy 9:00 PM', badge:'+15 pts'},
+    {title:'Bucks vs Nets', sub:'Mañana 7:00 PM', badge:'+6 pts'},
+    {title:'Knicks vs Bulls', sub:'Mañana 8:30 PM', badge:'+10 pts'},
+  ],
+  ['#00C2FF','#00FF9D','#FFB800','#FF6B35','#a855f7']
+);
+
+// Screenshot 2 — Leaderboard
+drawPhone('ss2', 'Tabla de posiciones', 'Compite con tus amigos',
+  [
+    {title:'🥇 Carlos', sub:'142 pts • 78% aciertos', badge:'🔥 8'},
+    {title:'🥈 Rogelio', sub:'138 pts • 74% aciertos', badge:'🔥 5'},
+    {title:'🥉 Miguel', sub:'121 pts • 69% aciertos', badge:'🔥 3'},
+    {title:'4 · Ana', sub:'98 pts • 65% aciertos', badge:'🔥 2'},
+    {title:'5 · Pedro', sub:'87 pts • 60% aciertos', badge:''},
+  ],
+  ['#FFB800','#94a3b8','#FF6B35','#00C2FF','#64748b']
+);
+
+// Screenshot 3 — Group/Chat
+drawPhone('ss3', 'Grupos privados', 'Crea tu liga con amigos',
+  [
+    {title:'💬 Los del barrio', sub:'5 miembros • Activo ahora', badge:'CHAT'},
+    {title:'🎯 Picks de hoy', sub:'Carlos: Lakers 🏀 +8 pts', badge:'NUEVO'},
+    {title:'🏆 Apuestas', sub:'Miguel retó a todos — 50 🪙', badge:'50🪙'},
+    {title:'📊 Tu semana', sub:'8/10 correctos • +94 pts', badge:'94 pts'},
+    {title:'🔗 Invitar amigos', sub:'Código: ABCDEF', badge:'COPIAR'},
+  ],
+  ['#00C2FF','#00FF9D','#FFB800','#a855f7','#FF6B35']
+);
+
+// Tablet
+function drawTablet() {
+  const c = document.getElementById('tablet'), ctx = c.getContext('2d');
+  const W=1200, H=1920;
+  drawGradBg(ctx,W,H);
+  drawBball(ctx, W/2, 340, 180, '#FF6B35');
+  ctx.fillStyle='#ffffff'; ctx.font='900 110px "Arial Black",sans-serif'; ctx.textAlign='center';
+  ctx.fillText('COURT IQ', W/2, 640);
+  const tg=ctx.createLinearGradient(W/2-200,0,W/2+200,0);
+  tg.addColorStop(0,'#00C2FF'); tg.addColorStop(1,'#0066ff');
+  ctx.fillStyle=tg; ctx.font='500 38px sans-serif';
+  ctx.fillText('Predice • Compite • Gana en la NBA', W/2, 720);
+  const feats=[
+    {e:'🎯',t:'Picks diarios',s:'Predice cada partido'},
+    {e:'🏆',t:'Grupos privados',s:'Compite con amigos'},
+    {e:'📊',t:'Estadísticas',s:'Sigue tu progreso'},
+    {e:'💰',t:'Apuestas',s:'Monedas virtuales'},
+    {e:'🔥',t:'Rachas',s:'Mantén tu racha'},
+    {e:'💬',t:'Chat',s:'Comenta en vivo'},
+  ];
+  feats.forEach((f,i)=>{
+    const col=i%2, row=Math.floor(i/2);
+    const x=80+col*580, y=830+row*320;
+    roundRect(ctx,x,y,520,280,28); ctx.fillStyle='#0d1117'; ctx.fill();
+    roundRect(ctx,x,y,520,280,28); ctx.strokeStyle='#00C2FF33'; ctx.lineWidth=2; ctx.stroke();
+    ctx.font='700 60px sans-serif'; ctx.textAlign='center'; ctx.fillStyle='#fff';
+    ctx.fillText(f.e, x+80, y+100);
+    ctx.font='700 38px sans-serif'; ctx.textAlign='left';
+    ctx.fillStyle='#ffffff'; ctx.fillText(f.t, x+140, y+100);
+    ctx.fillStyle='#64748b'; ctx.font='400 30px sans-serif';
+    ctx.fillText(f.s, x+140, y+150);
+  });
+  ctx.fillStyle='#00C2FF'; ctx.font='700 36px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('appbasket.vercel.app', W/2, H-100);
+}
+
+function download(id, filename) {
+  const c = document.getElementById(id);
+  const a = document.createElement('a');
+  a.href = c.toDataURL('image/png');
+  a.download = filename;
+  a.click();
+}
+
+drawIcon(); drawFeature(); drawTablet();
+</script>
+</body>
+</html>
