@@ -730,6 +730,12 @@ const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
   const [shopItems,setShopItems]=useState([]);
   const [lockedPicks,setLockedPicks]=useState(false);
   const [confidence,setConfidence]=useState({});
+  const [authMode,setAuthMode]=useState("auto"); // "auto"|"recovery"
+  const [recCode,setRecCode]=useState(""); // shown once after new registration
+  const [recInput,setRecInput]=useState(""); // recovery code input
+  const [recNewPin,setRecNewPin]=useState(["","","",""]); // new PIN for recovery
+  const [pendingUser,setPendingUser]=useState(null); // user waiting for recovery code ack
+  const [biometricAvail,setBiometricAvail]=useState(false);
   const [editGroup,setEditGroup]=useState(false);const [editGroupName,setEditGroupName]=useState("");const [editGroupEmoji,setEditGroupEmoji]=useState("");
   const [profileModal,setProfileModal]=useState(null);const [profileData,setProfileData]=useState(null);
   const now=new Date();
@@ -763,7 +769,18 @@ const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
     pickemAPI("getAchievements",{params:{userId:user.id}}).then(d=>{if(d.ok)setAchievements(d.achievements||[]);});
     // Auto-fill invite code if arrived via invite link
     const invite=localStorage.getItem("courtiq_invite_code");
+
     if(invite){localStorage.removeItem("courtiq_invite_code");setJoinCode(invite);setPanel("join");}
+  },[user]);
+
+  // Biometric auto-fill — try to pre-fill credentials from browser credential manager
+  useEffect(()=>{
+    if(user) return;
+    if(!('PasswordCredential' in window)) return;
+    setBiometricAvail(true);
+    navigator.credentials.get({password:true,mediation:"optional"})
+      .then(cred=>{if(cred?.type==="password"){setName(cred.id);const d=cred.password.replace(/\D/g,"").slice(0,4).split("");if(d.length===4)setPin(d);}})
+      .catch(()=>{});
   },[user]);
 
   // Save last selected group and notify FloatingChat
@@ -848,8 +865,23 @@ const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
   const register=async()=>{
     if(!name.trim()) return;
     setLoading(true);
-    const d=await pickemAPI("register",{body:{name:name.trim(),pin:pin.join("")}});
-    if(d.ok){save(d.user);autoSubscribePush(d.user.id);}else setMsg(d.error||"Error");
+    const rawPin=pin.join("");
+    const d=await pickemAPI("register",{body:{name:name.trim(),pin:rawPin}});
+    if(d.ok){
+      // Save to browser credential manager (triggers biometric on future visits)
+      if('PasswordCredential' in window){try{const c=new PasswordCredential({id:name.trim(),password:rawPin,name:name.trim()});navigator.credentials.store(c);}catch{}}
+      if(!d.reconnected&&d.recoveryCode){setPendingUser(d.user);setRecCode(d.recoveryCode);}
+      else{save(d.user);autoSubscribePush(d.user.id);}
+    }else setMsg(d.error||"Error");
+    setLoading(false);
+  };
+
+  const resetPin=async()=>{
+    if(!name.trim()||recInput.length!==8||recNewPin.join("").length!==4) return;
+    setLoading(true);
+    const d=await pickemAPI("resetPin",{body:{name:name.trim(),recoveryCode:recInput,newPin:recNewPin.join("")}});
+    if(d.ok){setAuthMode("auto");setMsg("✅ PIN actualizado. Ya puedes entrar.");setRecInput("");setRecNewPin(["","","",""]);setPin(["","","",""]);}
+    else setMsg(d.error||"Error");
     setLoading(false);
   };
 
@@ -999,25 +1031,59 @@ const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
 
   // ─── NOT REGISTERED ───
     if(!user) return(<div className="fade-up">
-      <ST sub="Pick'em">Crea tu perfil 🎯</ST>
-      <Card style={{maxWidth:420,margin:"0 auto",textAlign:"center",padding:30}}>
+      <ST sub="Pick'em">Court IQ 🏀</ST>
+
+      {/* ── Recovery code shown ONCE after new registration ── */}
+      {recCode&&pendingUser&&<Card style={{maxWidth:420,margin:"0 auto",textAlign:"center",padding:30}}>
+        <div style={{fontSize:40,marginBottom:12}}>🔑</div>
+        <div style={{fontSize:18,fontWeight:800,color:C.text,marginBottom:8}}>¡Cuenta creada!</div>
+        <div style={{fontSize:12,color:C.dim,marginBottom:16}}>Guarda este código de recuperación. Lo necesitarás si olvidas tu PIN.</div>
+        <div style={{background:"#0a1018",border:`2px dashed ${C.accent}`,borderRadius:12,padding:"18px 24px",marginBottom:16}}>
+          <div style={{fontSize:10,color:C.muted,letterSpacing:2,marginBottom:6}}>CÓDIGO DE RECUPERACIÓN</div>
+          <div style={{fontSize:32,fontWeight:900,letterSpacing:8,color:C.accent,fontFamily:"'Bebas Neue',sans-serif"}}>{recCode}</div>
+        </div>
+        <div style={{fontSize:11,color:"#f59e0b",marginBottom:20,padding:"8px 12px",background:"#f59e0b11",border:"1px solid #f59e0b33",borderRadius:8}}>⚠️ Toma captura de pantalla ahora. No se puede recuperar después.</div>
+        <button className="btn" onClick={()=>{save(pendingUser);autoSubscribePush(pendingUser.id);setRecCode("");setPendingUser(null);}} style={{width:"100%",padding:"14px",borderRadius:11,background:`linear-gradient(135deg,${C.accent},#0066ff)`,color:"#07090f",fontSize:15,fontWeight:900}}>Entendido, entrar →</button>
+      </Card>}
+
+      {/* ── Recovery / forgot PIN form ── */}
+      {!recCode&&authMode==="recovery"&&<Card style={{maxWidth:420,margin:"0 auto",textAlign:"center",padding:30}}>
+        <div style={{fontSize:40,marginBottom:12}}>🔓</div>
+        <div style={{fontSize:18,fontWeight:800,color:C.text,marginBottom:8}}>Recuperar PIN</div>
+        <div style={{fontSize:12,color:C.dim,marginBottom:20}}>Ingresa tu nombre y el código que guardaste al crear tu cuenta.</div>
+        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Tu nombre..." style={{width:"100%",background:"#0a1018",border:`1px solid ${C.border}`,borderRadius:11,padding:"14px 16px",color:C.text,fontSize:15,textAlign:"center",boxSizing:"border-box",marginBottom:10}}/>
+        <input value={recInput} onChange={e=>setRecInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""))} placeholder="CÓDIGO (8 CARACTERES)" maxLength={8} style={{width:"100%",background:"#0a1018",border:`1px solid ${recInput.length===8?C.accent:C.border}`,borderRadius:11,padding:"14px 16px",color:C.accent,fontSize:20,fontWeight:900,textAlign:"center",letterSpacing:6,boxSizing:"border-box",marginBottom:10}}/>
+        <div style={{fontSize:10,color:C.muted,marginBottom:6,textAlign:"left",paddingLeft:4}}>🔒 Nuevo PIN de 4 dígitos</div>
+        <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:16}}>
+          {[0,1,2,3].map(i=><input key={i} id={`rpin-${i}`} type="tel" maxLength={1} value={recNewPin[i]||""} onChange={e=>{const v=e.target.value.replace(/\D/g,"");if(v.length<=1){const np=[...recNewPin];np[i]=v;setRecNewPin(np);if(v&&i<3)document.getElementById(`rpin-${i+1}`)?.focus();}}} onKeyDown={e=>{if(e.key==="Backspace"&&!recNewPin[i]&&i>0)document.getElementById(`rpin-${i-1}`)?.focus();}} style={{width:52,height:56,background:"#0a1018",border:`1px solid ${recNewPin[i]?"#00FF9D":C.border}`,borderRadius:12,color:"#00FF9D",fontSize:24,fontWeight:900,textAlign:"center",fontFamily:"'Bebas Neue',sans-serif"}}/>)}
+        </div>
+        <button className="btn" onClick={resetPin} disabled={loading||!name.trim()||recInput.length!==8||recNewPin.join("").length!==4} style={{width:"100%",padding:"14px",borderRadius:11,background:name.trim()&&recInput.length===8&&recNewPin.join("").length===4?"linear-gradient(135deg,#00FF9D,#00a366)":"#1a2535",color:name.trim()&&recInput.length===8&&recNewPin.join("").length===4?"#07090f":C.muted,fontSize:15,fontWeight:900,marginBottom:12}}>{loading?<Spin s={14}/>:"🔓 Recuperar cuenta"}</button>
+        <button className="btn" onClick={()=>{setAuthMode("auto");setMsg("");}} style={{background:"none",color:C.dim,fontSize:13,padding:"8px"}}>← Volver al inicio</button>
+        {msg&&<div style={{marginTop:10,fontSize:12,color:msg.startsWith("✅")?"#00FF9D":"#ff6666"}}>{msg}</div>}
+      </Card>}
+
+      {/* ── Main login / register form ── */}
+      {!recCode&&authMode==="auto"&&<Card style={{maxWidth:420,margin:"0 auto",textAlign:"center",padding:30}}>
         <div style={{fontSize:48,marginBottom:12}}>🏀</div>
-        <div style={{fontSize:18,fontWeight:800,color:C.text,marginBottom:8}}>Únete al Pick'em</div>
-        <div style={{fontSize:12,color:C.dim,marginBottom:24}}>{nameStatus==="taken"?"Ese nombre ya tiene cuenta. Ingresa tu PIN para entrar.":"Primera vez? Elige nombre y PIN para crear tu cuenta."}</div>
+        <div style={{fontSize:18,fontWeight:800,color:C.text,marginBottom:8}}>{nameStatus==="taken"?"Bienvenido de vuelta 👋":"Únete al Pick'em"}</div>
+        <div style={{fontSize:12,color:C.dim,marginBottom:24}}>{nameStatus==="taken"?"Ingresa tu PIN para entrar a tu cuenta.":"Primera vez? Elige nombre y PIN para crear tu cuenta."}</div>
         <div style={{position:"relative",marginBottom:4}}>
-          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Tu nombre..." style={{width:"100%",background:"#0a1018",border:`1px solid ${nameStatus==="available"?"#22c55e":nameStatus==="taken"?"#f59e0b":C.border}`,borderRadius:11,padding:"14px 16px",color:C.text,fontSize:15,textAlign:"center",boxSizing:"border-box"}}/>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Tu nombre..." style={{width:"100%",background:"#0a1018",border:`1px solid ${nameStatus==="available"?"#22c55e":nameStatus==="taken"?"#00C2FF":C.border}`,borderRadius:11,padding:"14px 16px",color:C.text,fontSize:15,textAlign:"center",boxSizing:"border-box"}}/>
         </div>
         {nameStatus==="checking"&&<div style={{fontSize:11,color:C.muted,marginBottom:8,textAlign:"center"}}>Verificando...</div>}
         {nameStatus==="available"&&<div style={{fontSize:11,color:"#22c55e",marginBottom:8,textAlign:"center"}}>✓ Nombre disponible</div>}
-        {nameStatus==="taken"&&<div style={{fontSize:11,color:"#f59e0b",marginBottom:8,textAlign:"center"}}>⚠️ Este nombre ya está en uso — si es tuyo, ingresa tu PIN para entrar</div>}
-        {!nameStatus&&name.trim().length>0&&name.trim().length<2&&<div style={{fontSize:11,color:C.muted,marginBottom:8}}/>}
-        {(!nameStatus||nameStatus==="checking"||nameStatus==="available"||nameStatus==="taken")&&<div style={{fontSize:10,color:C.muted,marginBottom:6,textAlign:"left",paddingLeft:4}}>{nameStatus==="taken"?"🔒 Ingresa tu PIN para acceder a tu cuenta":"🔒 PIN de 4 dígitos (para proteger tu cuenta)"}</div>}
+        {nameStatus==="taken"&&<div style={{fontSize:11,color:C.accent,marginBottom:8,textAlign:"center"}}>✓ Cuenta encontrada — ingresa tu PIN</div>}
+        <div style={{fontSize:10,color:C.muted,marginBottom:6,textAlign:"left",paddingLeft:4}}>{nameStatus==="taken"?"🔒 Tu PIN de 4 dígitos":"🔒 PIN de 4 dígitos (para proteger tu cuenta)"}</div>
         <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:16}}>
           {[0,1,2,3].map(i=><input key={i} id={`pin-${i}`} type="tel" maxLength={1} value={pin[i]||""} onChange={e=>{const v=e.target.value.replace(/\D/g,"");if(v.length<=1){const np=[...pin];np[i]=v;setPin(np);if(v&&i<3)document.getElementById(`pin-${i+1}`)?.focus();}}} onKeyDown={e=>{if(e.key==="Backspace"&&!pin[i]&&i>0)document.getElementById(`pin-${i-1}`)?.focus();}} style={{width:52,height:56,background:"#0a1018",border:`1px solid ${pin[i]?C.accent:C.border}`,borderRadius:12,color:C.accent,fontSize:24,fontWeight:900,textAlign:"center",fontFamily:"'Bebas Neue',sans-serif"}}/>)}
         </div>
         <button className="btn" onClick={register} disabled={loading||nameStatus==="checking"||!name.trim()} style={{width:"100%",padding:"14px",borderRadius:11,background:pin.join("").length===4&&name.trim()?`linear-gradient(135deg,${C.accent},#0066ff)`:`${C.border}`,color:pin.join("").length===4&&name.trim()?"#07090f":C.muted,fontSize:15,fontWeight:900}}>{loading?<Spin s={14}/>:nameStatus==="taken"?"Entrar con PIN 🔑":"Crear cuenta 🚀"}</button>
-        {msg&&<div style={{marginTop:10,fontSize:12,color:"#ff6666"}}>{msg}</div>}
-      </Card>
+        {nameStatus==="taken"&&<div style={{marginTop:12,display:"flex",flexDirection:"column",gap:8,alignItems:"center"}}>
+          {biometricAvail&&<button className="btn" onClick={()=>navigator.credentials.get({password:true,mediation:"required"}).then(cred=>{if(cred?.type==="password"){setName(cred.id);const d=cred.password.replace(/\D/g,"").slice(0,4).split("");if(d.length===4)setPin(d);}}).catch(()=>{})} style={{width:"100%",padding:"12px",borderRadius:11,background:`${C.accent}15`,border:`1px solid ${C.accent}44`,color:C.accent,fontSize:14,fontWeight:700}}>🔐 Usar huella / desbloqueo</button>}
+          <button className="btn" onClick={()=>{setAuthMode("recovery");setMsg("");}} style={{background:"none",color:C.dim,fontSize:12,padding:"4px",textDecoration:"underline"}}>¿Olvidaste tu PIN?</button>
+        </div>}
+        {msg&&<div style={{marginTop:10,fontSize:12,color:msg.startsWith("✅")?"#00FF9D":"#ff6666"}}>{msg}</div>}
+      </Card>}
     </div>);
 
   // ─── MAIN PICK'EM VIEW ───

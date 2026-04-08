@@ -23,6 +23,15 @@ function hashPin(pin) {
   return createHash("sha256").update(pin + "courtiq_salt_2026").digest("hex");
 }
 
+// ─── RECOVERY CODE (deterministic, shown once at registration) ────────────────
+function recoveryCodeFor(userId, name) {
+  return createHash("sha256")
+    .update(userId + name.toLowerCase() + "courtiq_recovery_2026")
+    .digest("hex")
+    .slice(0, 8)
+    .toUpperCase();
+}
+
 // ─── INPUT SANITIZATION ───────────────────────────────────────────────────────
 function sanitize(str, maxLen = 100) {
   if (typeof str !== "string") return "";
@@ -84,7 +93,7 @@ export default async function handler(req, res) {
 
   // Rate limiting — stricter on auth, looser on reads
   const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || "unknown";
-  const authActions = ["register"];
+  const authActions = ["register", "resetPin"];
   const writeActions = ["makePick","createGroup","joinGroup","createBet","acceptBet","sendChat","claimDailyBonus","deleteAccount"];
   const maxReqs = authActions.includes(action) ? 10 : writeActions.includes(action) ? 60 : 120;
   if (rateLimit(ip, action, maxReqs)) {
@@ -123,7 +132,24 @@ export default async function handler(req, res) {
           body: { name: rawName, avatar_emoji: rawEmoji, pin: pinHash },
         });
         const { pin: _p2, ...safeNewUser } = newUser;
-        return res.json({ ok: true, user: safeNewUser });
+        return res.json({ ok: true, user: safeNewUser, recoveryCode: recoveryCodeFor(safeNewUser.id, safeNewUser.name) });
+      }
+
+      // ─── RESET PIN ────────────────────────────────────────
+      case "resetPin": {
+        const rawName = sanitize(body.name, 30);
+        const rawCode = sanitize(body.recoveryCode, 10).toUpperCase();
+        const rawPin = sanitize(body.newPin, 4);
+        if (!rawName || !rawCode || !rawPin || !/^\d{4}$/.test(rawPin))
+          return res.json({ ok: false, error: "Datos inválidos" });
+        const usersFound = await supabase("users", { filters: `?name=eq.${encodeURIComponent(rawName)}&limit=1` });
+        if (!usersFound?.length) return res.json({ ok: false, error: "Usuario no encontrado" });
+        const target = usersFound[0];
+        const expected = recoveryCodeFor(target.id, target.name);
+        if (rawCode !== expected) return res.json({ ok: false, error: "Código de recuperación incorrecto" });
+        await supabase(`users?id=eq.${target.id}`, { method: "PATCH", body: { pin: hashPin(rawPin) } });
+        const { pin: _rp, ...safeTarget } = target;
+        return res.json({ ok: true, user: safeTarget });
       }
 
       // ─── GET USER ─────────────────────────────────────────
