@@ -1516,7 +1516,7 @@ export default async function handler(req, res) {
         const { targetId } = req.query;
         if (!targetId) return res.json({ ok: false, error: "targetId requerido" });
         const [u] = await supabase("users", { filters: `?id=eq.${targetId}&select=id,name,avatar_emoji&limit=1` }) || [];
-        const picks = await supabase("picks", { filters: `?user_id=eq.${targetId}&scored=eq.true&select=picked_team,correct,points&limit=500` });
+        const picks = await supabase("picks", { filters: `?user_id=eq.${targetId}&scored=eq.true&select=picked_team,correct,points,game_date&limit=1000` });
         const achievements = await supabase("user_achievements", { filters: `?user_id=eq.${targetId}&select=achievement_key,unlocked_at` });
         const total = picks?.length || 0;
         const correct = picks?.filter(p => p.correct).length || 0;
@@ -1528,7 +1528,14 @@ export default async function handler(req, res) {
           if (p.correct) byTeam[p.picked_team].correct++;
         }
         const topTeams = Object.values(byTeam).map(t => ({ ...t, acc: Math.round(t.correct / t.total * 100) })).sort((a, b) => b.total - a.total).slice(0, 5);
-        return res.json({ ok: true, user: u, stats: { totalPicks: total, totalCorrect: correct, accuracy: total ? Math.round(correct / total * 100) : 0, totalPoints: pts, topTeams }, achievements: achievements || [] });
+        // Calc best streak from pick history
+        let bestStreak = 0, curS = 0;
+        const sorted = [...(picks || [])].sort((a, b) => new Date(a.game_date||0) - new Date(b.game_date||0));
+        for (const p of sorted) { if (p.correct) { curS++; if (curS > bestStreak) bestStreak = curS; } else curS = 0; }
+        // Shop items (cosmetics)
+        const shopAch = (achievements || []).filter(a => a.achievement_key.startsWith("shop_"));
+        const shopItems = shopAch.map(a => a.achievement_key.replace("shop_", ""));
+        return res.json({ ok: true, user: u, shopItems, stats: { totalPicks: total, totalCorrect: correct, accuracy: total ? Math.round(correct / total * 100) : 0, totalPoints: pts, topTeams, bestStreak }, achievements: achievements || [] });
       }
 
       // ─── STREAK ALERT (cron: 2h before first game) ─────────

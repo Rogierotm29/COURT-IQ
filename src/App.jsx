@@ -1867,50 +1867,84 @@ const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
     </Card>
 
     {/* ─── PROFILE MODAL ─── */}
-    {profileModal&&<div style={{position:"fixed",inset:0,zIndex:2000,background:"#000000bb",display:"flex",alignItems:"flex-end"}} onClick={()=>{setProfileModal(null);setProfileData(null);}}>
-      <div style={{background:C.card,borderRadius:"20px 20px 0 0",padding:24,width:"100%",maxHeight:"75vh",overflowY:"auto",border:`1px solid ${C.border}`}} onClick={e=>e.stopPropagation()}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <div style={{width:52,height:52,borderRadius:"50%",background:`${C.accent}20`,border:`2px solid ${C.accent}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>{profileModal.avatar_emoji||"🏀"}</div>
-            <div><div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text}}>{profileModal.name||profileModal.user_name}</div>
-              {(streaks[profileModal.user_id]||0)>=3&&<div style={{fontSize:12,color:"#FF6B35",fontWeight:700}}>🔥 {streaks[profileModal.user_id]} en racha</div>}
+    {profileModal&&(()=>{
+      const pItems=profileData?.shopItems||[];
+      const pNameClr=getNameColor(pItems);
+      const pPrefix=getNamePrefix(pItems);
+      const pBorder=getBorderColor(pItems);
+      const curStreak=streaks[profileModal.user_id]||0;
+      return<div style={{position:"fixed",inset:0,zIndex:2000,background:"#000000bb",display:"flex",alignItems:"flex-end"}} onClick={()=>{setProfileModal(null);setProfileData(null);}}>
+        <div style={{background:C.card,borderRadius:"20px 20px 0 0",padding:24,width:"100%",maxHeight:"80vh",overflowY:"auto",border:`1px solid ${C.border}`}} onClick={e=>e.stopPropagation()}>
+          {/* Header */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <div style={{width:56,height:56,borderRadius:"50%",background:`${C.accent}20`,border:`2px solid ${pBorder||C.accent+"44"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,flexShrink:0,boxShadow:pBorder?`0 0 12px ${pBorder}55`:undefined}}>{profileModal.avatar_emoji||"🏀"}</div>
+              <div>
+                <div style={{fontSize:22,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:pNameClr||C.text}}>{pPrefix}{profileModal.name||profileModal.user_name}</div>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:3}}>
+                  {curStreak>=3&&<span style={{fontSize:11,color:"#FF6B35",fontWeight:700}}>🔥 {curStreak} en racha</span>}
+                  {profileData?.stats?.bestStreak>=5&&<span style={{fontSize:11,color:"#FFB800",fontWeight:700}}>⚡ Mejor: {profileData.stats.bestStreak}</span>}
+                  {pItems.length>0&&<span style={{fontSize:11,color:"#9B59B6",fontWeight:700}}>💎 {pItems.length} items</span>}
+                </div>
+              </div>
             </div>
+            <button className="btn" onClick={()=>{setProfileModal(null);setProfileData(null);}} style={{background:"none",color:C.muted,fontSize:24,lineHeight:1}}>×</button>
           </div>
-          <button className="btn" onClick={()=>{setProfileModal(null);setProfileData(null);}} style={{background:"none",color:C.muted,fontSize:24,lineHeight:1}}>×</button>
-        </div>
-        {!profileData?<div style={{textAlign:"center",padding:30}}><Spin/></div>:<>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginBottom:16}}>
-            {[["🎯 Picks",profileData.stats?.totalPicks||0,C.accent],["✅ Aciertos",profileData.stats?.totalCorrect||0,"#00FF9D"],["📊 Precisión",`${profileData.stats?.accuracy||0}%`,"#FFB800"],["⭐ Puntos",profileData.stats?.totalPoints||0,"#FF6B35"]].map(([l,v,c])=><div key={l} style={{background:"#0a1018",borderRadius:10,padding:"10px 6px",textAlign:"center"}}>
-              <div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:c}}>{v}</div>
-              <div style={{fontSize:9,color:C.muted,marginTop:2}}>{l}</div>
-            </div>)}
-          </div>
-          {profileData.stats?.favoriteTeam&&<div style={{marginBottom:14}}>
-            <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:1.5,marginBottom:8}}>Equipos favoritos</div>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              {profileData.stats.topTeams?.slice(0,5).map(t=><div key={t.team} style={{background:`${tm(t.team).color}18`,border:`1px solid ${tm(t.team).color}44`,borderRadius:20,padding:"5px 10px",display:"flex",alignItems:"center",gap:6}}>
-                {logo(t.team,18)}<span style={{fontSize:11,fontWeight:700,color:tm(t.team).color}}>{t.team}</span><span style={{fontSize:9,color:C.dim}}>{t.acc}%</span>
+
+          {!profileData?<div style={{textAlign:"center",padding:30}}><Spin/></div>:<>
+            {/* Stats */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginBottom:14}}>
+              {[["🎯",profileData.stats?.totalPicks||0,"Picks",C.accent],["✅",profileData.stats?.totalCorrect||0,"Aciertos","#00FF9D"],["📊",`${profileData.stats?.accuracy||0}%`,"Precisión","#FFB800"],["⭐",profileData.stats?.totalPoints||0,"Puntos","#FF6B35"],["🔥",profileData.stats?.bestStreak||0,"Mejor racha","#FF6B35"]].map(([icon,v,l,c])=><div key={l} style={{background:"#0a1018",borderRadius:10,padding:"10px 4px",textAlign:"center"}}>
+                <div style={{fontSize:10,marginBottom:2}}>{icon}</div>
+                <div style={{fontSize:16,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:c}}>{v}</div>
+                <div style={{fontSize:8,color:C.muted,marginTop:1,lineHeight:1.2}}>{l}</div>
               </div>)}
             </div>
-          </div>}
-          {profileData.achievements?.filter(a=>!a.achievement_key.startsWith("shop_")).length>0&&<div>
-            <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:1.5,marginBottom:8}}>Logros</div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              {profileData.achievements.filter(a=>!a.achievement_key.startsWith("shop_")).map(a=>{
-                const def=ACHIEVEMENT_DEFS.find(d=>d.key===a.achievement_key);
-                return def?<div key={a.achievement_key} style={{background:`${def.color||C.accent}18`,border:`1px solid ${def.color||C.accent}44`,borderRadius:10,padding:"6px 10px",textAlign:"center"}} title={def.desc}>
-                  <div style={{fontSize:18}}>{def.emoji}</div>
-                  <div style={{fontSize:9,color:C.dim,marginTop:2}}>{def.name}</div>
-                </div>:null;
-              })}
+
+            {/* Cosmetics owned */}
+            {pItems.length>0&&<div style={{marginBottom:14}}>
+              <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:1.5,marginBottom:8}}>Items de tienda</div>
+              <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                {pItems.map(key=>{
+                  const def=SHOP_ITEMS.find(i=>i.key===key);
+                  return def?<div key={key} style={{background:"#0d1117",border:`1px solid ${C.border}`,borderRadius:16,padding:"4px 8px",fontSize:11,display:"flex",alignItems:"center",gap:3}}>
+                    <span>{def.emoji}</span><span style={{color:C.dim}}>{def.name.replace("Título ","").replace("Nombre ","").replace("Marco ","")}</span>
+                  </div>:null;
+                })}
+              </div>
+            </div>}
+
+            {/* Top teams */}
+            {(profileData.stats?.topTeams||[]).length>0&&<div style={{marginBottom:14}}>
+              <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:1.5,marginBottom:8}}>Equipos favoritos</div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {profileData.stats.topTeams.slice(0,5).map(t=><div key={t.team} style={{background:`${tm(t.team).color}18`,border:`1px solid ${tm(t.team).color}44`,borderRadius:20,padding:"5px 10px",display:"flex",alignItems:"center",gap:6}}>
+                  {logo(t.team,18)}<span style={{fontSize:11,fontWeight:700,color:tm(t.team).color}}>{t.team}</span><span style={{fontSize:9,color:C.dim}}>{t.acc}%</span>
+                </div>)}
+              </div>
+            </div>}
+
+            {/* Achievements */}
+            {profileData.achievements?.filter(a=>!a.achievement_key.startsWith("shop_")).length>0&&<div style={{marginBottom:14}}>
+              <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:1.5,marginBottom:8}}>Logros</div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {profileData.achievements.filter(a=>!a.achievement_key.startsWith("shop_")).map(a=>{
+                  const def=ACHIEVEMENT_DEFS.find(d=>d.key===a.achievement_key);
+                  return def?<div key={a.achievement_key} style={{background:`${def.color||C.accent}18`,border:`1px solid ${def.color||C.accent}44`,borderRadius:10,padding:"6px 10px",textAlign:"center"}} title={def.desc}>
+                    <div style={{fontSize:18}}>{def.emoji}</div>
+                    <div style={{fontSize:9,color:C.dim,marginTop:2}}>{def.name}</div>
+                  </div>:null;
+                })}
+              </div>
+            </div>}
+
+            <div style={{display:"flex",gap:8,marginTop:14}}>
+              <button className="btn" onClick={()=>loadH2H(profileModal)} style={{flex:1,padding:"10px",borderRadius:10,background:`${C.accent}22`,border:`1px solid ${C.accent}44`,color:C.accent,fontSize:12,fontWeight:700}}>⚡ Ver H2H</button>
             </div>
-          </div>}
-          <div style={{display:"flex",gap:8,marginTop:14}}>
-            <button className="btn" onClick={()=>loadH2H(profileModal)} style={{flex:1,padding:"10px",borderRadius:10,background:`${C.accent}22`,border:`1px solid ${C.accent}44`,color:C.accent,fontSize:12,fontWeight:700}}>⚡ Ver H2H</button>
-          </div>
-        </>}
-      </div>
-    </div>}
+          </>}
+        </div>
+      </div>;
+    })()}
   </div>);
 };
 
@@ -2953,11 +2987,16 @@ const SettingsTab=({userCtx,installPrompt,onInstalled})=>{
   const [emailInput,setEmailInput]=useState("");
   const [emailLoading,setEmailLoading]=useState(false);
   const [emailMsg,setEmailMsg]=useState("");
+  const [myStats,setMyStats]=useState(null);
+  const [myShopItems,setMyShopItems]=useState([]);
+  const [myEquippedSettings,setMyEquippedSettings]=useState(()=>JSON.parse(localStorage.getItem("courtiq_equipped_"+(user?.id||""))||"{}"));
 
   useEffect(()=>{
     if(!user) return;
     pickemAPI("getNotifPrefs",{params:{userId:user.id}}).then(d=>{if(d.ok)setNotifPrefs(d.prefs);});
     pickemAPI("getAchievements",{params:{userId:user.id}}).then(d=>{if(d.ok)setAchievements(d.achievements||[]);});
+    pickemAPI("userProfile",{params:{userId:user.id,targetId:user.id}}).then(d=>{if(d.ok){setMyStats(d.stats);setMyShopItems(d.shopItems||[]);}});
+    setMyEquippedSettings(JSON.parse(localStorage.getItem("courtiq_equipped_"+user.id)||"{}"));
     // Pre-fill email from stored user
     if(user.email) setEmailInput(user.email);
   },[user]);
@@ -3035,15 +3074,26 @@ const SettingsTab=({userCtx,installPrompt,onInstalled})=>{
     </div>
   );
 
+  const settingsNameClr=getNameColor(myShopItems,myEquippedSettings);
+  const settingsPrefix=getNamePrefix(myShopItems,myEquippedSettings);
+  const settingsBorder=getBorderColor(myShopItems,myEquippedSettings);
+
   return(<div className="fade-up">
     {/* Perfil */}
     <ST sub="Cuenta">Mi Perfil</ST>
-    <Card style={{marginBottom:18,background:`linear-gradient(135deg,${C.accent}11,${C.card})`,borderColor:`${C.accent}33`}}>
+    <Card style={{marginBottom:14,background:`linear-gradient(135deg,${C.accent}11,${C.card})`,borderColor:`${C.accent}33`}}>
       <div style={{display:"flex",alignItems:"center",gap:14}}>
-        <button className="btn" onClick={()=>setShowEmojiPicker(p=>!p)} style={{width:56,height:56,borderRadius:"50%",background:`${C.accent}20`,border:`2px solid ${showEmojiPicker?C.accent:C.accent+"44"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,flexShrink:0}} title="Cambiar avatar">{user.avatar_emoji||"🏀"}</button>
+        <button className="btn" onClick={()=>setShowEmojiPicker(p=>!p)} style={{width:58,height:58,borderRadius:"50%",background:`${C.accent}20`,border:`2px solid ${settingsBorder||( showEmojiPicker?C.accent:C.accent+"44")}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,flexShrink:0,boxShadow:settingsBorder?`0 0 10px ${settingsBorder}55`:undefined}} title="Cambiar avatar">{user.avatar_emoji||"🏀"}</button>
         <div style={{flex:1}}>
-          <div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text}}>{user.name}</div>
-          <div style={{fontSize:10,color:C.muted,letterSpacing:1}}>Toca el emoji para cambiar avatar</div>
+          <div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:settingsNameClr||C.text}}>{settingsPrefix}{user.name}</div>
+          <div style={{fontSize:10,color:C.muted,letterSpacing:1,marginBottom:4}}>Toca el emoji para cambiar avatar</div>
+          {myShopItems.length>0&&<div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+            {["title","color","border"].map(type=>{
+              const key=myEquippedSettings[type];
+              const item=key?SHOP_ITEMS.find(i=>i.key===key):null;
+              return item?<span key={type} style={{fontSize:10,background:"#0d1117",border:`1px solid ${C.border}`,borderRadius:12,padding:"2px 7px",color:C.dim}}>{item.emoji} {item.name.replace("Título ","").replace("Nombre ","").replace("Marco ","")}</span>:null;
+            })}
+          </div>}
         </div>
         <button className="btn" onClick={logout} style={{padding:"8px 16px",borderRadius:8,background:"#ff444422",border:"1px solid #ff444444",color:"#ff6666",fontSize:12,fontWeight:700}}>Salir</button>
       </div>
@@ -3054,6 +3104,18 @@ const SettingsTab=({userCtx,installPrompt,onInstalled})=>{
         </div>
       </div>}
     </Card>
+
+    {/* Stats personales */}
+    {myStats&&<Card style={{marginBottom:14,background:"#0a1018"}}>
+      <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>📊 Mis estadísticas</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6}}>
+        {[["🎯",myStats.totalPicks||0,"Picks",C.accent],["✅",myStats.totalCorrect||0,"Aciertos","#00FF9D"],["📊",`${myStats.accuracy||0}%`,"Precisión","#FFB800"],["⭐",myStats.totalPoints||0,"Puntos","#FF6B35"],["🔥",myStats.bestStreak||0,"Mejor racha","#FF6B35"]].map(([icon,v,l,c])=><div key={l} style={{background:"#0d1117",borderRadius:10,padding:"10px 4px",textAlign:"center"}}>
+          <div style={{fontSize:10,marginBottom:2}}>{icon}</div>
+          <div style={{fontSize:16,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:c}}>{v}</div>
+          <div style={{fontSize:8,color:C.muted,marginTop:1,lineHeight:1.2}}>{l}</div>
+        </div>)}
+      </div>
+    </Card>}
 
     {/* Instalar App */}
     {(installPrompt||isIOS())&&<>
