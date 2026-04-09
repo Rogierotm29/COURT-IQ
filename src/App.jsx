@@ -45,38 +45,6 @@ const tm=a=>TM[a]||{color:C.accent,name:a||"?",conf:"W",div:""};
 const FIX={GS:"GSW",NY:"NYK",SA:"SAS",NO:"NOP",WSH:"WAS",UTAH:"UTA",CHAR:"CHA",PHO:"PHX",UTH:"UTA"};
 const fix=a=>FIX[a]||a;
 
-const ROSTERS={
-  OKC:["Shai Gilgeous-Alexander","Jalen Williams","Chet Holmgren","Lu Dort","Alex Caruso","Isaiah Hartenstein","Ajay Mitchell","Ousmane Dieng"],
-  SAS:["Victor Wembanyama","De'Aaron Fox","Stephon Castle","Jeremy Sochan","Devin Vassell","Keldon Johnson","Zach Collins","Julian Champagnie"],
-  LAL:["Luka Dončić","LeBron James","Austin Reaves","Rui Hachimura","D'Angelo Russell","Gabe Vincent","Cam Reddish","Jaxson Hayes"],
-  MIN:["Anthony Edwards","Rudy Gobert","Julius Randle","Naz Reid","Mike Conley","Jaden McDaniels","Donte DiVincenzo","Rob Dillingham"],
-  HOU:["Kevin Durant","Alperen Sengun","Jalen Green","Fred VanVleet","Amen Thompson","Dillon Brooks","Jabari Smith Jr.","Tari Eason"],
-  DEN:["Nikola Jokić","Jamal Murray","Aaron Gordon","Christian Braun","Russell Westbrook","Peyton Watson"],
-  PHX:["Devin Booker","Bradley Beal","Jusuf Nurkic","Grayson Allen","Royce O'Neale","Josh Okogie"],
-  LAC:["Kawhi Leonard","James Harden","Norman Powell","Ivica Zubac","Terance Mann","Bones Hyland"],
-  POR:["Deni Avdija","Anfernee Simons","Scoot Henderson","Shaedon Sharpe","Deandre Ayton","Jerami Grant"],
-  GSW:["Stephen Curry","Draymond Green","Andrew Wiggins","Brandin Podziemski","Jonathan Kuminga","Kevon Looney"],
-  DAL:["Kyrie Irving","Anthony Davis","PJ Washington","Quentin Grimes","Naji Marshall","Jaden Hardy"],
-  UTA:["Lauri Markkanen","Keyonte George","Jordan Clarkson","Collin Sexton","Walker Kessler","John Collins"],
-  CLE:["Donovan Mitchell","Darius Garland","Evan Mobley","Jarrett Allen","Max Strus","Isaac Okoro"],
-  BOS:["Jayson Tatum","Jaylen Brown","Jrue Holiday","Derrick White","Kristaps Porzingis","Payton Pritchard"],
-  NYK:["Jalen Brunson","Karl-Anthony Towns","Mikal Bridges","OG Anunoby","Josh Hart","Miles McBride"],
-  MIA:["Bam Adebayo","Tyler Herro","Jaime Jaquez Jr.","Davion Mitchell","Nikola Jovic","Duncan Robinson"],
-  MIL:["Giannis Antetokounmpo","Damian Lillard","Brook Lopez","Bobby Portis","Ryan Rollins","Kevin Porter Jr."],
-  IND:["Pascal Siakam","Tyrese Haliburton","Myles Turner","Bennedict Mathurin","Andrew Nembhard","Aaron Nesmith"],
-  ORL:["Paolo Banchero","Franz Wagner","Desmond Bane","Wendell Carter Jr.","Jalen Suggs","Cole Anthony"],
-  ATL:["Trae Young","Jalen Johnson","Dyson Daniels","Nickeil Alexander-Walker","De'Andre Hunter","Onyeka Okongwu"],
-  CHI:["Josh Giddey","Nikola Vucevic","Coby White","Patrick Williams","Ayo Dosunmu","Matas Buzelis"],
-  TOR:["Scottie Barnes","Brandon Ingram","Immanuel Quickley","Jakob Poeltl","RJ Barrett","Gradey Dick"],
-  DET:["Cade Cunningham","Jalen Duren","Ausar Thompson","Kevin Huerter","Caris LeVert","Daniss Jenkins"],
-  PHI:["Tyrese Maxey","Joel Embiid","Paul George","Kelly Oubre Jr.","VJ Edgecombe","Kyle Lowry"],
-  CHA:["LaMelo Ball","Brandon Miller","Miles Bridges","Mark Williams","Grant Williams","Nick Smith Jr."],
-  BKN:["Michael Porter Jr.","Cam Thomas","Nic Claxton","Cameron Johnson","Ben Simmons","Noah Clowney"],
-  WAS:["Carlton Carrington","Alexandre Sarr","Bilal Coulibaly","Jordan Poole","Kyle Kuzma","Corey Kispert"],
-  MEM:["Ja Morant","Jaren Jackson Jr.","Santi Aldama","Marcus Smart","GG Jackson","Vince Williams Jr."],
-  SAC:["Domantas Sabonis","Russell Westbrook","Malik Monk","Kevin Huerter","Keon Ellis","Trey Lyles"],
-  NOP:["Zion Williamson","CJ McCollum","Herbert Jones","Trey Murphy III","Jose Alvarado","Yves Missi"],
-};
 
 /* ═══ FALLBACK DATA ═══ */
 const FB_ST=[
@@ -90,7 +58,7 @@ const FB_ST=[
   {abbr:"ATL",conf:"E",w:38,l:31,streak:"L1"},{abbr:"MIA",conf:"E",w:38,l:31,streak:"W1"},{abbr:"PHI",conf:"E",w:37,l:32,streak:"L1"},
   {abbr:"CHA",conf:"E",w:35,l:34,streak:"W1"},{abbr:"CHI",conf:"E",w:28,l:41,streak:"L1"},{abbr:"MIL",conf:"E",w:28,l:40,streak:"L2"},
   {abbr:"BKN",conf:"E",w:17,l:52,streak:"L3"},{abbr:"WAS",conf:"E",w:16,l:52,streak:"L4"},{abbr:"IND",conf:"E",w:15,l:55,streak:"L5"},
-].map(s=>({id:s.abbr,...s,...tm(s.abbr),pct:+(s.w/(s.w+s.l)).toFixed(3),players:ROSTERS[s.abbr]||[]}));
+].map(s=>({id:s.abbr,...s,...tm(s.abbr),pct:+(s.w/(s.w+s.l)).toFixed(3),players:[]}));
 
 const FB_PL=[
   {id:1,name:"Luka Dončić",teamAbbr:"LAL",pos:"G",pts:33.7,ast:8.7,reb:8.1,blk:0.6,stl:1.5,fgPct:46.0,fg3Pct:36.5},
@@ -120,7 +88,6 @@ const FB_PL=[
 ].map(p=>({...p,color:tm(p.teamAbbr).color}));
 
 /* ═══ API LAYER ═══ */
-const isVercel = typeof window !== "undefined" && window.location.hostname !== "localhost" || false;
 
 async function api(path) {
   try {
@@ -155,7 +122,7 @@ async function loadGames() {
 
 async function loadStandings() {
   let d = await api("/api/standings");
-  if (d?.ok && d.standings?.length >= 25) return d.standings.map(s=>({id:s.abbr,...s,...tm(s.abbr),pct:s.pct,players:ROSTERS[s.abbr]||[]}));
+  if (d?.ok && d.standings?.length >= 25) return d.standings.map(s=>({id:s.abbr,...s,...tm(s.abbr),pct:s.pct,players:[]}));
   // ESPN direct fallback
   d = await espnDirect("https://site.api.espn.com/apis/v2/sports/basketball/nba/standings");
   if (!d) return null;
@@ -215,7 +182,7 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
   const [picks,setPicks]=useState({});
   const [confidence,setConfidence]=useState({});
   const [group,setGroup]=useState(null);
-  const [loaded,setLoaded]=useState(false);
+
   const [grpPicks,setGrpPicks]=useState([]);
   const [pendingBets,setPendingBets]=useState([]);
   const [expandedCard,setExpandedCard]=useState(null);
@@ -267,7 +234,6 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
               triggerCelebration(totalPts,0);
             }
           }
-          setLoaded(true);
         });
         pickemAPI("groupPicks",{params:{groupId:g.id}}).then(r=>{if(r.ok)setGrpPicks(r.picks||[]);});
         pickemAPI("groupBets",{params:{groupId:g.id}}).then(r=>{
@@ -276,7 +242,7 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         pickemAPI("getStreak",{params:{userId:user.id,groupId:g.id}}).then(r=>{if(r.ok)setStreak(r.streak||0);});
         pickemAPI("periodLeaderboard",{params:{groupId:g.id,period:"week"}}).then(r=>{if(r.ok){const me=(r.leaderboard||[]).find(x=>x.user_id===user.id);setWeeklyStats(me||null);}});
         if(localStorage.getItem(`courtiq_locked_${g.id}_${today}`)) setLockedPicks(true);
-      } else setLoaded(true);
+      }
     });
     pickemAPI("dailyBonusStatus",{params:{userId:user.id}}).then(d=>{if(d.ok)setBonusClaimed(d.claimed);});
   },[user]);
@@ -629,7 +595,6 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
 const OUTab=({games,userCtx})=>{
   const {user}=userCtx||{};
   const [picks,setPicks]=useState({}); // {gameId: "over"|"under"}
-  const [saved,setSaved]=useState({});
   const [loading,setLoading]=useState({});
   const [msg,setMsg]=useState("");
   const [lines,setLines]=useState({}); // {gameId: number}
@@ -638,7 +603,7 @@ const OUTab=({games,userCtx})=>{
   useEffect(()=>{
     if(!user)return;
     const savedPicks=JSON.parse(localStorage.getItem(`courtiq_ou_${user.id}_${new Date().toISOString().split("T")[0]}`)||"{}");
-    setPicks(savedPicks);setSaved(savedPicks);
+    setPicks(savedPicks);
     // Generate stable O/U lines from game ids (deterministic seed)
     const newLines={};
     games.filter(g=>g.status==="Upcoming"||g.status==="LIVE"||g.status==="Final").forEach(g=>{
@@ -659,7 +624,6 @@ const OUTab=({games,userCtx})=>{
     localStorage.setItem(`courtiq_ou_${user.id}_${today}`,JSON.stringify(next));
     // Score immediately if game is final
     await pickemAPI("makeOUPick",{body:{userId:user.id,gameId:game.id,gameDate:today,choice,line:lines[game.id]}});
-    setSaved(next);
     setLoading(l=>({...l,[game.id]:false}));
   };
 
@@ -689,7 +653,7 @@ const OUTab=({games,userCtx})=>{
       <Card style={{marginBottom:14,background:"#0a1018",borderColor:C.border}}>
         <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:8}}>Cómo funciona</div>
         <div style={{fontSize:11,color:C.dim,lineHeight:1.7}}>
-          Cada partido tiene una línea de puntos totales (ej: 218.5). Predice si el total final será <b style={{color:"#00FF9D"}}>OVER</b> (más puntos) o <b style={{color:"#FF6B35"}}>UNDER</b> (menos puntos). +5 pts si aciertas 🎯
+          Cada partido tiene una línea de puntos totales. Predice si el total final será <b style={{color:"#00FF9D"}}>OVER</b> (más) o <b style={{color:"#FF6B35"}}>UNDER</b> (menos). <b style={{color:"#00FF9D"}}>+5 pts</b> si aciertas, <b style={{color:"#ff4444"}}>-5 pts</b> si fallas 🎯
         </div>
       </Card>
 
@@ -746,7 +710,7 @@ const OUTab=({games,userCtx})=>{
               </div>
               <div style={{display:"flex",gap:8,alignItems:"center"}}>
                 <span style={{fontSize:11,color:C.dim}}>Total: <b style={{color:total>line?"#00FF9D":"#FF6B35"}}>{total}</b> / línea {line}</span>
-                <span style={{fontSize:13,fontWeight:900,color:result==="correct"?"#00FF9D":"#ff6666"}}>{result==="correct"?"✅ +5 pts":"❌"}</span>
+                <span style={{fontSize:13,fontWeight:900,color:result==="correct"?"#00FF9D":"#ff6666"}}>{result==="correct"?"✅ +5 pts":result==="wrong"?"❌ −5 pts":"⏳"}</span>
               </div>
             </div>
           </Card>;
@@ -1066,7 +1030,6 @@ const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
   const [chat,setChat]=useState([]);const [chatInput,setChatInput]=useState("");const [chatLoading,setChatLoading]=useState(false);
   const [h2hUser,setH2hUser]=useState(null);const [h2hData,setH2hData]=useState(null);
   const [streaks,setStreaks]=useState({});
-  const [achievements,setAchievements]=useState([]);
   const [lbPeriod,setLbPeriod]=useState("season");
   const [dailyWinner,setDailyWinner]=useState(null);
   const [myStatsData,setMyStatsData]=useState(null);
@@ -1116,7 +1079,6 @@ const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
         setSelGroup(found||d.groups[0]);
       }
     });
-    pickemAPI("getAchievements",{params:{userId:user.id}}).then(d=>{if(d.ok)setAchievements(d.achievements||[]);});
     // Auto-fill invite code if arrived via invite link
     const invite=localStorage.getItem("courtiq_invite_code");
 
@@ -1546,7 +1508,6 @@ const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
 
     {selGroup&&(()=>{
       const histByDate=history.reduce((a,p)=>({...a,[p.game_date]:[...(a[p.game_date]||[]),p]}),{});
-      const grpByGame=grpPicks.reduce((a,p)=>({...a,[p.game_id]:[...(a[p.game_id]||[]),p]}),{});
       const activeLb=lbPeriod==="season"?leaderboard:periodLb;
       return <>
       {/* Group header */}
@@ -1938,7 +1899,7 @@ const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
 
       {/* ─── ESTADÍSTICAS ─── */}
       {subTab==="estadisticas"&&<>
-        <button className="btn" onClick={()=>pickemAPI("checkAchievements",{params:{userId:user.id,groupId:selGroup.id}}).then(d=>{if(d.ok&&d.newAchievements?.length)setMsg(`🏅 Nuevo logro desbloqueado`);pickemAPI("getAchievements",{params:{userId:user.id}}).then(r=>{if(r.ok)setAchievements(r.achievements||[]);})})} style={{width:"100%",marginBottom:14,padding:"10px",borderRadius:10,background:`${C.accent}11`,border:`1px solid ${C.accent}33`,color:C.accent,fontSize:12,fontWeight:700}}>🔄 Verificar logros y racha</button>
+        <button className="btn" onClick={()=>pickemAPI("checkAchievements",{params:{userId:user.id,groupId:selGroup.id}}).then(d=>{if(d.ok&&d.newAchievements?.length)setMsg(`🏅 Nuevo logro desbloqueado`);})} style={{width:"100%",marginBottom:14,padding:"10px",borderRadius:10,background:`${C.accent}11`,border:`1px solid ${C.accent}33`,color:C.accent,fontSize:12,fontWeight:700}}>🔄 Verificar logros y racha</button>
         {!myStatsData?<Card style={{textAlign:"center",padding:40}}><div style={{fontSize:36}}>📊</div><div style={{fontSize:14,color:C.dim,marginTop:8}}>Aún no tienes picks con resultado</div></Card>
         :<>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
@@ -2128,7 +2089,6 @@ const BracketTab=({userCtx,standings})=>{
   const [mvpSearch,setMvpSearch]=useState("");
   const [lb,setLb]=useState([]);
   const [subTab,setSubTab]=useState("bracket");
-  const [saving,setSaving]=useState(false);
   const [lastSaved,setLastSaved]=useState("");
 
   // Load picks on mount
@@ -2151,9 +2111,7 @@ const BracketTab=({userCtx,standings})=>{
     if(!user) return;
     setPicks(p=>({...p,[matchupId]:winner}));
     setGames(g=>({...g,[matchupId]:numGames||4}));
-    setSaving(true);
     await pickemAPI("bracketPick",{body:{userId:user.id,matchupId,round,teamA,teamB,predictedWinner:winner,predictedGames:numGames||4}});
-    setSaving(false);
     setLastSaved(matchupId);
     setTimeout(()=>setLastSaved(""),1500);
   };
@@ -2203,7 +2161,6 @@ const BracketTab=({userCtx,standings})=>{
           <div style={{fontSize:9,color:C.muted,marginBottom:4}}>Score de la serie:</div>
           <div style={{display:"flex",gap:4}}>
             {SERIES_OPTS.map(opt=>{
-              const n=parseInt(opt.split("-")[1])+4-parseInt(opt.split("-")[1]);
               const gamesVal=parseInt(opt.split("-")[0])+parseInt(opt.split("-")[1]);
               const isSel=numGames===gamesVal;
               return <button key={opt} className="btn" onClick={()=>savePick(id,round,t1,t2,picked,gamesVal)} style={{
@@ -2596,6 +2553,40 @@ const PLAYER_CLUES=[
   {name:"Karl Malone",team:"UTA",clues:["13vo pick del Draft 1985 — apodado 'The Mailman'","Jugó principalmente con Utah Jazz junto a John Stockton","2do máximo anotador de la historia NBA","Ganó el MVP en 1997 y 1999 pero nunca un campeonato"]},
 ];
 
+// ─── FLAGS DATA ──────────────────────────────────────────────────────────────
+const FLAGS=[
+  {flag:"🇲🇽",country:"México",opts:["Colombia","México","Perú","Venezuela"]},
+  {flag:"🇧🇷",country:"Brasil",opts:["Argentina","Brasil","Uruguay","Chile"]},
+  {flag:"🇯🇵",country:"Japón",opts:["China","Corea","Japón","Taiwán"]},
+  {flag:"🇩🇪",country:"Alemania",opts:["Austria","Bélgica","Alemania","Holanda"]},
+  {flag:"🇫🇷",country:"Francia",opts:["Italia","España","Francia","Portugal"]},
+  {flag:"🇮🇹",country:"Italia",opts:["Francia","Italia","Grecia","España"]},
+  {flag:"🇨🇦",country:"Canadá",opts:["EE.UU.","Canadá","Australia","N. Zelanda"]},
+  {flag:"🇦🇺",country:"Australia",opts:["N. Zelanda","Fiji","Australia","Samoa"]},
+  {flag:"🇪🇸",country:"España",opts:["Portugal","Italia","España","Francia"]},
+  {flag:"🇰🇷",country:"Corea del Sur",opts:["Japón","China","Corea del Sur","Vietnam"]},
+  {flag:"🇷🇺",country:"Rusia",opts:["Ucrania","Serbia","Rusia","Polonia"]},
+  {flag:"🇨🇳",country:"China",opts:["Japón","China","Corea del Sur","Vietnam"]},
+  {flag:"🇮🇳",country:"India",opts:["Pakistán","India","Bangladesh","Nepal"]},
+  {flag:"🇿🇦",country:"Sudáfrica",opts:["Nigeria","Kenya","Sudáfrica","Ghana"]},
+  {flag:"🇦🇷",country:"Argentina",opts:["Chile","Uruguay","Argentina","Brasil"]},
+  {flag:"🇺🇸",country:"EE.UU.",opts:["Canadá","Australia","EE.UU.","N. Zelanda"]},
+  {flag:"🇬🇧",country:"Reino Unido",opts:["Irlanda","Escocia","Reino Unido","Australia"]},
+  {flag:"🇳🇬",country:"Nigeria",opts:["Ghana","Nigeria","Senegal","Costa de Marfil"]},
+  {flag:"🇹🇷",country:"Turquía",opts:["Grecia","Turquía","Irán","Egipto"]},
+  {flag:"🇸🇦",country:"Arabia Saudí",opts:["Emiratos","Irán","Arabia Saudí","Kuwait"]},
+  {flag:"🇵🇹",country:"Portugal",opts:["España","Francia","Portugal","Italia"]},
+  {flag:"🇳🇱",country:"Países Bajos",opts:["Bélgica","Alemania","Países Bajos","Dinamarca"]},
+  {flag:"🇨🇴",country:"Colombia",opts:["Venezuela","Ecuador","Colombia","Perú"]},
+  {flag:"🇵🇱",country:"Polonia",opts:["Ucrania","Rusia","Polonia","Chequia"]},
+  {flag:"🇸🇪",country:"Suecia",opts:["Noruega","Finlandia","Suecia","Dinamarca"]},
+  {flag:"🇨🇱",country:"Chile",opts:["Argentina","Chile","Colombia","Perú"]},
+  {flag:"🇪🇬",country:"Egipto",opts:["Marruecos","Turquía","Egipto","Irak"]},
+  {flag:"🇺🇦",country:"Ucrania",opts:["Polonia","Rusia","Ucrania","Bielorrusia"]},
+  {flag:"🇬🇷",country:"Grecia",opts:["Italia","Turquía","Grecia","Chipre"]},
+  {flag:"🇹🇭",country:"Tailandia",opts:["Vietnam","Camboya","Tailandia","Indonesia"]},
+];
+
 const MiniGamesTab=({players,userCtx})=>{
   const {user}=userCtx||{};
   const [screen,setScreen]=useState("menu");
@@ -2612,12 +2603,39 @@ const MiniGamesTab=({players,userCtx})=>{
   const [triviaDone,setTriviaDone]=useState(false);
   const [triviaFeedback,setTriviaFeedback]=useState(null);
   const [triviaSet,setTriviaSet]=useState([]);
+  // Reaction game
+  const [reactPhase,setReactPhase]=useState("idle"); // idle|waiting|go|tapped|done
+  const [reactTimes,setReactTimes]=useState([]);
+  const [reactStart,setReactStart]=useState(0);
+  const [reactTimer,setReactTimer]=useState(null);
+  // Memory game
+  const [memCards,setMemCards]=useState([]);
+  const [memFlipped,setMemFlipped]=useState([]);
+  const [memMatched,setMemMatched]=useState([]);
+  const [memMoves,setMemMoves]=useState(0);
+  const [memLocked,setMemLocked]=useState(false);
+  const [memDone,setMemDone]=useState(false);
+  // Flag quiz
+  const [flagRound,setFlagRound]=useState(0);
+  const [flagScore,setFlagScore]=useState(0);
+  const [flagQ,setFlagQ]=useState(null);
+  const [flagDone,setFlagDone]=useState(false);
+  const [flagFeedback,setFlagFeedback]=useState(null);
+  const [flagPool,setFlagPool]=useState([]);
+  // Math game
+  const [mathRound,setMathRound]=useState(0);
+  const [mathScore,setMathScore]=useState(0);
+  const [mathQ,setMathQ]=useState(null);
+  const [mathDone,setMathDone]=useState(false);
+  const [mathFeedback,setMathFeedback]=useState(null);
+  const [mathTimer,setMathTimer]=useState(5);
+  const mathTimerRef=useRef(null);
   // Leaderboard
   const [scores,setScores]=useState([]);
-  const [allRankings,setAllRankings]=useState({scorer:[],trivia:[],guess:[],champs:[]});
+  const [allRankings,setAllRankings]=useState({scorer:[],trivia:[],guess:[],champs:[],react:[],flags:[],math:[]});
 
   useEffect(()=>{
-    const types=["scorer","trivia","guess","champs"];
+    const types=["scorer","trivia","guess","champs","react","flags","math"];
     Promise.all(types.map(t=>pickemAPI("getMiniScores",{params:{gameType:t}}))).then(results=>{
       const r={};
       types.forEach((t,i)=>{r[t]=results[i].ok?results[i].scores||[]:[]; });
@@ -2765,33 +2783,203 @@ const MiniGamesTab=({players,userCtx})=>{
     },700);
   };
 
+  // ─── REACTION GAME ───────────────────────────────────────────────────────
+  const startReact=()=>{
+    setReactTimes([]);setReactPhase("idle");    setGame("react");setScreen("game");
+    beginReactRound();
+  };
+  const beginReactRound=()=>{
+    setReactPhase("waiting");    const delay=1200+Math.random()*2800;
+    const t=setTimeout(()=>{
+      setReactPhase("go");setReactStart(Date.now());
+    },delay);
+    setReactTimer(t);
+  };
+  const tapReact=()=>{
+    if(reactPhase==="waiting"){
+      clearTimeout(reactTimer);setReactPhase("early");
+      setTimeout(()=>beginReactRound(),1200);
+      return;
+    }
+    if(reactPhase!=="go") return;
+    const elapsed=Date.now()-reactStart;
+    const newTimes=[...reactTimes,elapsed];
+    setReactTimes(newTimes);
+    setReactPhase("tapped");
+    if(newTimes.length>=5){
+      const avg=Math.round(newTimes.reduce((a,b)=>a+b,0)/newTimes.length);
+      const finalScore=Math.max(0,Math.min(999,Math.round(1000-(avg/2))));
+      setTimeout(()=>{
+        setReactPhase("done");
+        if(user) pickemAPI("saveMiniScore",{body:{userId:user.id,gameType:"react",score:finalScore}});
+        pickemAPI("getMiniScores",{params:{gameType:"react"}}).then(d=>{if(d.ok){setScores(d.scores||[]);setAllRankings(r=>({...r,react:d.scores||[]}));}});
+      },800);
+    } else {
+      setTimeout(()=>beginReactRound(),900);
+    }
+  };
+
+  // ─── MEMORY GAME ─────────────────────────────────────────────────────────
+  const MEM_EMOJIS=["🏀","⚽","🎾","🏈","🎱","🥊","⚾","🏐","🎯","🚀","💎","🎮","🔥","⚡","🌟","🦁"];
+  const startMemory=()=>{
+    const pairs=MEM_EMOJIS.slice(0,8);
+    const deck=[...pairs,...pairs].map((e,i)=>({id:i,emoji:e,matched:false})).sort(()=>Math.random()-.5);
+    setMemCards(deck);setMemFlipped([]);setMemMatched([]);setMemMoves(0);setMemLocked(false);setMemDone(false);
+    setGame("memory");setScreen("game");
+  };
+  const flipCard=(idx)=>{
+    if(memLocked||memFlipped.includes(idx)||memMatched.includes(memCards[idx]?.emoji)) return;
+    const newFlipped=[...memFlipped,idx];
+    setMemFlipped(newFlipped);
+    if(newFlipped.length===2){
+      setMemLocked(true);
+      setMemMoves(m=>m+1);
+      const [a,b]=newFlipped;
+      if(memCards[a].emoji===memCards[b].emoji){
+        const newMatched=[...memMatched,memCards[a].emoji];
+        setMemMatched(newMatched);
+        setMemFlipped([]);setMemLocked(false);
+        if(newMatched.length===8){
+          const finalMoves=memMoves+1;
+          setMemDone(true);
+          const finalScore=Math.max(0,100-Math.max(0,finalMoves-8)*4);
+          if(user) pickemAPI("saveMiniScore",{body:{userId:user.id,gameType:"memory",score:finalScore}});
+          pickemAPI("getMiniScores",{params:{gameType:"memory"}}).then(d=>{if(d.ok){setScores(d.scores||[]);setAllRankings(r=>({...r,memory:d.scores||[]}));}});
+        }
+      } else {
+        setTimeout(()=>{setMemFlipped([]);setMemLocked(false);},900);
+      }
+    }
+  };
+
+  // ─── FLAG QUIZ ───────────────────────────────────────────────────────────
+  const startFlags=()=>{
+    const pool=[...FLAGS].sort(()=>Math.random()-.5).slice(0,10);
+    setFlagPool(pool);setFlagRound(0);setFlagScore(0);setFlagDone(false);setFlagFeedback(null);
+    setFlagQ(pool[0]);setGame("flags");setScreen("game");
+  };
+  const answerFlag=(choice)=>{
+    if(flagFeedback!==null) return;
+    const correct=choice===flagQ.country;
+    setFlagFeedback(correct?choice:"wrong:"+choice);
+    if(correct) setFlagScore(s=>s+1);
+    setTimeout(()=>{
+      const next=flagRound+1;
+      if(next>=10){
+        setFlagDone(true);
+        const finalScore=correct?flagScore+1:flagScore;
+        if(user) pickemAPI("saveMiniScore",{body:{userId:user.id,gameType:"flags",score:finalScore}});
+        pickemAPI("getMiniScores",{params:{gameType:"flags"}}).then(d=>{if(d.ok){setScores(d.scores||[]);setAllRankings(r=>({...r,flags:d.scores||[]}));}});
+      } else {
+        setFlagRound(next);setFlagQ(flagPool[next]);setFlagFeedback(null);
+      }
+    },900);
+  };
+
+  // ─── MATH GAME ───────────────────────────────────────────────────────────
+  const genMathQ=()=>{
+    const ops=["+","-","×"];const op=ops[Math.floor(Math.random()*ops.length)];
+    let a,b,ans;
+    if(op==="+"){a=Math.floor(Math.random()*50)+10;b=Math.floor(Math.random()*50)+10;ans=a+b;}
+    else if(op==="-"){a=Math.floor(Math.random()*50)+30;b=Math.floor(Math.random()*30)+5;ans=a-b;}
+    else{a=Math.floor(Math.random()*9)+2;b=Math.floor(Math.random()*9)+2;ans=a*b;}
+    // Generate 3 wrong answers
+    const wrongs=new Set();
+    while(wrongs.size<3){const w=ans+Math.floor(Math.random()*20)-10;if(w!==ans&&w>0)wrongs.add(w);}
+    const opts=[ans,...wrongs].sort(()=>Math.random()-.5);
+    return{q:`${a} ${op} ${b}`,ans,opts};
+  };
+  const startMath=()=>{
+    setMathRound(0);setMathScore(0);setMathDone(false);setMathFeedback(null);
+    setMathQ(genMathQ());setMathTimer(5);setGame("math");setScreen("game");
+  };
+  useEffect(()=>{
+    if(screen!=="game"||game!=="math"||mathDone||mathFeedback!==null) return;
+    if(mathTimer<=0){
+      // Time's up — count as wrong
+      setMathFeedback(false);
+      setTimeout(()=>{
+        const next=mathRound+1;
+        if(next>=10){setMathDone(true);if(user)pickemAPI("saveMiniScore",{body:{userId:user.id,gameType:"math",score:mathScore}}).then(()=>pickemAPI("getMiniScores",{params:{gameType:"math"}}).then(d=>{if(d.ok){setScores(d.scores||[]);setAllRankings(r=>({...r,math:d.scores||[]}));}}));}
+        else{setMathRound(next);setMathQ(genMathQ());setMathFeedback(null);setMathTimer(5);}
+      },700);
+      return;
+    }
+    mathTimerRef.current=setTimeout(()=>setMathTimer(t=>t-1),1000);
+    return()=>clearTimeout(mathTimerRef.current);
+  },[mathTimer,screen,game,mathDone,mathFeedback]);
+
+  const answerMath=(opt)=>{
+    if(mathFeedback!==null) return;
+    clearTimeout(mathTimerRef.current);
+    const correct=opt===mathQ.ans;
+    setMathFeedback(correct);
+    if(correct) setMathScore(s=>s+1);
+    setTimeout(()=>{
+      const next=mathRound+1;
+      if(next>=10){
+        setMathDone(true);
+        const finalScore=correct?mathScore+1:mathScore;
+        if(user) pickemAPI("saveMiniScore",{body:{userId:user.id,gameType:"math",score:finalScore}});
+        pickemAPI("getMiniScores",{params:{gameType:"math"}}).then(d=>{if(d.ok){setScores(d.scores||[]);setAllRankings(r=>({...r,math:d.scores||[]}));}});
+      } else {
+        setMathRound(next);setMathQ(genMathQ());setMathFeedback(null);setMathTimer(5);
+      }
+    },700);
+  };
+
   const GAME_META=[
-    {key:"scorer",icon:"📊",label:"¿Quién anota más?",desc:"Adivina qué jugador tiene más PPG · 10 rondas",color:C.accent,start:startScorer,max:10},
-    {key:"trivia",icon:"🧠",label:"NBA Trivia",desc:"10 preguntas sobre la NBA · ¿Cuántas aciertas?",color:"#FFB800",start:startTrivia,max:10},
-    {key:"guess",icon:"🕵️",label:"Adivina el Jugador",desc:"4 pistas de carrera · 8 rondas",color:"#00FF9D",start:startGuess,max:8},
-    {key:"champs",icon:"🏆",label:"Campeones NBA",desc:"¿Quién ganó en ese año? · 1947–2024 · 10 rondas",color:"#E03A3E",start:startChamps,max:10},
+    // NBA
+    {key:"scorer",  icon:"📊",label:"¿Quién anota más?",  desc:"Adivina qué jugador tiene más PPG",         color:C.accent,   start:startScorer,  max:10, cat:"nba"},
+    {key:"trivia",  icon:"🧠",label:"NBA Trivia",          desc:"10 preguntas sobre la NBA",                color:"#FFB800",  start:startTrivia,  max:10, cat:"nba"},
+    {key:"guess",   icon:"🕵️",label:"Adivina el Jugador", desc:"4 pistas de carrera · 8 rondas",            color:"#00FF9D",  start:startGuess,   max:8,  cat:"nba"},
+    {key:"champs",  icon:"🏆",label:"Campeones NBA",       desc:"¿Quién ganó en ese año? · 1947–2024",      color:"#E03A3E",  start:startChamps,  max:10, cat:"nba"},
+    // Generales
+    {key:"react",   icon:"⚡",label:"Test de Reacción",    desc:"Toca cuando veas verde · ¿qué tan rápido?",color:"#FFD700",  start:startReact,   max:999,cat:"general"},
+    {key:"memory",  icon:"🃏",label:"Memoria",             desc:"Voltea y empareja los pares de emojis",    color:"#9B59B6",  start:startMemory,  max:100,cat:"general"},
+    {key:"flags",   icon:"🌍",label:"Adivina la Bandera",  desc:"30 países · ¿cuántas reconoces?",          color:"#00C2FF",  start:startFlags,   max:10, cat:"general"},
+    {key:"math",    icon:"🔢",label:"Mate Rápido",         desc:"10 operaciones en 5 segundos cada una",    color:"#FF6B35",  start:startMath,    max:10, cat:"general"},
   ];
 
   if(screen==="menu") return(<div className="fade-up">
-    <ST sub="Mini Juegos">Juegos NBA 🎮</ST>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
-      {GAME_META.map(g=>(
-        <Card key={g.key} style={{textAlign:"center",padding:20,borderColor:g.color+"33",display:"flex",flexDirection:"column"}}>
-          <div style={{fontSize:36,marginBottom:8}}>{g.icon}</div>
-          <div style={{fontSize:14,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,marginBottom:4,lineHeight:1.2}}>{g.label}</div>
-          <div style={{fontSize:11,color:C.dim,marginBottom:12,flex:1}}>{g.desc}</div>
-          {allRankings[g.key].length>0&&(()=>{
-            const top=allRankings[g.key][0];
-            const myRank=user?allRankings[g.key].findIndex(s=>s.users?.name===user.name)+1:0;
-            return<div style={{fontSize:10,color:C.muted,marginBottom:8,padding:"4px 8px",background:g.color+"11",borderRadius:6}}>
-              👑 {top.users?.avatar_emoji||"🏀"} {top.users?.name}: {top.score}/{g.max}
-              {myRank>0&&<span style={{color:g.color}}> · Tu puesto: #{myRank}</span>}
-            </div>;
-          })()}
-          <button className="btn" onClick={g.start} style={{width:"100%",padding:"10px",borderRadius:10,background:`linear-gradient(135deg,${g.color},${g.color}aa)`,color:g.key==="champs"?"#fff":"#07090f",fontWeight:900,fontSize:13}}>Jugar</button>
-        </Card>
-      ))}
+    <ST sub="Mini Juegos">Arcade 🎮</ST>
+
+    <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>🌍 Juegos Generales</div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:18}}>
+      {GAME_META.filter(g=>g.cat==="general").map(g=>{
+        const top=allRankings[g.key]?.[0];
+        const myRank=user?allRankings[g.key]?.findIndex(s=>s.users?.name===user.name)+1:0;
+        return<Card key={g.key} style={{padding:16,borderColor:g.color+"44",display:"flex",flexDirection:"column",gap:6}}>
+          <div style={{fontSize:32,textAlign:"center"}}>{g.icon}</div>
+          <div style={{fontSize:13,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,textAlign:"center",lineHeight:1.2}}>{g.label}</div>
+          <div style={{fontSize:10,color:C.dim,textAlign:"center",flex:1,lineHeight:1.4}}>{g.desc}</div>
+          {top&&<div style={{fontSize:9,color:C.muted,textAlign:"center",padding:"3px 6px",background:g.color+"11",borderRadius:6}}>
+            👑 {top.users?.name}: {top.score}{g.key==="react"?" pts":`/${g.max}`}
+            {myRank>0&&<span style={{color:g.color}}> · #{myRank}</span>}
+          </div>}
+          <button className="btn" onClick={g.start} style={{padding:"9px",borderRadius:9,background:`linear-gradient(135deg,${g.color},${g.color}bb)`,color:"#07090f",fontWeight:900,fontSize:12}}>Jugar</button>
+        </Card>;
+      })}
     </div>
+
+    <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>🏀 NBA</div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:18}}>
+      {GAME_META.filter(g=>g.cat==="nba").map(g=>{
+        const top=allRankings[g.key]?.[0];
+        const myRank=user?allRankings[g.key]?.findIndex(s=>s.users?.name===user.name)+1:0;
+        return<Card key={g.key} style={{padding:16,borderColor:g.color+"44",display:"flex",flexDirection:"column",gap:6}}>
+          <div style={{fontSize:32,textAlign:"center"}}>{g.icon}</div>
+          <div style={{fontSize:13,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text,textAlign:"center",lineHeight:1.2}}>{g.label}</div>
+          <div style={{fontSize:10,color:C.dim,textAlign:"center",flex:1,lineHeight:1.4}}>{g.desc}</div>
+          {top&&<div style={{fontSize:9,color:C.muted,textAlign:"center",padding:"3px 6px",background:g.color+"11",borderRadius:6}}>
+            👑 {top.users?.name}: {top.score}/{g.max}
+            {myRank>0&&<span style={{color:g.color}}> · #{myRank}</span>}
+          </div>}
+          <button className="btn" onClick={g.start} style={{padding:"9px",borderRadius:9,background:`linear-gradient(135deg,${g.color},${g.color}bb)`,color:g.key==="champs"?"#fff":"#07090f",fontWeight:900,fontSize:12}}>Jugar</button>
+        </Card>;
+      })}
+    </div>
+
     <button className="btn" onClick={()=>setScreen("rankings")} style={{width:"100%",padding:"13px",borderRadius:12,background:"#0a1018",border:`1px solid ${C.border}`,color:C.text,fontWeight:700,fontSize:14}}>🏆 Ver Rankings Globales</button>
   </div>);
 
@@ -2965,6 +3153,161 @@ const MiniGamesTab=({players,userCtx})=>{
     </div>);
   }
 
+  // ─── REACTION SCREEN ────────────────────────────────────────────────────────
+  if(screen==="game"&&game==="react"){
+    const round=reactTimes.length;
+    const avg=reactTimes.length?Math.round(reactTimes.reduce((a,b)=>a+b,0)/reactTimes.length):0;
+    const finalScore=Math.max(0,Math.min(999,Math.round(1000-(avg/2))));
+    if(reactPhase==="done") return(<div className="fade-up">
+      <ST sub="Test de Reacción">¡Terminaste! ⚡</ST>
+      <Card style={{textAlign:"center",padding:30,marginBottom:14,background:"linear-gradient(135deg,#FFD70014,#0d1117)",borderColor:"#FFD70044"}}>
+        <div style={{fontSize:56,marginBottom:4}}>⚡</div>
+        <div style={{fontSize:40,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFD700"}}>{avg} ms</div>
+        <div style={{fontSize:13,color:C.dim,marginTop:4,marginBottom:10}}>Promedio de 5 intentos</div>
+        <div style={{fontSize:36,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.accent}}>{finalScore} pts</div>
+        <div style={{fontSize:11,color:C.dim,marginTop:4}}>{avg<220?"🔥 ¡Reflejos de campeón!":avg<280?"⚡ ¡Muy bien!":avg<350?"👍 Por encima del promedio":"📈 Sigue practicando"}</div>
+        <div style={{marginTop:14,display:"flex",gap:6,flexWrap:"wrap",justifyContent:"center"}}>
+          {reactTimes.map((t,i)=><div key={i} style={{background:"#0d1117",border:`1px solid ${C.border}`,borderRadius:8,padding:"4px 10px",fontSize:11,color:t<250?"#00FF9D":t<350?C.accent:"#ff6666"}}>{t}ms</div>)}
+        </div>
+      </Card>
+      {scores.length>0&&<Card style={{marginBottom:14}}><div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>🏆 Ranking Global</div>{scores.slice(0,5).map((s,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<Math.min(4,scores.length-1)?`1px solid ${C.border}`:"none"}}><span style={{fontSize:11,color:C.muted,width:16}}>{i+1}</span><span style={{flex:1,fontSize:12,color:C.text}}>{s.users?.avatar_emoji||"⚡"} {s.users?.name}</span><span style={{fontSize:13,fontWeight:900,color:"#FFD700"}}>{s.score} pts</span></div>)}</Card>}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <button className="btn" onClick={startReact} style={{padding:"13px",borderRadius:10,background:"linear-gradient(135deg,#FFD700,#ffa500)",color:"#07090f",fontWeight:900,fontSize:14}}>Repetir</button>
+        <button className="btn" onClick={()=>setScreen("menu")} style={{padding:"13px",borderRadius:10,background:"#0a1018",border:`1px solid ${C.border}`,color:C.text,fontWeight:700,fontSize:14}}>← Menú</button>
+      </div>
+    </div>);
+    const bgGrad=reactPhase==="go"?"linear-gradient(135deg,#00FF9D22,#00c97a11)":reactPhase==="early"?"linear-gradient(135deg,#ff444422,#0d1117)":"linear-gradient(135deg,#0a1018,#0d1117)";
+    return(<div className="fade-up">
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <ST sub="Test de Reacción">Intento {round+1}/5 ⚡</ST>
+        {reactTimes.length>0&&<div style={{fontSize:14,fontWeight:900,color:"#FFD700"}}>{Math.round(reactTimes.reduce((a,b)=>a+b,0)/reactTimes.length)}ms avg</div>}
+      </div>
+      <button className="btn" onClick={tapReact} style={{width:"100%",minHeight:240,borderRadius:20,background:bgGrad,border:`3px solid ${reactPhase==="go"?"#00FF9D":reactPhase==="early"?"#ff4444":C.border}`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12,transition:"all .1s",cursor:"pointer",touchAction:"manipulation"}}>
+        <div style={{fontSize:72}}>{reactPhase==="go"?"🟢":reactPhase==="early"?"🔴":reactPhase==="tapped"?"✅":"⏳"}</div>
+        <div style={{fontSize:18,fontWeight:900,color:reactPhase==="go"?"#00FF9D":reactPhase==="early"?"#ff6666":reactPhase==="tapped"?C.accent:C.muted}}>
+          {reactPhase==="go"?"¡TOCA AHORA!":reactPhase==="early"?"¡Demasiado pronto!":reactPhase==="tapped"?`${reactTimes[reactTimes.length-1]}ms ⚡`:"Espera..."}
+        </div>
+        {reactPhase==="waiting"&&<div style={{fontSize:11,color:C.dim}}>No toques todavía</div>}
+      </button>
+      {reactTimes.length>0&&<div style={{display:"flex",gap:6,marginTop:12,flexWrap:"wrap",justifyContent:"center"}}>
+        {reactTimes.map((t,i)=><div key={i} style={{background:"#0d1117",border:`1px solid ${C.border}`,borderRadius:8,padding:"4px 10px",fontSize:11,color:t<250?"#00FF9D":t<350?C.accent:"#ff6666"}}>{t}ms</div>)}
+      </div>}
+      <button className="btn" onClick={()=>{clearTimeout(reactTimer);setScreen("menu");}} style={{width:"100%",marginTop:14,padding:"10px",borderRadius:10,background:"#0a1018",border:`1px solid ${C.border}`,color:C.dim,fontSize:12}}>Salir</button>
+    </div>);
+  }
+
+  // ─── MEMORY SCREEN ───────────────────────────────────────────────────────────
+  if(screen==="game"&&game==="memory"){
+    if(memDone) return(<div className="fade-up">
+      <ST sub="Memoria">¡Completado! 🃏</ST>
+      <Card style={{textAlign:"center",padding:30,marginBottom:14,background:"linear-gradient(135deg,#9B59B611,#0d1117)",borderColor:"#9B59B644"}}>
+        <div style={{fontSize:56,marginBottom:4}}>🃏</div>
+        <div style={{fontSize:40,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#9B59B6"}}>{memMoves} mov</div>
+        <div style={{fontSize:36,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.accent,marginTop:4}}>{Math.max(0,100-Math.max(0,memMoves-8)*4)} pts</div>
+        <div style={{fontSize:12,color:C.dim,marginTop:4}}>{memMoves<=8?"🏆 ¡Perfecto!":memMoves<=14?"⚡ ¡Excelente!":memMoves<=20?"👍 ¡Bien!":"💪 ¡Lo lograste!"}</div>
+      </Card>
+      {scores.length>0&&<Card style={{marginBottom:14}}><div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>🏆 Ranking Global</div>{scores.slice(0,5).map((s,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<Math.min(4,scores.length-1)?`1px solid ${C.border}`:"none"}}><span style={{fontSize:11,color:C.muted,width:16}}>{i+1}</span><span style={{flex:1,fontSize:12,color:C.text}}>{s.users?.avatar_emoji||"🃏"} {s.users?.name}</span><span style={{fontSize:13,fontWeight:900,color:"#9B59B6"}}>{s.score} pts</span></div>)}</Card>}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <button className="btn" onClick={startMemory} style={{padding:"13px",borderRadius:10,background:"linear-gradient(135deg,#9B59B6,#7d3c98)",color:"#fff",fontWeight:900,fontSize:14}}>Repetir</button>
+        <button className="btn" onClick={()=>setScreen("menu")} style={{padding:"13px",borderRadius:10,background:"#0a1018",border:`1px solid ${C.border}`,color:C.text,fontWeight:700,fontSize:14}}>← Menú</button>
+      </div>
+    </div>);
+    return(<div className="fade-up">
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <ST sub="Memoria">Movimientos: {memMoves} 🃏</ST>
+        <div style={{fontSize:13,fontWeight:700,color:"#9B59B6"}}>{memMatched.length}/8 pares</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:14}}>
+        {memCards.map((card,idx)=>{
+          const isFlipped=memFlipped.includes(idx);
+          const isMatched=memMatched.includes(card.emoji);
+          return<button key={card.id} className="btn" onClick={()=>flipCard(idx)} style={{aspectRatio:"1",borderRadius:12,background:isMatched?"#9B59B622":isFlipped?"#0d1117":"#131d29",border:`2px solid ${isMatched?"#9B59B6":isFlipped?"#9B59B688":C.border}`,fontSize:isFlipped||isMatched?28:10,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",cursor:isMatched?"default":"pointer",opacity:isMatched?0.6:1}}>
+            {isFlipped||isMatched?card.emoji:"?"}
+          </button>;
+        })}
+      </div>
+      <button className="btn" onClick={()=>setScreen("menu")} style={{width:"100%",padding:"10px",borderRadius:10,background:"#0a1018",border:`1px solid ${C.border}`,color:C.dim,fontSize:12}}>Salir</button>
+    </div>);
+  }
+
+  // ─── FLAG SCREEN ─────────────────────────────────────────────────────────────
+  if(screen==="game"&&game==="flags"){
+    if(flagDone) return(<div className="fade-up">
+      <ST sub="Banderas">Resultado 🌍</ST>
+      <Card style={{textAlign:"center",padding:30,marginBottom:14,background:"linear-gradient(135deg,#00C2FF11,#0d1117)",borderColor:"#00C2FF44"}}>
+        <div style={{fontSize:56,marginBottom:4}}>🌍</div>
+        <div style={{fontSize:40,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#00C2FF"}}>{flagScore}/10</div>
+        <div style={{fontSize:13,color:C.dim,marginTop:4}}>{flagScore===10?"🏆 ¡Experto en geografía!":flagScore>=7?"🌍 ¡Muy buen conocimiento!":flagScore>=5?"👍 Pasable":flagScore>=3?"📚 A estudiar el mapamundi":"🗺️ ¿Nunca has visto un atlas?"}</div>
+      </Card>
+      {scores.length>0&&<Card style={{marginBottom:14}}><div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>🏆 Ranking Global</div>{scores.slice(0,5).map((s,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<Math.min(4,scores.length-1)?`1px solid ${C.border}`:"none"}}><span style={{fontSize:11,color:C.muted,width:16}}>{i+1}</span><span style={{flex:1,fontSize:12,color:C.text}}>{s.users?.avatar_emoji||"🌍"} {s.users?.name}</span><span style={{fontSize:13,fontWeight:900,color:"#00C2FF"}}>{s.score}/10</span></div>)}</Card>}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <button className="btn" onClick={startFlags} style={{padding:"13px",borderRadius:10,background:"linear-gradient(135deg,#00C2FF,#0055ff)",color:"#fff",fontWeight:900,fontSize:14}}>Repetir</button>
+        <button className="btn" onClick={()=>setScreen("menu")} style={{padding:"13px",borderRadius:10,background:"#0a1018",border:`1px solid ${C.border}`,color:C.text,fontWeight:700,fontSize:14}}>← Menú</button>
+      </div>
+    </div>);
+    if(!flagQ) return null;
+    return(<div className="fade-up">
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <ST sub="Banderas">Pregunta {flagRound+1}/10 🌍</ST>
+        <div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#00C2FF"}}>{flagScore} pts</div>
+      </div>
+      <Card style={{textAlign:"center",padding:"32px 20px",marginBottom:16,background:"linear-gradient(135deg,#00C2FF08,#0d1117)",borderColor:"#00C2FF33"}}>
+        <div style={{fontSize:10,color:"#00C2FF",textTransform:"uppercase",letterSpacing:2,marginBottom:12}}>¿De qué país es esta bandera?</div>
+        <div style={{fontSize:96,lineHeight:1}}>{flagQ.flag}</div>
+      </Card>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        {flagQ.opts.map(opt=>{
+          const isCorrect=opt===flagQ.country;
+          const chosen=flagFeedback&&(flagFeedback===opt||flagFeedback==="wrong:"+opt);
+          return<button key={opt} className="btn" onClick={()=>answerFlag(opt)} style={{padding:"14px 10px",borderRadius:12,textAlign:"center",background:flagFeedback!==null?(isCorrect?"#00C2FF22":chosen?"#ff444422":"#0a1018"):"#0a1018",border:`2px solid ${flagFeedback!==null?(isCorrect?"#00C2FF":chosen?"#ff4444":C.border):C.border}`,color:flagFeedback!==null?(isCorrect?"#00C2FF":chosen?"#ff6666":C.dim):C.text,fontWeight:700,fontSize:13,transition:"all .2s"}}>{opt}</button>;
+        })}
+      </div>
+      {flagFeedback&&<div style={{textAlign:"center",marginTop:10,fontSize:15,fontWeight:700,color:flagFeedback===flagQ.country?"#00C2FF":"#ff6666"}}>{flagFeedback===flagQ.country?"✅ ¡Correcto!":"❌ Era "+flagQ.country}</div>}
+      <div style={{height:5,borderRadius:3,background:C.border,overflow:"hidden",marginTop:14}}><div style={{width:`${(flagRound/10)*100}%`,height:"100%",background:"#00C2FF",transition:"width .4s"}}/></div>
+    </div>);
+  }
+
+  // ─── MATH SCREEN ─────────────────────────────────────────────────────────────
+  if(screen==="game"&&game==="math"){
+    if(mathDone) return(<div className="fade-up">
+      <ST sub="Mate Rápido">Resultado 🔢</ST>
+      <Card style={{textAlign:"center",padding:30,marginBottom:14,background:"linear-gradient(135deg,#FF6B3511,#0d1117)",borderColor:"#FF6B3544"}}>
+        <div style={{fontSize:56,marginBottom:4}}>🔢</div>
+        <div style={{fontSize:40,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FF6B35"}}>{mathScore}/10</div>
+        <div style={{fontSize:13,color:C.dim,marginTop:4}}>{mathScore===10?"🏆 ¡Calculadora humana!":mathScore>=7?"⚡ ¡Muy rápido!":mathScore>=5?"💪 ¡Buen intento!":"📚 Practica más"}</div>
+      </Card>
+      {scores.length>0&&<Card style={{marginBottom:14}}><div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>🏆 Ranking Global</div>{scores.slice(0,5).map((s,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<Math.min(4,scores.length-1)?`1px solid ${C.border}`:"none"}}><span style={{fontSize:11,color:C.muted,width:16}}>{i+1}</span><span style={{flex:1,fontSize:12,color:C.text}}>{s.users?.avatar_emoji||"🔢"} {s.users?.name}</span><span style={{fontSize:13,fontWeight:900,color:"#FF6B35"}}>{s.score}/10</span></div>)}</Card>}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <button className="btn" onClick={startMath} style={{padding:"13px",borderRadius:10,background:"linear-gradient(135deg,#FF6B35,#ff9500)",color:"#07090f",fontWeight:900,fontSize:14}}>Repetir</button>
+        <button className="btn" onClick={()=>setScreen("menu")} style={{padding:"13px",borderRadius:10,background:"#0a1018",border:`1px solid ${C.border}`,color:C.text,fontWeight:700,fontSize:14}}>← Menú</button>
+      </div>
+    </div>);
+    if(!mathQ) return null;
+    const timerPct=(mathTimer/5)*100;
+    const timerColor=mathTimer>2?"#00FF9D":mathTimer>1?"#FFB800":"#ff4444";
+    return(<div className="fade-up">
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <ST sub="Mate Rápido">Pregunta {mathRound+1}/10 🔢</ST>
+        <div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FF6B35"}}>{mathScore} pts</div>
+      </div>
+      {/* Timer bar */}
+      <div style={{height:6,borderRadius:3,background:C.border,overflow:"hidden",marginBottom:14}}>
+        <div style={{width:`${timerPct}%`,height:"100%",background:timerColor,transition:"width 1s linear"}}/>
+      </div>
+      <Card style={{textAlign:"center",padding:"32px 20px",marginBottom:16,background:"linear-gradient(135deg,#FF6B3508,#0d1117)",borderColor:"#FF6B3533"}}>
+        <div style={{fontSize:52,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text}}>{mathQ.q} = ?</div>
+        <div style={{fontSize:28,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:timerColor,marginTop:4}}>{mathTimer}s</div>
+      </Card>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        {mathQ.opts.map(opt=>{
+          const isCorrect=opt===mathQ.ans;
+          return<button key={opt} className="btn" onClick={()=>answerMath(opt)} style={{padding:"16px",borderRadius:12,textAlign:"center",background:mathFeedback!==null?(isCorrect?"#FF6B3522":"#0a1018"):"#0a1018",border:`2px solid ${mathFeedback!==null?isCorrect?"#FF6B35":C.border:C.border}`,color:mathFeedback!==null?isCorrect?"#FF6B35":C.dim:C.text,fontSize:22,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",transition:"all .2s"}}>{opt}</button>;
+        })}
+      </div>
+      {mathFeedback!==null&&<div style={{textAlign:"center",marginTop:10,fontSize:15,fontWeight:700,color:mathFeedback?"#FF6B35":"#ff6666"}}>{mathFeedback?"✅ ¡Correcto!":"❌ Era "+mathQ.ans}</div>}
+    </div>);
+  }
+
   return null;
 };
 
@@ -3064,7 +3407,6 @@ const ShopTab=({userCtx})=>{
       <div style={{fontSize:9,color:"#FFB800",textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>⚡ Items Equipados</div>
       {["title","color","border"].map(type=>{
         const eqKey=equipped[type];
-        const eqItem=eqKey?SHOP_ITEMS.find(i=>i.key===eqKey):null;
         const ownedOfType=allOwned.filter(i=>i.type===type);
         if(ownedOfType.length===0)return null;
         return<div key={type} style={{marginBottom:8}}>
@@ -3578,7 +3920,6 @@ const Onboarding=({onDone})=>{
 
 export default function App(){
   const [tab,setTab]=useState("home");const [menuOpen,setMenuOpen]=useState(false);const [games,setGames]=useState([]);const [standings,setStandings]=useState(FB_ST);const [players,setPlayers]=useState(FB_PL);
-  const [pickemInitSubTab,setPickemInitSubTab]=useState("picks");
   const [live,setLive]=useState({games:false,standings:false,players:false});const [loading,setLoading]=useState(false);const [lastUpd,setLastUpd]=useState(null);
   const [installPrompt,setInstallPrompt]=useState(null);
   const [isOffline,setIsOffline]=useState(!navigator.onLine);
@@ -3710,5 +4051,3 @@ export default function App(){
     <FloatingChat userCtx={userCtx}/>
   </div>);
 }
-//
-//mejora

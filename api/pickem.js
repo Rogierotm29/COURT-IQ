@@ -1575,7 +1575,7 @@ export default async function handler(req, res) {
           const total = totals[gameId];
           if (total == null) continue;
           const correct = (pick.choice === "over" && total > pick.line) || (pick.choice === "under" && total < pick.line);
-          const points = correct ? 5 : 0;
+          const points = correct ? 5 : -5;
           await supabase(`ou_picks?id=eq.${pick.id}`, { method: "PATCH", body: { scored: true, correct, total_scored: total, points } });
           if (correct) grantAchievement(pick.user_id, "first_win");
           scored++;
