@@ -6,13 +6,11 @@ import { ESPN_LOGO,ESPN_ID,TM,FIX,fix } from "./data/teams";
 import { GS, Tag, Card, ST, Divider, Spin, TT } from "./components/ui";
 import { C } from "./theme";
 import { CONF_COLORS, Confetti,ResultBanner,FloatPts,LiveBadge } from "./components/feedback";
-/* ═══ TEAM META + LOGOS ═══ */
-const logo=(abbr,sz=32)=><img src={`https://a.espncdn.com/i/teamlogos/nba/500/${ESPN_LOGO[abbr]||abbr.toLowerCase()}.png`} alt={abbr} style={{width:sz,height:sz,objectFit:"contain"}} onError={e=>{e.target.style.display="none"}}/>;
-
-
-const tm=a=>TM[a]||{color:C.accent,name:a||"?",conf:"W",div:""};
-
-
+import { tm, logo } from "./components/TeamLogo";
+import { PlayersTab } from "./components/PlayersTab";
+import { TeamsTab } from "./components/TeamsTab";
+import { pickemAPI } from "./api/pickem";
+import { OUTab } from "./components/OUTab";
 
 /* ═══ FALLBACK DATA ═══ */
 const FB_ST=[
@@ -95,7 +93,7 @@ async function loadStandings() {
   d = await espnDirect("https://site.api.espn.com/apis/v2/sports/basketball/nba/standings");
   if (!d) return null;
   const results=[];
-  const walk=n=>{if(n?.standings?.entries?.length)n.standings.entries.forEach(e=>{const abbr=fix(e.team?.abbreviation||"");if(!TM[abbr])return;const sm={};(e.stats||[]).forEach(s=>{sm[s.name]=s.value;});const w=Math.round(sm.wins||0),l=Math.round(sm.losses||0);results.push({id:abbr,abbr,...tm(abbr),w,l,pct:w+l>0?+(w/(w+l)).toFixed(3):0,streak:`${Number(sm.streak||0)>=0?"W":"L"}${Math.abs(Number(sm.streak||0))||1}`,players:ROSTERS[abbr]||[]});});(n?.children||[]).forEach(walk);};
+  const walk=n=>{if(n?.standings?.entries?.length)n.standings.entries.forEach(e=>{const abbr=fix(e.team?.abbreviation||"");if(!TM[abbr])return;const sm={};(e.stats||[]).forEach(s=>{sm[s.name]=s.value;});const w=Math.round(sm.wins||0),l=Math.round(sm.losses||0);results.push({id:abbr,abbr,...tm(abbr),w,l,pct:w+l>0?+(w/(w+l)).toFixed(3):0,streak:`${Number(sm.streak||0)>=0?"W":"L"}${Math.abs(Number(sm.streak||0))||1}`,players:[]});});(n?.children||[]).forEach(walk);};
   walk(d);
   return results.length>=25?results:null;
 }
@@ -106,19 +104,7 @@ async function loadPlayers() {
   return null;
 }
 
-/* ═══ PICKEM API ═══ */
-async function pickemAPI(action, opts = {}) {
-  const { body, params } = opts;
-  const qs = new URLSearchParams({ action, ...params }).toString();
-  try {
-    const r = await fetch(`/api/pickem?${qs}`, {
-      method: body ? "POST" : "GET",
-      headers: body ? { "Content-Type": "application/json" } : {},
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    return await r.json();
-  } catch { return { ok: false, error: "Network error" }; }
-}
+
 
 /* ═══ USER CONTEXT (localStorage) ═══ */
 function useUser() {
@@ -556,299 +542,6 @@ const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         📤 Compartir mis resultados
       </button>
     }
-  </div>);
-};
-
-/* ═══ OVER/UNDER TAB ═══ */
-const OUTab=({games,userCtx})=>{
-  const {user}=userCtx||{};
-  const [picks,setPicks]=useState({}); // {gameId: "over"|"under"}
-  const [loading,setLoading]=useState({});
-  const [msg,setMsg]=useState("");
-  const [lines,setLines]=useState({}); // {gameId: number}
-
-  // Load today's OU picks and generate lines
-  useEffect(()=>{
-    if(!user)return;
-    const savedPicks=JSON.parse(localStorage.getItem(`courtiq_ou_${user.id}_${new Date().toISOString().split("T")[0]}`)||"{}");
-    setPicks(savedPicks);
-    // Generate stable O/U lines from game ids (deterministic seed)
-    const newLines={};
-    games.filter(g=>g.status==="Upcoming"||g.status==="LIVE"||g.status==="Final").forEach(g=>{
-      // Line between 210–230 based on a hash of the game id
-      const seed=g.id.split("").reduce((a,c)=>a+c.charCodeAt(0),0);
-      newLines[g.id]=210+((seed%21));
-    });
-    setLines(newLines);
-  },[user,games]);
-
-  const makePick=async(game,choice)=>{
-    if(!user){setMsg("Inicia sesión primero");return;}
-    const today=new Date().toISOString().split("T")[0];
-    if(game.status!=="Upcoming"){setMsg("Solo puedes hacer picks en partidos próximos");return;}
-    const next={...picks,[game.id]:choice};
-    setPicks(next);
-    setLoading(l=>({...l,[game.id]:true}));
-    localStorage.setItem(`courtiq_ou_${user.id}_${today}`,JSON.stringify(next));
-    // Score immediately if game is final
-    await pickemAPI("makeOUPick",{body:{userId:user.id,gameId:game.id,gameDate:today,choice,line:lines[game.id]}});
-    setLoading(l=>({...l,[game.id]:false}));
-  };
-
-  const getResult=(game,choice)=>{
-    if(game.status!=="Final"||game.awayScore==null||game.homeScore==null)return null;
-    const total=(parseInt(game.awayScore)||0)+(parseInt(game.homeScore)||0);
-    const line=lines[game.id]||220;
-    const actual=total>line?"over":"under";
-    return choice===actual?"correct":"wrong";
-  };
-
-  const upcoming=games.filter(g=>g.status==="Upcoming");
-  const finished=games.filter(g=>g.status==="Final"&&picks[g.id]);
-
-  return(<div className="fade-up">
-    <ST sub="Predice el total de puntos">Over / Under 🎰</ST>
-
-    {!user&&<Card style={{textAlign:"center",padding:40}}>
-      <div style={{fontSize:48,marginBottom:12}}>🎰</div>
-      <div style={{fontSize:15,fontWeight:700,color:C.text}}>Inicia sesión para hacer picks O/U</div>
-    </Card>}
-
-    {user&&<>
-      {msg&&<div style={{marginBottom:12,padding:"10px 14px",background:"#ff444411",border:"1px solid #ff444433",borderRadius:10,fontSize:12,color:"#ff6666"}}>{msg}</div>}
-
-      {/* Cómo funciona */}
-      <Card style={{marginBottom:14,background:"#0a1018",borderColor:C.border}}>
-        <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:8}}>Cómo funciona</div>
-        <div style={{fontSize:11,color:C.dim,lineHeight:1.7}}>
-          Cada partido tiene una línea de puntos totales. Predice si el total final será <b style={{color:"#00FF9D"}}>OVER</b> (más) o <b style={{color:"#FF6B35"}}>UNDER</b> (menos). <b style={{color:"#00FF9D"}}>+5 pts</b> si aciertas, <b style={{color:"#ff4444"}}>-5 pts</b> si fallas 🎯
-        </div>
-      </Card>
-
-      {/* Partidos próximos */}
-      {upcoming.length>0&&<>
-        <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>Partidos de hoy</div>
-        {upcoming.map(game=>{
-          const picked=picks[game.id];
-          const line=lines[game.id]||220;
-          const isLoading=loading[game.id];
-          return<Card key={game.id} style={{marginBottom:10,borderColor:picked?`${C.accent}44`:C.border}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                {logo(game.away,22)}<span style={{fontSize:13,fontWeight:800,color:C.text}}>{game.away}</span>
-                <span style={{fontSize:11,color:C.muted}}>vs</span>
-                <span style={{fontSize:13,fontWeight:800,color:C.text}}>{game.home}</span>{logo(game.home,22)}
-              </div>
-              <div style={{textAlign:"right"}}>
-                <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:1}}>Línea</div>
-                <div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800"}}>{line}</div>
-              </div>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              <button className="btn" onClick={()=>makePick(game,"over")} disabled={isLoading} style={{padding:"12px",borderRadius:12,background:picked==="over"?"#00FF9D22":"#0d1117",border:`2px solid ${picked==="over"?"#00FF9D":C.border}`,color:picked==="over"?"#00FF9D":C.muted,fontWeight:900,fontSize:13}}>
-                📈 OVER {line}
-              </button>
-              <button className="btn" onClick={()=>makePick(game,"under")} disabled={isLoading} style={{padding:"12px",borderRadius:12,background:picked==="under"?"#FF6B3522":"#0d1117",border:`2px solid ${picked==="under"?"#FF6B35":C.border}`,color:picked==="under"?"#FF6B35":C.muted,fontWeight:900,fontSize:13}}>
-                📉 UNDER {line}
-              </button>
-            </div>
-            {picked&&<div style={{textAlign:"center",fontSize:10,color:C.dim,marginTop:8}}>
-              {isLoading?<Spin s={10}/>:<span>Pick guardado · {picked==="over"?"Predices más de":"Predices menos de"} {line} pts</span>}
-            </div>}
-          </Card>;
-        })}
-      </>}
-
-      {upcoming.length===0&&<Card style={{textAlign:"center",padding:30}}><div style={{fontSize:32,marginBottom:8}}>🏀</div><div style={{fontSize:14,color:C.dim}}>No hay partidos próximos hoy</div></Card>}
-
-      {/* Resultados */}
-      {finished.length>0&&<>
-        <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginTop:16,marginBottom:10}}>Tus resultados</div>
-        {finished.map(game=>{
-          const picked=picks[game.id];
-          const result=getResult(game,picked);
-          const total=(parseInt(game.awayScore)||0)+(parseInt(game.homeScore)||0);
-          const line=lines[game.id]||220;
-          return<Card key={game.id} style={{marginBottom:8,borderColor:result==="correct"?"#00FF9D44":result==="wrong"?"#ff444444":C.border,background:result==="correct"?"#00FF9D08":result==="wrong"?"#ff444408":undefined}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:6}}>
-              <div style={{display:"flex",alignItems:"center",gap:6}}>
-                {logo(game.away,18)}<span style={{fontSize:12,fontWeight:700,color:C.text}}>{game.away}</span>
-                <span style={{fontSize:11,color:"#FFB800",fontWeight:900}}>{game.awayScore}–{game.homeScore}</span>
-                <span style={{fontSize:12,fontWeight:700,color:C.text}}>{game.home}</span>{logo(game.home,18)}
-              </div>
-              <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                <span style={{fontSize:11,color:C.dim}}>Total: <b style={{color:total>line?"#00FF9D":"#FF6B35"}}>{total}</b> / línea {line}</span>
-                <span style={{fontSize:13,fontWeight:900,color:result==="correct"?"#00FF9D":"#ff6666"}}>{result==="correct"?"✅ +5 pts":result==="wrong"?"❌ −5 pts":"⏳"}</span>
-              </div>
-            </div>
-          </Card>;
-        })}
-      </>}
-    </>}
-  </div>);
-};
-
-
-/* ═══ TEAMS TAB ═══ */
-const TeamsTab=({standings,live})=>{
-  const [conf,setConf]=useState("ALL");
-  const [sel,setSel]=useState(standings.find(t=>t.abbr==="DET")||standings[0]);
-  const [gridOpen,setGridOpen]=useState(true);
-  const [liveRoster,setLiveRoster]=useState(null);
-  const [rosterLoading,setRosterLoading]=useState(false);
-  const visible=standings.filter(t=>conf==="ALL"||t.conf===conf).sort((a,b)=>b.w-a.w);
-
-  useEffect(()=>{if(sel) loadLiveRoster(sel.abbr);},[]);
-  const east=standings.filter(t=>t.conf==="E").sort((a,b)=>b.w-a.w);
-  const west=standings.filter(t=>t.conf==="W").sort((a,b)=>b.w-a.w);
-
-  const loadLiveRoster=async(abbr)=>{
-    const id=ESPN_ID[abbr];
-    if(!id) return;
-    setRosterLoading(true);setLiveRoster(null);
-    try{
-      const r=await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/${id}/roster`,{signal:AbortSignal.timeout(5000)});
-      if(!r.ok) throw new Error();
-      const d=await r.json();
-      const players=(d.athletes||[]).flatMap(g=>g.items||[g]).map(a=>`${a.firstName} ${a.lastName}`).filter(Boolean);
-      if(players.length>0) setLiveRoster(players);
-    }catch(_){}
-    setRosterLoading(false);
-  };
-
-  const pickTeam=(t)=>{setSel(t);setGridOpen(false);loadLiveRoster(t.abbr);};
-
-  return(<div className="fade-up">
-    <ST sub="NBA 2025-26">30 Equipos</ST>
-
-    {/* Selector de equipo — colapsable */}
-    {!gridOpen&&sel
-      ?<Card style={{marginBottom:14,background:`linear-gradient(135deg,${sel.color}14,${C.card})`,borderColor:`${sel.color}55`,padding:"12px 16px"}}>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
-            {logo(sel.abbr,40)}
-            <div style={{flex:1}}>
-              <div style={{fontSize:18,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:sel.color}}>{sel.name}</div>
-              <div style={{fontSize:11,color:C.muted}}>{sel.conf==="E"?"Este":"Oeste"} · {sel.w}–{sel.l}</div>
-            </div>
-            <button className="btn" onClick={()=>setGridOpen(true)} style={{padding:"8px 14px",borderRadius:10,background:"#0a1018",border:`1px solid ${C.border}`,color:C.accent,fontSize:12,fontWeight:700}}>✏️ Cambiar</button>
-          </div>
-        </Card>
-      :<>
-        <div style={{display:"flex",gap:8,marginBottom:14}}>
-          {[["Todos","ALL"],["Este","E"],["Oeste","W"]].map(([l,v])=><button key={v} className="btn" onClick={()=>setConf(v)} style={{padding:"7px 16px",borderRadius:20,background:conf===v?C.accent:"#0d1117",border:`1px solid ${conf===v?C.accent:C.border}`,color:conf===v?"#07090f":C.dim,fontWeight:700,fontSize:12}}>{l}</button>)}
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(84px,1fr))",gap:7,marginBottom:sel?14:22}}>
-          {visible.map(t=><button key={t.id} className="btn" onClick={()=>pickTeam(t)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:"10px 6px",borderRadius:12,background:sel?.id===t.id?`${t.color}22`:"#0d1117",border:`2px solid ${sel?.id===t.id?t.color:C.border}`}}>
-            {logo(t.abbr,30)}<span style={{fontSize:10,fontWeight:800,color:sel?.id===t.id?t.color:C.dim}}>{t.abbr}</span><span style={{fontSize:9,color:C.muted}}>{t.w}–{t.l}</span>
-          </button>)}
-        </div>
-      </>}
-
-    {/* Info del equipo seleccionado */}
-    {sel&&<><Card style={{marginBottom:14,background:`linear-gradient(135deg,${sel.color}14,${C.card})`,borderColor:`${sel.color}44`}}>
-      <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
-        {logo(sel.abbr,56)}
-        <div><div style={{fontSize:22,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:sel.color}}>{sel.name}</div><div style={{fontSize:11,color:C.muted}}>{sel.conf==="E"?"Este":"Oeste"} · {sel.div}</div></div>
-        <div style={{marginLeft:"auto",display:"flex",gap:18,flexWrap:"wrap"}}>{[[sel.w,"V",C.text],[sel.l,"D","#ff6666"],[(sel.pct*100).toFixed(1)+"%","%","#00FF9D"]].map(([v,l,c])=><div key={l} style={{textAlign:"center"}}><div style={{fontSize:28,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:c}}>{v}</div><div style={{fontSize:9,color:C.muted}}>{l}</div></div>)}</div>
-      </div></Card>
-    <Card style={{marginBottom:28}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-        <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2}}>Roster 2025-26</div>
-        {rosterLoading?<Spin s={12}/>:liveRoster?<span style={{fontSize:9,color:"#00FF9D"}}>🟢 Live</span>:<span style={{fontSize:9,color:C.muted}}>📦 Cache</span>}
-      </div>
-      {rosterLoading
-        ?<div style={{textAlign:"center",padding:"20px 0",color:C.dim,fontSize:12}}>Cargando roster...</div>
-        :<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
-          {(liveRoster||sel.players||[]).map((p,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0"}}>
-            <span style={{fontSize:9,fontWeight:800,color:sel.color,width:16}}>{i+1}</span>
-            <span style={{fontSize:12,fontWeight:600,color:C.text}}>{p}</span>
-          </div>)}
-        </div>
-      }
-    </Card>
-    </>}
-
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><ST sub="2025-26">Clasificación</ST><LiveBadge live={live.standings}/></div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:14}}>
-      {[["Este",east],["Oeste",west]].map(([label,teams])=><Card key={label}>
-        <div style={{fontSize:11,fontWeight:700,color:C.dim,marginBottom:12}}>{label}</div>
-        {teams.slice(0,10).map((t,i)=>{
-          const isSelected=sel?.id===t.id;
-          return<div key={t.id} onClick={()=>pickTeam(t)} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 6px",borderRadius:8,marginBottom:2,cursor:"pointer",background:isSelected?`${t.color}18`:"transparent",border:isSelected?`1px solid ${t.color}44`:"1px solid transparent",borderBottom:!isSelected&&i<9?`1px solid ${C.border}`:"none",transition:"background .15s"}}>
-            <span style={{fontSize:10,width:16,color:i<6?"#FFB800":i<8?"#00C2FF":C.muted,fontWeight:800}}>{i+1}</span>
-            {logo(t.abbr,22)}<span style={{flex:1,fontSize:12,fontWeight:isSelected?800:600,color:isSelected?t.color:C.text}}>{t.abbr}</span>
-            <span style={{fontSize:11,color:C.dim,width:44}}>{t.w}–{t.l}</span>
-            <Tag c={t.streak?.startsWith("W")?"#00FF9D":"#ff6666"}>{t.streak}</Tag>
-          </div>;
-        })}</Card>)}
-    </div>
-  </div>);
-};
-
-/* ═══ PLAYERS TAB (all players with pagination) ═══ */
-const PlayersTab=({players,live})=>{
-  const [sel,setSel]=useState(null);const [search,setSearch]=useState("");const [teamF,setTeamF]=useState("ALL");const [page,setPage]=useState(0);
-  const PER_PAGE=40;
-  const filtered=players.filter(p=>{const q=search.toLowerCase();return(p.name?.toLowerCase().includes(q)||p.teamAbbr?.toLowerCase().includes(q))&&(teamF==="ALL"||p.teamAbbr===teamF);});
-  const pageCount=Math.ceil(filtered.length/PER_PAGE);
-  const paged=filtered.slice(page*PER_PAGE,(page+1)*PER_PAGE);
-  const teams=[...new Set(players.map(p=>p.teamAbbr).filter(Boolean))].sort();
-  const color=sel?tm(sel.teamAbbr).color:C.accent;
-  const radar=sel?[{s:"PTS",v:Math.min(99,Math.round(+sel.pts/38*95))},{s:"AST",v:Math.min(99,Math.round(+(sel.ast||0)/12*95))},{s:"REB",v:Math.min(99,Math.round(+(sel.reb||0)/15*95))},{s:"BLK",v:Math.min(99,Math.round(+(sel.blk||0)/4*95))},{s:"STL",v:Math.min(99,Math.round(+(sel.stl||0)/3*95))},{s:"FG%",v:Math.min(99,Math.round(+(sel.fgPct||45)/62*95))}]:[];
-  return(<div className="fade-up">
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><ST sub="2025-26">Top Anotadores</ST><LiveBadge live={live.players}/></div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(195px,1fr))",gap:10,marginBottom:28}}>
-      {players.slice(0,8).map(p=><Card key={p.id} style={{borderLeft:`3px solid ${p.color}`,padding:14}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-          {logo(p.teamAbbr,28)}
-          <div><div style={{fontSize:12,fontWeight:700,color:C.text,lineHeight:1.3}}>{p.name}</div><div style={{fontSize:10,color:C.muted}}>{p.teamAbbr} · {p.pos}</div></div>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:5}}>
-          {[["PTS",p.pts],["AST",p.ast],["REB",p.reb]].map(([l,v])=><div key={l} style={{textAlign:"center",background:"#0a1018",borderRadius:7,padding:"5px 2px"}}><div style={{fontSize:16,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text}}>{v}</div><div style={{fontSize:8,color:C.muted,letterSpacing:1}}>{l}</div></div>)}
-        </div></Card>)}
-    </div>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><ST sub="NBA 2025-26">{filtered.length} Jugadores</ST><LiveBadge live={live.players}/></div>
-    <Card style={{marginBottom:16,padding:"16px 18px",background:"linear-gradient(135deg,#0a1520,#0d1117)",borderColor:`${C.accent}33`}}>
-      <div style={{position:"relative",marginBottom:12}}>
-        <span style={{position:"absolute",left:16,top:"50%",transform:"translateY(-50%)",fontSize:20}}>🔍</span>
-        <input value={search} onChange={e=>{setSearch(e.target.value);setPage(0);setSel(null);}} placeholder="Buscar jugador o equipo..." style={{width:"100%",background:C.card,border:`2px solid ${search?C.accent:C.border}`,borderRadius:14,padding:"14px 16px 14px 48px",color:C.text,fontSize:16,fontWeight:600,transition:"border .2s"}}/>
-        {search&&<button className="btn" onClick={()=>{setSearch("");setPage(0);}} style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",background:"none",color:C.muted,fontSize:20,padding:0}}>✕</button>}
-      </div>
-      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-        <button className="btn" onClick={()=>{setTeamF("ALL");setPage(0);}} style={{padding:"6px 14px",borderRadius:20,background:teamF==="ALL"?C.accent:"#0a1018",border:`1px solid ${teamF==="ALL"?C.accent:C.border}`,color:teamF==="ALL"?"#07090f":C.dim,fontWeight:700,fontSize:11}}>Todos</button>
-        {teams.map(t=><button key={t} className="btn" onClick={()=>{setTeamF(teamF===t?"ALL":t);setPage(0);}} style={{padding:"4px 8px",borderRadius:20,background:teamF===t?`${tm(t).color}22`:"#0a1018",border:`1px solid ${teamF===t?tm(t).color:C.border}`,color:teamF===t?tm(t).color:C.dim,fontSize:10,fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
-          {logo(t,16)}{t}
-        </button>)}
-      </div>
-    </Card>
-    <Card style={{marginBottom:14,padding:10,overflow:"auto"}}>
-      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-        <thead><tr style={{borderBottom:`1px solid ${C.border}`}}>{["#","","Jugador","Equipo","PTS","AST","REB","FG%"].map(h=><th key={h} style={{padding:"8px 6px",textAlign:"left",color:C.muted,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1}}>{h}</th>)}</tr></thead>
-        <tbody>{paged.map((p,i)=><tr key={p.id} onClick={()=>setSel(sel?.id===p.id?null:p)} style={{cursor:"pointer",borderBottom:`1px solid ${C.border}`,background:sel?.id===p.id?`${tm(p.teamAbbr).color}11`:"transparent"}}>
-          <td style={{padding:"8px 6px",color:C.muted,fontSize:10}}>{page*PER_PAGE+i+1}</td>
-          <td style={{padding:"4px 2px"}}>{logo(p.teamAbbr,20)}</td>
-          <td style={{padding:"8px 6px",fontWeight:700,color:sel?.id===p.id?tm(p.teamAbbr).color:C.text}}>{p.name}</td>
-          <td style={{padding:"8px 6px",color:C.dim}}>{p.teamAbbr}</td>
-          <td style={{padding:"8px 6px",fontWeight:800,color:"#FFB800"}}>{p.pts}</td>
-          <td style={{padding:"8px 6px",color:C.text}}>{p.ast}</td>
-          <td style={{padding:"8px 6px",color:C.text}}>{p.reb}</td>
-          <td style={{padding:"8px 6px",color:C.dim}}>{p.fgPct}%</td>
-        </tr>)}</tbody>
-      </table>
-    </Card>
-    {pageCount>1&&<div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:8,marginBottom:16}}>
-      <button className="btn" disabled={page===0} onClick={()=>{setPage(p=>p-1);setSel(null);}} style={{width:44,height:44,borderRadius:"50%",background:page===0?"#0a1018":C.accent,border:`2px solid ${page===0?C.border:C.accent}`,color:page===0?C.muted:"#07090f",fontSize:18,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
-      <div style={{display:"flex",gap:4}}>{Array.from({length:pageCount},(_,i)=><button key={i} className="btn" onClick={()=>{setPage(i);setSel(null);}} style={{width:i===page?36:28,height:28,borderRadius:14,background:i===page?C.accent:"#0a1018",border:`1px solid ${i===page?C.accent:C.border}`,color:i===page?"#07090f":C.dim,fontSize:11,fontWeight:i===page?900:500,display:"flex",alignItems:"center",justifyContent:"center"}}>{i+1}</button>)}</div>
-      <button className="btn" disabled={page>=pageCount-1} onClick={()=>{setPage(p=>p+1);setSel(null);}} style={{width:44,height:44,borderRadius:"50%",background:page>=pageCount-1?"#0a1018":C.accent,border:`2px solid ${page>=pageCount-1?C.border:C.accent}`,color:page>=pageCount-1?C.muted:"#07090f",fontSize:18,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>→</button>
-    </div>}
-    {sel&&<Card style={{borderLeft:`4px solid ${color}`}}>
-      <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap",marginBottom:14}}>
-        {logo(sel.teamAbbr,48)}
-        <div><div style={{fontSize:22,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color}}>{sel.name}</div><div style={{fontSize:11,color:C.muted}}>{tm(sel.teamAbbr).name} · {sel.pos}</div></div>
-        <div style={{marginLeft:"auto",display:"flex",gap:10,flexWrap:"wrap"}}>{[["PTS",sel.pts],["AST",sel.ast],["REB",sel.reb],["BLK",sel.blk],["STL",sel.stl],["FG%",sel.fgPct],["3P%",sel.fg3Pct]].map(([l,v])=><div key={l} style={{textAlign:"center"}}><div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.text}}>{v||"—"}</div><div style={{fontSize:8,color:C.muted,letterSpacing:1}}>{l}</div></div>)}</div>
-      </div>
-      <ResponsiveContainer width="100%" height={200}><RadarChart data={radar}><PolarGrid stroke={C.border}/><PolarAngleAxis dataKey="s" tick={{fill:C.dim,fontSize:10}}/><PolarRadiusAxis domain={[0,100]} tick={false} axisLine={false}/><Radar dataKey="v" stroke={color} fill={color} fillOpacity={.2} strokeWidth={2}/></RadarChart></ResponsiveContainer>
-    </Card>}
   </div>);
 };
 
