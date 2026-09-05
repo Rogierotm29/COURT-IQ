@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { AreaChart, Area, BarChart, Bar, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { TRIVIA_ALL, CHAMPS, PLAYER_CLUES, FLAGS } from "./data/minigames";
+import { SHOP_ITEMS } from "./data/shop";
+import { ESPN_LOGO,ESPN_ID,TM,FIX,fix } from "./data/teams";
 //Consts
 const C={bg:"#07090f",card:"#0d1117",border:"#1a2535",muted:"#3d5166",dim:"#566880",text:"#e0eaf5",accent:"#00C2FF"};
 const GS=()=><style>{`@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;500;600;700;800;900&display=swap');*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}body{background:#07090f}::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:#1e2d40;border-radius:4px}@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}@keyframes spin{to{transform:rotate(360deg)}}@keyframes bounceIn{0%{transform:scale(.85);opacity:0}60%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-5px)}40%,80%{transform:translateX(5px)}}@keyframes confettiFall{0%{transform:translateY(-10px) rotate(0deg);opacity:1}100%{transform:translateY(105vh) rotate(720deg);opacity:0}}@keyframes floatUp{0%{transform:translateY(0) scale(1);opacity:1}100%{transform:translateY(-70px) scale(1.2);opacity:0}}@keyframes resultPop{0%{transform:translateX(-50%) scale(.6) translateY(20px);opacity:0}60%{transform:translateX(-50%) scale(1.08) translateY(-4px)}100%{transform:translateX(-50%) scale(1) translateY(0);opacity:1}}@keyframes resultOut{0%{opacity:1;transform:translateX(-50%) scale(1)}100%{opacity:0;transform:translateX(-50%) scale(.9) translateY(10px)}}.fade-up{animation:fadeUp .35s ease both}.pick-correct{animation:bounceIn .5s ease both}.pick-wrong{animation:shake .4s ease both}.btn{cursor:pointer;border:none;outline:none;transition:all .15s;font-family:inherit}.btn:hover{filter:brightness(1.15)}.card{transition:transform .15s,box-shadow .15s}.card:hover{transform:translateY(-2px);box-shadow:0 8px 28px #00000055}input,select{outline:none;font-family:inherit}.spin{animation:spin 1s linear infinite}`}</style>;
@@ -35,15 +38,11 @@ const FloatPts=({pts,correct})=><div style={{position:'absolute',top:'-8px',righ
 const LiveBadge=({live})=><span style={{fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:20,letterSpacing:.8,background:live?"#00FF9D18":"#1a2535",color:live?"#00FF9D":C.muted}}>{live?"🟢 LIVE":"📦 Cache"}</span>;
 
 /* ═══ TEAM META + LOGOS ═══ */
-const ESPN_LOGO={ATL:"atl",BOS:"bos",BKN:"bkn",CHA:"cha",CHI:"chi",CLE:"cle",DAL:"dal",DEN:"den",DET:"det",GSW:"gs",HOU:"hou",IND:"ind",LAC:"lac",LAL:"lal",MEM:"mem",MIA:"mia",MIL:"mil",MIN:"min",NOP:"no",NYK:"ny",OKC:"okc",ORL:"orl",PHI:"phi",PHX:"phx",POR:"por",SAC:"sac",SAS:"sa",TOR:"tor",UTA:"utah",WAS:"wsh"};
 const logo=(abbr,sz=32)=><img src={`https://a.espncdn.com/i/teamlogos/nba/500/${ESPN_LOGO[abbr]||abbr.toLowerCase()}.png`} alt={abbr} style={{width:sz,height:sz,objectFit:"contain"}} onError={e=>{e.target.style.display="none"}}/>;
 
-const TM={
-  ATL:{color:"#E03A3E",name:"Atlanta Hawks",conf:"E",div:"Southeast"},BOS:{color:"#008348",name:"Boston Celtics",conf:"E",div:"Atlantic"},BKN:{color:"#BBBBBB",name:"Brooklyn Nets",conf:"E",div:"Atlantic"},CHA:{color:"#00B2A9",name:"Charlotte Hornets",conf:"E",div:"Southeast"},CHI:{color:"#CE1141",name:"Chicago Bulls",conf:"E",div:"Central"},CLE:{color:"#860038",name:"Cleveland Cavaliers",conf:"E",div:"Central"},DAL:{color:"#00538C",name:"Dallas Mavericks",conf:"W",div:"Southwest"},DEN:{color:"#FEC524",name:"Denver Nuggets",conf:"W",div:"Northwest"},DET:{color:"#C8102E",name:"Detroit Pistons",conf:"E",div:"Central"},GSW:{color:"#1D428A",name:"Golden State Warriors",conf:"W",div:"Pacific"},HOU:{color:"#CE1141",name:"Houston Rockets",conf:"W",div:"Southwest"},IND:{color:"#FDBB30",name:"Indiana Pacers",conf:"E",div:"Central"},LAC:{color:"#C8102E",name:"LA Clippers",conf:"W",div:"Pacific"},LAL:{color:"#552583",name:"Los Angeles Lakers",conf:"W",div:"Pacific"},MEM:{color:"#5D76A9",name:"Memphis Grizzlies",conf:"W",div:"Southwest"},MIA:{color:"#98002E",name:"Miami Heat",conf:"E",div:"Southeast"},MIL:{color:"#007A33",name:"Milwaukee Bucks",conf:"E",div:"Central"},MIN:{color:"#236192",name:"Minnesota Timberwolves",conf:"W",div:"Northwest"},NOP:{color:"#C8A96E",name:"New Orleans Pelicans",conf:"W",div:"Southwest"},NYK:{color:"#006BB6",name:"New York Knicks",conf:"E",div:"Atlantic"},OKC:{color:"#007AC1",name:"OKC Thunder",conf:"W",div:"Northwest"},ORL:{color:"#0077C0",name:"Orlando Magic",conf:"E",div:"Southeast"},PHI:{color:"#ED174C",name:"Philadelphia 76ers",conf:"E",div:"Atlantic"},PHX:{color:"#E56020",name:"Phoenix Suns",conf:"W",div:"Pacific"},POR:{color:"#E03A3E",name:"Portland Trail Blazers",conf:"W",div:"Northwest"},SAC:{color:"#5A2D81",name:"Sacramento Kings",conf:"W",div:"Pacific"},SAS:{color:"#8E9093",name:"San Antonio Spurs",conf:"W",div:"Southwest"},TOR:{color:"#CE1141",name:"Toronto Raptors",conf:"E",div:"Atlantic"},UTA:{color:"#F9A01B",name:"Utah Jazz",conf:"W",div:"Northwest"},WAS:{color:"#E31837",name:"Washington Wizards",conf:"E",div:"Southeast"},
-};
+
 const tm=a=>TM[a]||{color:C.accent,name:a||"?",conf:"W",div:""};
-const FIX={GS:"GSW",NY:"NYK",SA:"SAS",NO:"NOP",WSH:"WAS",UTAH:"UTA",CHAR:"CHA",PHO:"PHX",UTH:"UTA"};
-const fix=a=>FIX[a]||a;
+
 
 
 /* ═══ FALLBACK DATA ═══ */
@@ -720,8 +719,6 @@ const OUTab=({games,userCtx})=>{
   </div>);
 };
 
-/* ═══ ESPN TEAM IDs ═══ */
-const ESPN_ID={ATL:1,BOS:2,NOP:3,CHI:4,CLE:5,DAL:6,DEN:7,DET:8,GSW:9,HOU:10,IND:11,LAC:12,LAL:13,MIA:14,MIL:15,MIN:16,BKN:17,NYK:18,ORL:19,PHI:20,PHX:21,POR:22,SAC:23,SAS:24,OKC:25,UTA:26,WAS:27,TOR:28,MEM:29,CHA:30};
 
 /* ═══ TEAMS TAB ═══ */
 const TeamsTab=({standings,live})=>{
@@ -917,43 +914,6 @@ const ACHIEVEMENT_DEFS=[
   {key:"parlay_win",emoji:"🎰",name:"Parlay Perfecto",desc:"Acertaste todos los picks de tu parlay",color:"#FF6B35"},
 ];
 
-// ─── SHOP ITEMS ─────────────────────────────────────────────────────────────
-const SHOP_ITEMS=[
-  // Títulos
-  {key:"title_rookie",   emoji:"🐣",name:"Título Rookie",    desc:"🐣 para los que están empezando",        cost:50,  type:"title", cat:"Títulos"},
-  {key:"title_fire",     emoji:"🔥",name:"Título Fuego",     desc:"🔥 antes de tu nombre",                 cost:120, type:"title", cat:"Títulos"},
-  {key:"title_sniper",   emoji:"🎯",name:"Título Sniper",    desc:"🎯 puntería perfecta, junto a tu nombre",cost:150, type:"title", cat:"Títulos"},
-  {key:"title_lightning",emoji:"⚡",name:"Título Rayo",      desc:"⚡ velocidad y energía",                 cost:180, type:"title", cat:"Títulos"},
-  {key:"title_rey",      emoji:"👑",name:"Título Rey",       desc:"👑 antes de tu nombre en el ranking",    cost:200, type:"title", cat:"Títulos"},
-  {key:"title_brain",    emoji:"🧠",name:"Título Cerebro",   desc:"🧠 el más inteligente del grupo",        cost:200, type:"title", cat:"Títulos"},
-  {key:"title_lion",     emoji:"🦁",name:"Título León",      desc:"🦁 domina el ranking con fuerza",        cost:250, type:"title", cat:"Títulos"},
-  {key:"title_shark",    emoji:"🦈",name:"Título Tiburón",   desc:"🦈 implacable en los picks",             cost:300, type:"title", cat:"Títulos"},
-  {key:"title_legend",   emoji:"🌟",name:"Título Leyenda",   desc:"🌟 para las verdaderas leyendas",        cost:400, type:"title", cat:"Títulos"},
-  {key:"title_mvp",      emoji:"🏅",name:"Título MVP",       desc:"🏅 MVP junto a tu nombre",              cost:350, type:"title", cat:"Títulos"},
-  {key:"title_goat",     emoji:"🐐",name:"Título GOAT",      desc:"🐐 el más grande, junto a tu nombre",   cost:500, type:"title", cat:"Títulos"},
-  {key:"title_diamond",  emoji:"💎",name:"Título Diamante",  desc:"💎 raro y exclusivo, el tope del juego", cost:600, type:"title", cat:"Títulos"},
-  // Colores de nombre
-  {key:"color_white",  emoji:"⬜",name:"Nombre Blanco",   desc:"Tu nombre en blanco puro",               cost:100, type:"color", cat:"Colores", value:"#FFFFFF"},
-  {key:"color_fire",   emoji:"🟠",name:"Nombre Fuego",    desc:"Tu nombre en naranja en el ranking",     cost:150, type:"color", cat:"Colores", value:"#FF6B35"},
-  {key:"color_red",    emoji:"🔴",name:"Nombre Rojo",     desc:"Tu nombre en rojo intenso",              cost:150, type:"color", cat:"Colores", value:"#FF4444"},
-  {key:"color_green",  emoji:"🟢",name:"Nombre Verde",    desc:"Tu nombre en verde en el ranking",       cost:150, type:"color", cat:"Colores", value:"#00FF9D"},
-  {key:"color_blue",   emoji:"🔵",name:"Nombre Azul",     desc:"Tu nombre en azul neón",                 cost:150, type:"color", cat:"Colores", value:"#00C2FF"},
-  {key:"color_teal",   emoji:"🩵",name:"Nombre Turquesa", desc:"Tu nombre en turquesa vibrante",         cost:180, type:"color", cat:"Colores", value:"#00CED1"},
-  {key:"color_purple", emoji:"🟣",name:"Nombre Violeta",  desc:"Tu nombre en violeta en el ranking",     cost:200, type:"color", cat:"Colores", value:"#9B59B6"},
-  {key:"color_pink",   emoji:"🩷",name:"Nombre Rosa",     desc:"Tu nombre en rosa brillante",            cost:200, type:"color", cat:"Colores", value:"#FF69B4"},
-  {key:"color_gold",   emoji:"🟡",name:"Nombre Dorado",   desc:"Tu nombre en dorado en el ranking",      cost:250, type:"color", cat:"Colores", value:"#FFB800"},
-  // Marcos
-  {key:"border_silver", emoji:"🔘",name:"Marco Plata",    desc:"Borde plateado en tu posición",          cost:200, type:"border", cat:"Marcos", value:"#C0C0C0"},
-  {key:"border_neon",   emoji:"🔵",name:"Marco Neón",     desc:"Borde cyan neón en tu posición",         cost:250, type:"border", cat:"Marcos", value:"#00C2FF"},
-  {key:"border_purple", emoji:"🟣",name:"Marco Violeta",  desc:"Borde violeta brillante",                cost:280, type:"border", cat:"Marcos", value:"#9B59B6"},
-  {key:"border_gold",   emoji:"✨",name:"Marco Dorado",   desc:"Borde dorado en tu posición del ranking",cost:300, type:"border", cat:"Marcos", value:"#FFB800"},
-  {key:"border_fire",   emoji:"🔴",name:"Marco Fuego",    desc:"Borde rojo en tu posición del ranking",  cost:300, type:"border", cat:"Marcos", value:"#FF4444"},
-  {key:"border_electric",emoji:"⚡",name:"Marco Eléctrico",desc:"Borde eléctrico que te hace brillar",   cost:350, type:"border", cat:"Marcos", value:"#FFD700"},
-  {key:"border_rainbow", emoji:"🌈",name:"Marco Arcoíris", desc:"Borde arcoíris animado — exclusivo",    cost:500, type:"border", cat:"Marcos", value:"rainbow"},
-  // Poderes
-  {key:"shield",         emoji:"🛡️",name:"Escudo de Racha",desc:"+1 escudo para proteger tu racha (consumible)", cost:75,  type:"shield", cat:"Poderes"},
-  {key:"extra_pick",     emoji:"🔄",name:"Pick Extra",      desc:"Cambia 1 pick aunque el partido ya cerró (consumible)", cost:200, type:"extra_pick", cat:"Poderes"},
-];
 
 // Helpers para aplicar cosmetics en el leaderboard
 // equipped = {color:"color_gold", title:"title_rey", border:"border_neon"} — solo 1 activo por tipo
@@ -2398,194 +2358,7 @@ const BracketTab=({userCtx,standings})=>{
 };
 
 /* ═══ ACHIEVEMENT DEFS ═══ */
-/* ═══ MINI GAMES TAB ═══ */
-const TRIVIA_ALL=[
-  /* ── Campeones ── */
-  {q:"¿Quién ganó las Finales NBA 2023?",opts:["Miami Heat","Denver Nuggets","Boston Celtics","LA Lakers"],a:1},
-  {q:"¿Quién ganó las Finales NBA 2024?",opts:["Dallas Mavericks","Miami Heat","Boston Celtics","Indiana Pacers"],a:2},
-  {q:"¿Quién ganó las Finales NBA 2021?",opts:["LA Lakers","Miami Heat","Milwaukee Bucks","Phoenix Suns"],a:2},
-  {q:"¿Quién ganó las Finales NBA 2016?",opts:["Golden State Warriors","Cleveland Cavaliers","Oklahoma City Thunder","San Antonio Spurs"],a:1},
-  {q:"¿Quién ganó las Finales NBA 2019?",opts:["Golden State Warriors","Toronto Raptors","Cleveland Cavaliers","Milwaukee Bucks"],a:1},
-  {q:"¿Quién ganó las Finales NBA 2020?",opts:["Miami Heat","LA Lakers","Denver Nuggets","Boston Celtics"],a:1},
-  {q:"¿En qué año ganó Dallas Mavericks su único campeonato?",opts:["2009","2011","2013","2015"],a:1},
-  {q:"¿Cuántos campeonatos tiene Boston Celtics en total?",opts:["15","17","18","20"],a:2},
-  {q:"¿Cuántos campeonatos ganó Chicago Bulls con Michael Jordan?",opts:["4","5","6","7"],a:2},
-  {q:"¿Qué equipo ganó 3 campeonatos consecutivos entre 2000 y 2002?",opts:["Chicago Bulls","San Antonio Spurs","Los Angeles Lakers","Boston Celtics"],a:2},
-  {q:"¿Cuántos campeonatos tiene San Antonio Spurs?",opts:["4","5","6","7"],a:1},
-  {q:"¿Qué equipo fue el primero en defender el campeonato en la era moderna (post-2000)?",opts:["LA Lakers","Chicago Bulls","Miami Heat","Golden State Warriors"],a:0},
-  /* ── Récords ── */
-  {q:"¿Cuántos puntos anotó Kobe Bryant en su juego récord vs Toronto?",opts:["71","81","73","76"],a:1},
-  {q:"¿Cuántos puntos anotó Wilt Chamberlain en su partido récord?",opts:["81","92","100","73"],a:2},
-  {q:"¿Quién tiene el récord histórico de triple-dobles?",opts:["Magic Johnson","Oscar Robertson","Russell Westbrook","LeBron James"],a:2},
-  {q:"¿Qué equipo fue el primero en ganar 70+ partidos en temporada regular?",opts:["LA Lakers 1972","Chicago Bulls 1996","Golden State 2016","Boston 1986"],a:1},
-  {q:"¿Cuántas victorias tuvo Golden State en la temporada 2015-16?",opts:["67","70","73","75"],a:2},
-  {q:"¿Quién tiene el récord de más puntos en un cuarto de playoffs?",opts:["Kobe Bryant","Michael Jordan","Kyrie Irving","Stephen Curry"],a:3},
-  {q:"¿Cuántos triples anotó Stephen Curry en su temporada récord?",opts:["342","376","402","421"],a:2},
-  {q:"¿Quién anotó 71 puntos en un juego en 2023?",opts:["Luka Dončić","Devin Booker","Jayson Tatum","Ja Morant"],a:0},
-  /* ── MVPs ── */
-  {q:"¿Quién fue el único MVP unánime en la historia NBA?",opts:["LeBron James","Michael Jordan","Stephen Curry","Shaquille O'Neal"],a:2},
-  {q:"¿Cuántos MVPs de temporada tiene Nikola Jokić?",opts:["1","2","3","4"],a:2},
-  {q:"¿Cuántos MVPs de temporada tiene LeBron James?",opts:["3","4","5","6"],a:1},
-  {q:"¿Cuántas veces ganó Michael Jordan el MVP de las Finales?",opts:["4","5","6","7"],a:2},
-  {q:"¿Quién fue MVP de las Finales 2016 siendo del equipo perdedor?",opts:["Kyrie Irving","LeBron James","Kevin Durant","Stephen Curry"],a:1},
-  {q:"¿Quién fue MVP de las Finales 2019?",opts:["Stephen Curry","Kevin Durant","Kawhi Leonard","Giannis Antetokounmpo"],a:2},
-  {q:"¿Cuántos MVPs tiene Kareem Abdul-Jabbar?",opts:["4","5","6","7"],a:2},
-  {q:"¿Quién ganó MVP de la temporada 2022-23?",opts:["Giannis Antetokounmpo","Joel Embiid","Nikola Jokić","Jayson Tatum"],a:1},
-  {q:"¿Dirk Nowitzki fue el primer europeo en ganar el MVP?",opts:["Sí","No","También Arvydas Sabonis","También Peja Stojaković"],a:0},
-  /* ── Draft ── */
-  {q:"¿En qué pick del Draft 2014 fue seleccionado Nikola Jokić?",opts:["#27","#35","#41","#48"],a:2},
-  {q:"¿En qué año entró LeBron James a la NBA?",opts:["2001","2002","2003","2004"],a:2},
-  {q:"¿Quién fue el pick #1 del Draft 2003?",opts:["Carmelo Anthony","LeBron James","Chris Bosh","Dwyane Wade"],a:1},
-  {q:"¿Quién fue Rookie del Año 2023-24?",opts:["Chet Holmgren","Victor Wembanyama","Scoot Henderson","Brandon Miller"],a:1},
-  {q:"¿En qué pick fue seleccionado Stephen Curry en el Draft 2009?",opts:["#3","#5","#7","#10"],a:2},
-  {q:"¿Quién fue el #1 del Draft 2023?",opts:["Scoot Henderson","Brandon Miller","Victor Wembanyama","Chet Holmgren"],a:2},
-  {q:"¿Qué equipo seleccionó a Kobe Bryant en el Draft 1996?",opts:["Los Angeles Lakers","Charlotte Hornets","Chicago Bulls","Seattle SuperSonics"],a:1},
-  {q:"¿En qué pick fue seleccionado Giannis Antetokounmpo en el Draft 2013?",opts:["#10","#12","#15","#17"],a:2},
-  /* ── Jugadores ── */
-  {q:"¿Quién tiene más anillos como jugador en la historia NBA?",opts:["Michael Jordan","Magic Johnson","Bill Russell","Kareem Abdul-Jabbar"],a:2},
-  {q:"¿Quién es el máximo anotador en la historia de la NBA?",opts:["Kareem Abdul-Jabbar","Karl Malone","Kobe Bryant","LeBron James"],a:3},
-  {q:"¿Qué posición juega Nikola Jokić?",opts:["Alero","Escolta","Pívot","Base"],a:2},
-  {q:"¿De qué país es Luka Dončić?",opts:["Croacia","Serbia","Eslovenia","Bosnia"],a:2},
-  {q:"¿Cuántas temporadas jugó Dirk Nowitzki, todas con Dallas?",opts:["18","19","21","23"],a:2},
-  {q:"¿Qué apodo tiene Giannis Antetokounmpo?",opts:["The King","The Greek Freak","The Alphabet","Greek God"],a:1},
-  {q:"¿Con cuántos puntos terminó su carrera Kareem Abdul-Jabbar?",opts:["36,928","37,440","38,112","38,387"],a:3},
-  {q:"¿Quién fue el primer jugador en saltar del instituto directamente a la NBA?",opts:["Kobe Bryant","LeBron James","Kevin Garnett","Moses Malone"],a:3},
-  {q:"¿Quién tiene el récord de más asistencias en la historia NBA?",opts:["Magic Johnson","John Stockton","Steve Nash","Jason Kidd"],a:1},
-  {q:"¿Qué jugador popularizó el 'skyhook'?",opts:["Wilt Chamberlain","Bill Russell","Kareem Abdul-Jabbar","Shaquille O'Neal"],a:2},
-  /* ── Equipos ── */
-  {q:"¿En qué ciudad juegan los Suns de Phoenix?",opts:["Phoenix","Scottsdale","Tempe","Mesa"],a:0},
-  {q:"¿Cuál es el apodo de los jugadores de Golden State Warriors?",opts:["Splash Brothers","Three Kings","Bay Boys","Warrior Nation"],a:0},
-  {q:"¿Qué equipo tiene el logo del toro?",opts:["Orlando Magic","Chicago Bulls","Milwaukee Bucks","Memphis Grizzlies"],a:1},
-  {q:"¿En qué conferencia juega Miami Heat?",opts:["Oeste","Este","Depende del año","No tiene conferencia"],a:1},
-  {q:"¿Cuántos equipos hay en la NBA actualmente?",opts:["28","30","32","29"],a:1},
-  {q:"¿Qué equipo del oeste jugó más finales en los años 2000?",opts:["Dallas Mavericks","San Antonio Spurs","LA Lakers","Golden State Warriors"],a:2},
-  {q:"¿Cómo se llamaba el equipo de New Jersey antes de mudarse a Brooklyn?",opts:["New Jersey Nets","New Jersey Devils","NJ Knicks","NJ Blazers"],a:0},
-  {q:"¿Qué equipo tiene más victorias en una sola temporada regular?",opts:["Chicago Bulls 95-96","Golden State 15-16","LA Lakers 71-72","Boston 85-86"],a:1},
-  /* ── Miscelánea ── */
-  {q:"¿Cuántos jugadores hay por equipo en cancha simultáneamente?",opts:["4","5","6","7"],a:1},
-  {q:"¿Cuántos cuartos dura un partido de la NBA?",opts:["2","3","4","5"],a:2},
-  {q:"¿Cuántos minutos dura cada cuarto en la NBA?",opts:["10","12","15","8"],a:1},
-  {q:"¿Qué significa 'triple-doble'?",opts:["Anotar 30+ puntos","Dobles dígitos en 3 estadísticas","3 veces MVP","3 triples en un partido"],a:1},
-  {q:"¿Cuántos segundos tiene un equipo para lanzar a canasta?",opts:["20","24","30","35"],a:1},
-  {q:"¿Qué se gana cuando el tiro es desde detrás de la línea de tres?",opts:["1 punto","2 puntos","3 puntos","4 puntos"],a:2},
-  {q:"¿Qué es un 'alley-oop'?",opts:["Tiro libre fallado","Pase al vuelo para mate","Triple en el buzzer","Robo de balón"],a:1},
-  {q:"¿Cuántas victorias se necesitan para ganar una serie de playoffs?",opts:["3","4","5","6"],a:1},
-];
 
-const CHAMPS=[
-  /* ── Era clásica ── */
-  {year:1947,team:"PHW",label:"Philadelphia Warriors"},{year:1948,team:"BAB",label:"Baltimore Bullets"},
-  {year:1949,team:"MNL",label:"Minneapolis Lakers"},{year:1950,team:"MNL",label:"Minneapolis Lakers"},
-  {year:1951,team:"ROC",label:"Rochester Royals"},{year:1952,team:"MNL",label:"Minneapolis Lakers"},
-  {year:1953,team:"MNL",label:"Minneapolis Lakers"},{year:1954,team:"MNL",label:"Minneapolis Lakers"},
-  {year:1955,team:"SYN",label:"Syracuse Nationals"},{year:1956,team:"PHW",label:"Philadelphia Warriors"},
-  {year:1957,team:"BOS",label:"Boston Celtics"},{year:1958,team:"STL",label:"St. Louis Hawks"},
-  {year:1959,team:"BOS",label:"Boston Celtics"},{year:1960,team:"BOS",label:"Boston Celtics"},
-  {year:1961,team:"BOS",label:"Boston Celtics"},{year:1962,team:"BOS",label:"Boston Celtics"},
-  {year:1963,team:"BOS",label:"Boston Celtics"},{year:1964,team:"BOS",label:"Boston Celtics"},
-  {year:1965,team:"BOS",label:"Boston Celtics"},{year:1966,team:"BOS",label:"Boston Celtics"},
-  {year:1967,team:"PHI",label:"Philadelphia 76ers"},{year:1968,team:"BOS",label:"Boston Celtics"},
-  {year:1969,team:"BOS",label:"Boston Celtics"},{year:1970,team:"NYK",label:"New York Knicks"},
-  {year:1971,team:"MIL",label:"Milwaukee Bucks"},{year:1972,team:"LAL",label:"LA Lakers"},
-  {year:1973,team:"NYK",label:"New York Knicks"},{year:1974,team:"BOS",label:"Boston Celtics"},
-  {year:1975,team:"GSW",label:"Golden State Warriors"},{year:1976,team:"BOS",label:"Boston Celtics"},
-  {year:1977,team:"POR",label:"Portland Trail Blazers"},{year:1978,team:"WAS",label:"Washington Bullets"},
-  {year:1979,team:"SEA",label:"Seattle SuperSonics"},{year:1980,team:"LAL",label:"LA Lakers"},
-  {year:1981,team:"BOS",label:"Boston Celtics"},{year:1982,team:"LAL",label:"LA Lakers"},
-  {year:1983,team:"PHI",label:"Philadelphia 76ers"},{year:1984,team:"BOS",label:"Boston Celtics"},
-  /* ── Era moderna ── */
-  {year:1985,team:"LAL"},{year:1986,team:"BOS"},{year:1987,team:"LAL"},{year:1988,team:"LAL"},
-  {year:1989,team:"DET"},{year:1990,team:"DET"},{year:1991,team:"CHI"},{year:1992,team:"CHI"},
-  {year:1993,team:"CHI"},{year:1994,team:"HOU"},{year:1995,team:"HOU"},{year:1996,team:"CHI"},
-  {year:1997,team:"CHI"},{year:1998,team:"CHI"},{year:1999,team:"SAS"},{year:2000,team:"LAL"},
-  {year:2001,team:"LAL"},{year:2002,team:"LAL"},{year:2003,team:"SAS"},{year:2004,team:"DET"},
-  {year:2005,team:"SAS"},{year:2006,team:"MIA"},{year:2007,team:"SAS"},{year:2008,team:"BOS"},
-  {year:2009,team:"LAL"},{year:2010,team:"LAL"},{year:2011,team:"DAL"},{year:2012,team:"MIA"},
-  {year:2013,team:"MIA"},{year:2014,team:"SAS"},{year:2015,team:"GSW"},{year:2016,team:"CLE"},
-  {year:2017,team:"GSW"},{year:2018,team:"GSW"},{year:2019,team:"TOR"},{year:2020,team:"LAL"},
-  {year:2021,team:"MIL"},{year:2022,team:"GSW"},{year:2023,team:"DEN"},{year:2024,team:"BOS"},
-];
-
-const PLAYER_CLUES=[
-  /* ── Era actual ── */
-  {name:"LeBron James",team:"LAL",clues:["1er pick del Draft 2003","Jugó para Cavaliers, Heat y Lakers","4 campeonatos de la NBA","Máximo anotador en la historia NBA superando a Kareem"]},
-  {name:"Stephen Curry",team:"GSW",clues:["7mo pick del Draft 2009","Ha jugado toda su carrera con Golden State Warriors","Récord de triples en una temporada: 402","El único MVP unánime en la historia de la NBA"]},
-  {name:"Kevin Durant",team:"HOU",clues:["2do pick del Draft 2007","Jugó en OKC, Golden State, Brooklyn y Phoenix","Ganó 2 campeonatos con Golden State (2017, 2018)","MVP de la NBA en 2014 con Oklahoma City Thunder"]},
-  {name:"Giannis Antetokounmpo",team:"MIL",clues:["15vo pick del Draft 2013","Nació en Atenas, Grecia, de padres nigerianos","Campeón con Milwaukee Bucks en 2021","Doble MVP de la NBA (2019, 2020) — apodado 'The Greek Freak'"]},
-  {name:"Nikola Jokić",team:"DEN",clues:["Pick #41 del Draft 2014 — el más bajo en ganar MVP","Ha jugado toda su carrera con Denver Nuggets","Campeón y MVP de Finales con Denver en 2023","3 veces MVP de la NBA (2021, 2022, 2024)"]},
-  {name:"Luka Dončić",team:"LAL",clues:["3er pick del Draft 2018 — nació en Eslovenia","Fue All-Star en su primera temporada (2018-19)","Fue a las Finales NBA con Dallas en 2024","Tradeado a LA Lakers en enero de 2025"]},
-  {name:"Victor Wembanyama",team:"SAS",clues:["1er pick del Draft 2023 — nació en Francia","Solo ha jugado para San Antonio Spurs","Rookie del Año 2023-24 de forma unánime","Mide 2.24m y es considerado el prospecto más especial en décadas"]},
-  {name:"Jayson Tatum",team:"BOS",clues:["3er pick del Draft 2017","Ha jugado toda su carrera con Boston Celtics","Campeón NBA en 2024 con Boston","Fue MVP de las Finales 2024 con 31 años"]},
-  {name:"Joel Embiid",team:"PHI",clues:["3er pick del Draft 2014 — nació en Camerún","Ha jugado casi toda su carrera con Philadelphia 76ers","MVP de la NBA en 2022-23","Tiene el apodo de 'The Process'"]},
-  {name:"Kawhi Leonard",team:"LAC",clues:["15vo pick del Draft 2011","Jugó para San Antonio, Toronto, LA Clippers","Ganó el campeonato con Toronto en 2019 y fue MVP de Finales","Tiene 2 MVP de Finales con dos equipos diferentes"]},
-  {name:"Shai Gilgeous-Alexander",team:"OKC",clues:["11vo pick del Draft 2018 — nació en Canadá","Empezó en LA Clippers antes de ir a Oklahoma City","Líder anotador de la temporada 2024-25","Es la franquicia de OKC Thunder junto con Chet Holmgren"]},
-  {name:"Anthony Davis",team:"LAL",clues:["1er pick del Draft 2012","Jugó para New Orleans Pelicans y LA Lakers","Campeón con LA Lakers en 2020","Se le conoce por sus cejas y su apodo 'The Brow'"]},
-  {name:"Damian Lillard",team:"MIL",clues:["6to pick del Draft 2012","Jugó 11 temporadas con Portland Trail Blazers","Tradeado a Milwaukee Bucks en 2023","Famoso por sus clutch shots — apodado 'Dame Time'"]},
-  {name:"Ja Morant",team:"MEM",clues:["2do pick del Draft 2019","Ha jugado toda su carrera con Memphis Grizzlies","Rookie del Año 2019-20","Conocido por sus alucinantes mates y suspensiones polémicas"]},
-  {name:"Devin Booker",team:"PHX",clues:["13vo pick del Draft 2015","Ha jugado toda su carrera con Phoenix Suns","Anotó 70 puntos en un partido en 2017 — a sus 20 años","Fue MVP del All-Star Game 2023"]},
-  {name:"Karl-Anthony Towns",team:"NYK",clues:["1er pick del Draft 2015","Jugó 9 temporadas con Minnesota Timberwolves","Tradeado a New York Knicks en 2024","El único jugador en la historia con 50-40-90 como pivote"]},
-  {name:"Tyrese Haliburton",team:"IND",clues:["12vo pick del Draft 2020","Empezó en Sacramento Kings antes de ir a Indiana","MVP del Rising Stars 2022","Fue el héroe del East All-Star que ganó Indiana en 2024"]},
-  {name:"Draymond Green",team:"GSW",clues:["35vo pick del Draft 2012","Ha jugado toda su carrera con Golden State Warriors","4 campeonatos con los Warriors","No es anotador — su valor está en defensa, asistencias y liderazgo"]},
-  /* ── Leyendas recientes ── */
-  {name:"Kobe Bryant",team:"LAL",clues:["13vo pick del Draft 1996","Jugó toda su carrera con Los Angeles Lakers","5 campeonatos con los Lakers","Anotó 81 puntos contra Toronto — 2do mayor en la historia"]},
-  {name:"Shaquille O'Neal",team:"LAL",clues:["1er pick del Draft 1992","Jugó para Orlando, Lakers, Miami, Phoenix y otros","4 campeonatos — 3 con Lakers y 1 con Miami Heat","Considerado el pivote más dominante físicamente en la historia"]},
-  {name:"Tim Duncan",team:"SAS",clues:["1er pick del Draft 1997","Jugó toda su carrera con San Antonio Spurs","5 campeonatos en la era moderna","2 veces MVP de la NBA — apodado 'The Big Fundamental'"]},
-  {name:"Dirk Nowitzki",team:"DAL",clues:["9no pick del Draft 1998 — nació en Würzburg, Alemania","Jugó toda su carrera con Dallas Mavericks","Campeón con Dallas en 2011 eliminando a LeBron en las Finales","MVP de la NBA en 2007 — el primer europeo en ganarlo"]},
-  {name:"Dwyane Wade",team:"MIA",clues:["5to pick del Draft 2003","Jugó principalmente con Miami Heat","3 campeonatos — 2006, 2012 y 2013","MVP de las Finales 2006 a los 24 años — apodado 'Flash'"]},
-  {name:"Chris Paul",team:"PHX",clues:["4to pick del Draft 2005","Jugó para New Orleans, LA Clippers, Houston, OKC y Phoenix","Nunca ganó un campeonato pese a ser uno de los mejores bases","Líder histórico en robos y uno de los mejores pasadores de todos los tiempos"]},
-  {name:"Russell Westbrook",team:"OKC",clues:["4to pick del Draft 2008","Jugó para OKC, Houston, LA Lakers, Washington y otros","MVP de la NBA en 2017 con 42 triple-dobles en la temporada","Récord histórico de triple-dobles en la NBA"]},
-  {name:"Allen Iverson",team:"PHI",clues:["1er pick del Draft 1996","Jugó principalmente para Philadelphia 76ers","MVP de la NBA en 2001 — a 183cm, el más bajo en ganarlo","Apodado 'The Answer' — revolucionó el estilo streetball en la NBA"]},
-  {name:"Charles Barkley",team:"PHX",clues:["5to pick del Draft 1984","Jugó para Philadelphia, Phoenix y Houston — nunca ganó un título","MVP de la NBA en 1993","Famosa frase: 'I am not a role model'"]},
-  {name:"Kevin Garnett",team:"MIN",clues:["5to pick del Draft 1995 — salió directo del instituto","Jugó principalmente para Minnesota y Boston","Campeón con Boston Celtics en 2008","MVP de la NBA en 2004 — apodado 'The Big Ticket'"]},
-  /* ── Era dorada ── */
-  {name:"Michael Jordan",team:"CHI",clues:["3er pick del Draft 1984","6 campeonatos con Chicago Bulls — 3+3 consecutivos","6 MVP de las Finales — todos los títulos que disputó","5 veces MVP de la temporada regular"]},
-  {name:"Magic Johnson",team:"LAL",clues:["1er pick del Draft 1979","Jugó toda su carrera con Los Angeles Lakers","5 campeonatos con los Lakers","3 veces MVP de la NBA y 3 veces MVP de las Finales"]},
-  {name:"Larry Bird",team:"BOS",clues:["6to pick del Draft 1978","Jugó toda su carrera con Boston Celtics","3 campeonatos con los Celtics","3 MVPs de la NBA consecutivos (1984, 1985, 1986)"]},
-  {name:"Kareem Abdul-Jabbar",team:"LAL",clues:["1er pick en 1969 — se llamaba 'Lew Alcindor'","Jugó para Milwaukee Bucks y Los Angeles Lakers","6 campeonatos de la NBA","6 veces MVP — el récord absoluto de la NBA hasta que LeBron lo iguala"]},
-  {name:"Wilt Chamberlain",team:"LAL",clues:["Entró a la NBA en 1959 con Philadelphia Warriors","Jugó para Warriors, 76ers, Lakers y Harlem Globetrotters","Anotó 100 puntos en un solo partido (2 de marzo de 1962)","2 campeonatos — con 76ers en 1967 y Lakers en 1972"]},
-  {name:"Bill Russell",team:"BOS",clues:["Fue seleccionado 2do en el Draft 1956","Jugó toda su carrera con Boston Celtics","11 campeonatos en 13 temporadas — el récord absoluto","5 veces MVP y considerado el mejor defensor de la historia"]},
-  {name:"Oscar Robertson",team:"MIL",clues:["1er pick del Draft 1960","Jugó para Cincinnati Royals y Milwaukee Bucks","Primer jugador en promediar triple-doble en una temporada completa (1961-62)","Campeón con Milwaukee en 1971 junto a Kareem Abdul-Jabbar"]},
-  {name:"Julius Erving",team:"PHI",clues:["Apodado 'Dr. J'","Ganó 3 campeonatos ABA antes de llegar a la NBA","Campeón NBA con Philadelphia 76ers en 1983","Pionero del juego aéreo y los mates espectaculares"]},
-  {name:"Isiah Thomas",team:"DET",clues:["2do pick del Draft 1981","Jugó toda su carrera con Detroit Pistons","2 campeonatos consecutivos (1989, 1990) — los 'Bad Boys'","MVP de las Finales en 1990 pese a estar lesionado"]},
-  {name:"Hakeem Olajuwon",team:"HOU",clues:["1er pick del Draft 1984 — nació en Nigeria","Jugó principalmente con Houston Rockets","2 campeonatos consecutivos (1994, 1995)","MVP de la temporada y de las Finales en 1994 — apodado 'The Dream'"]},
-  {name:"Patrick Ewing",team:"NYK",clues:["1er pick del Draft 1985","Jugó principalmente con New York Knicks","Nunca ganó un campeonato pese a ser considerado el mejor de su época","Llevó a los Knicks a las Finales en 1994 donde perdieron con Houston"]},
-  {name:"John Stockton",team:"UTA",clues:["16vo pick del Draft 1984","Jugó toda su carrera con Utah Jazz junto a Karl Malone","Líder histórico de la NBA en asistencias Y en robos","Nunca ganó un campeonato — perdió 2 Finales ante los Bulls de Jordan"]},
-  {name:"Karl Malone",team:"UTA",clues:["13vo pick del Draft 1985 — apodado 'The Mailman'","Jugó principalmente con Utah Jazz junto a John Stockton","2do máximo anotador de la historia NBA","Ganó el MVP en 1997 y 1999 pero nunca un campeonato"]},
-];
-
-// ─── FLAGS DATA ──────────────────────────────────────────────────────────────
-const FLAGS=[
-  {flag:"🇲🇽",country:"México",opts:["Colombia","México","Perú","Venezuela"]},
-  {flag:"🇧🇷",country:"Brasil",opts:["Argentina","Brasil","Uruguay","Chile"]},
-  {flag:"🇯🇵",country:"Japón",opts:["China","Corea","Japón","Taiwán"]},
-  {flag:"🇩🇪",country:"Alemania",opts:["Austria","Bélgica","Alemania","Holanda"]},
-  {flag:"🇫🇷",country:"Francia",opts:["Italia","España","Francia","Portugal"]},
-  {flag:"🇮🇹",country:"Italia",opts:["Francia","Italia","Grecia","España"]},
-  {flag:"🇨🇦",country:"Canadá",opts:["EE.UU.","Canadá","Australia","N. Zelanda"]},
-  {flag:"🇦🇺",country:"Australia",opts:["N. Zelanda","Fiji","Australia","Samoa"]},
-  {flag:"🇪🇸",country:"España",opts:["Portugal","Italia","España","Francia"]},
-  {flag:"🇰🇷",country:"Corea del Sur",opts:["Japón","China","Corea del Sur","Vietnam"]},
-  {flag:"🇷🇺",country:"Rusia",opts:["Ucrania","Serbia","Rusia","Polonia"]},
-  {flag:"🇨🇳",country:"China",opts:["Japón","China","Corea del Sur","Vietnam"]},
-  {flag:"🇮🇳",country:"India",opts:["Pakistán","India","Bangladesh","Nepal"]},
-  {flag:"🇿🇦",country:"Sudáfrica",opts:["Nigeria","Kenya","Sudáfrica","Ghana"]},
-  {flag:"🇦🇷",country:"Argentina",opts:["Chile","Uruguay","Argentina","Brasil"]},
-  {flag:"🇺🇸",country:"EE.UU.",opts:["Canadá","Australia","EE.UU.","N. Zelanda"]},
-  {flag:"🇬🇧",country:"Reino Unido",opts:["Irlanda","Escocia","Reino Unido","Australia"]},
-  {flag:"🇳🇬",country:"Nigeria",opts:["Ghana","Nigeria","Senegal","Costa de Marfil"]},
-  {flag:"🇹🇷",country:"Turquía",opts:["Grecia","Turquía","Irán","Egipto"]},
-  {flag:"🇸🇦",country:"Arabia Saudí",opts:["Emiratos","Irán","Arabia Saudí","Kuwait"]},
-  {flag:"🇵🇹",country:"Portugal",opts:["España","Francia","Portugal","Italia"]},
-  {flag:"🇳🇱",country:"Países Bajos",opts:["Bélgica","Alemania","Países Bajos","Dinamarca"]},
-  {flag:"🇨🇴",country:"Colombia",opts:["Venezuela","Ecuador","Colombia","Perú"]},
-  {flag:"🇵🇱",country:"Polonia",opts:["Ucrania","Rusia","Polonia","Chequia"]},
-  {flag:"🇸🇪",country:"Suecia",opts:["Noruega","Finlandia","Suecia","Dinamarca"]},
-  {flag:"🇨🇱",country:"Chile",opts:["Argentina","Chile","Colombia","Perú"]},
-  {flag:"🇪🇬",country:"Egipto",opts:["Marruecos","Turquía","Egipto","Irak"]},
-  {flag:"🇺🇦",country:"Ucrania",opts:["Polonia","Rusia","Ucrania","Bielorrusia"]},
-  {flag:"🇬🇷",country:"Grecia",opts:["Italia","Turquía","Grecia","Chipre"]},
-  {flag:"🇹🇭",country:"Tailandia",opts:["Vietnam","Camboya","Tailandia","Indonesia"]},
-];
 
 const MiniGamesTab=({players,userCtx})=>{
   const {user}=userCtx||{};
