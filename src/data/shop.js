@@ -35,3 +35,17 @@ export const SHOP_ITEMS=[
   {key:"shield",         emoji:"🛡️",name:"Escudo de Racha",desc:"+1 escudo para proteger tu racha (consumible)", cost:75,  type:"shield", cat:"Poderes"},
   {key:"extra_pick",     emoji:"🔄",name:"Pick Extra",      desc:"Cambia 1 pick aunque el partido ya cerró (consumible)", cost:200, type:"extra_pick", cat:"Poderes"},
 ];
+
+
+export const ACHIEVEMENT_DEFS=[
+  {key:"first_pick",emoji:"🎯",name:"Primer Pick",desc:"Hiciste tu primera predicción",color:"#00C2FF"},
+  {key:"first_win",emoji:"✅",name:"Primer Acierto",desc:"Atinaste una predicción",color:"#00FF9D"},
+  {key:"streak_3",emoji:"🔥",name:"En Racha",desc:"3 picks correctos seguidos",color:"#FF6B35"},
+  {key:"streak_5",emoji:"🔥🔥",name:"En Llamas",desc:"5 picks correctos seguidos",color:"#FF6B35"},
+  {key:"streak_7",emoji:"⚡🔥",name:"Imparable",desc:"7 picks correctos seguidos — ganas un escudo",color:"#FFB800"},
+  {key:"perfect_day",emoji:"💎",name:"Día Perfecto",desc:"100% en un día (mín. 2 picks)",color:"#00C2FF"},
+  {key:"bet_won",emoji:"🪙",name:"Apostador",desc:"Ganaste tu primera apuesta",color:"#FFB800"},
+  {key:"joined_group",emoji:"👥",name:"Social",desc:"Te uniste a un grupo",color:"#00C2FF"},
+  {key:"challenge_sent",emoji:"⚡",name:"Retador",desc:"Enviaste un reto de apuesta",color:"#FFB800"},
+  {key:"parlay_win",emoji:"🎰",name:"Parlay Perfecto",desc:"Acertaste todos los picks de tu parlay",color:"#FF6B35"},
+];
