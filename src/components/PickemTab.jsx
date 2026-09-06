@@ -172,9 +172,9 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
 
   // Refrescar grupo picks cuando cambia el status de los juegos (para que no desaparezcan los % al iniciar un partido)
   useEffect(()=>{
-    if(!user||!selGroup||subTab!=="grupo") return;
+    if(!user||!selGroup) return;
     pickemAPI("groupPicks",{params:{groupId:selGroup.id}}).then(d=>{if(d.ok)setGrpPicks(d.picks||[]);});
-  },[games.map(g=>g.status).join(",")]);
+  },[user,selGroup,games.map(g=>g.status).join(",")]);
 
   const register=async()=>{
     if(!name.trim()) return;

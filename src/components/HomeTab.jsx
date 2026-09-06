@@ -76,6 +76,12 @@ export const HomeTab=({games,live,userCtx,standings,picks,confidence,setConfiden
     pickemAPI("periodLeaderboard",{params:{groupId:selGroup.id,period:"week"}}).then(r=>{if(r.ok){const me=(r.leaderboard||[]).find(x=>x.user_id===user.id);setWeeklyStats(me||null);}});
   },[user,selGroup]);
 
+    // Recargar picks del grupo cuando cambia el estado de los juegos
+  useEffect(()=>{
+    if(!user||!selGroup) return;
+    pickemAPI("groupPicks",{params:{groupId:selGroup.id}}).then(r=>{if(r.ok)setGrpPicks(r.picks||[]);});
+  },[user,selGroup,games.map(g=>g.status).join(",")]);
+  
   // Notificación de racha cuando sube
   useEffect(()=>{
     if(streak>prevStreakRef.current&&streak>=2){
