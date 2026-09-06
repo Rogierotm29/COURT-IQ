@@ -6,7 +6,7 @@ import { pickemAPI } from "../api/pickem";
 import { calcWinPct, dynPts, dynBase } from "../utils/scoring";
 import { C, APP_URL } from "../theme";
 import { getSeason } from "../utils/season";
-
+import { getToday } from "../utils/date";
 /* ═══ HOME TAB ═══ */
 export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
   const {user}=userCtx||{};
@@ -41,7 +41,7 @@ export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
 
   useEffect(()=>{
     if(!user)return;
-    const today=new Date().toISOString().split("T")[0];
+    const today= getToday();
     const savedGid=localStorage.getItem("courtiq_lastgroup");
     // Restaurar grupo del cache sincrónico — picks funcionan de inmediato
     try{const cached=localStorage.getItem("courtiq_lastgroup_obj");if(cached)setGroup(JSON.parse(cached));}catch(_){}
@@ -116,7 +116,7 @@ export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
 
   const lockAllPicks=()=>{
     if(!group) return;
-    const today=new Date().toISOString().split("T")[0];
+    const today= getToday();
     localStorage.setItem(`courtiq_locked_${group.id}_${today}`,"1");
     setLockedPicks(true);
     setExpandedCard(null);
@@ -127,7 +127,7 @@ export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
   const makePick=async(gameId,team,home,away,g)=>{
     if(!group||!user)return;
     setPicks(p=>({...p,[gameId]:team}));
-    const today=new Date().toISOString().split("T")[0];
+    const today= getToday();
     const conf=confidence[gameId]||1;
     const pickedSide=team===home?"home":"away";
     const wPct=g?.status==="Upcoming"?calcWinPct(g,pickedSide,standings):50;
@@ -328,7 +328,7 @@ export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         {/* Confidence multiplier — visible al hacer pick */}
         {canPick&&picked&&<div style={{marginTop:10,display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}>
           <span style={{fontSize:10,color:C.muted}}>Confianza:</span>
-          {[1,2,3].map(c=>{const pts=dynPts(pickedPct,c);const labels={1:`✅ +${pts}`,2:`🔥 ±${pts}`,3:`⚡ ±${pts}`};const descs={1:"seguro",2:"riesgo",3:"alto riesgo"};return<button key={c} className="btn" onClick={()=>{setConfidence(cf=>({...cf,[g.id]:c}));pickemAPI("makePick",{body:{userId:user.id,groupId:group.id,gameId:g.id,gameDate:new Date().toISOString().split("T")[0],pickedTeam:picked,homeTeam:g.home,awayTeam:g.away,confidence:c,winPct:pickedPct}});}} style={{padding:"5px 10px",borderRadius:8,background:conf===c?(c===1?`#00FF9D22`:c===2?`#FF6B3522`:`#ff444422`):"#0a1018",border:`1px solid ${conf===c?(c===1?"#00FF9D44":c===2?"#FF6B3544":"#ff444444"):C.border}`,color:conf===c?(c===1?"#00FF9D":c===2?"#FF6B35":"#ff4444"):C.muted,fontSize:10,fontWeight:700,display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><span>{labels[c]}</span><span style={{fontSize:8,opacity:.7}}>{descs[c]}</span></button>;})}
+          {[1,2,3].map(c=>{const pts=dynPts(pickedPct,c);const labels={1:`✅ +${pts}`,2:`🔥 ±${pts}`,3:`⚡ ±${pts}`};const descs={1:"seguro",2:"riesgo",3:"alto riesgo"};return<button key={c} className="btn" onClick={()=>{setConfidence(cf=>({...cf,[g.id]:c}));pickemAPI("makePick",{body:{userId:user.id,groupId:group.id,gameId:g.id,gameDate:getToday(),pickedTeam:picked,homeTeam:g.home,awayTeam:g.away,confidence:c,winPct:pickedPct}});}} style={{padding:"5px 10px",borderRadius:8,background:conf===c?(c===1?`#00FF9D22`:c===2?`#FF6B3522`:`#ff444422`):"#0a1018",border:`1px solid ${conf===c?(c===1?"#00FF9D44":c===2?"#FF6B3544":"#ff444444"):C.border}`,color:conf===c?(c===1?"#00FF9D":c===2?"#FF6B35":"#ff4444"):C.muted,fontSize:10,fontWeight:700,display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><span>{labels[c]}</span><span style={{fontSize:8,opacity:.7}}>{descs[c]}</span></button>;})}
         </div>}
 
         {/* Consenso del grupo — visible siempre cuando hay picks */}

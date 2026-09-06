@@ -3,7 +3,7 @@ import { C } from "../theme";
 import { Card, ST, Spin } from "./ui";
 import { logo } from "./TeamLogo";
 import { pickemAPI } from "../api/pickem";
-
+import { getToday } from "../utils/date";
 
 /* ═══ OVER/UNDER TAB ═══ */
 export const OUTab=({games,userCtx})=>{
@@ -16,7 +16,7 @@ export const OUTab=({games,userCtx})=>{
   // Load today's OU picks and generate lines
   useEffect(()=>{
     if(!user)return;
-    const savedPicks=JSON.parse(localStorage.getItem(`courtiq_ou_${user.id}_${new Date().toISOString().split("T")[0]}`)||"{}");
+    const savedPicks=JSON.parse(localStorage.getItem(`courtiq_ou_${user.id}_${getToday()}`)||"{}");
     setPicks(savedPicks);
     // Generate stable O/U lines from game ids (deterministic seed)
     const newLines={};
@@ -30,7 +30,7 @@ export const OUTab=({games,userCtx})=>{
 
   const makePick=async(game,choice)=>{
     if(!user){setMsg("Inicia sesión primero");return;}
-    const today=new Date().toISOString().split("T")[0];
+    const today=getToday();
     if(game.status!=="Upcoming"){setMsg("Solo puedes hacer picks en partidos próximos");return;}
     const next={...picks,[game.id]:choice};
     setPicks(next);

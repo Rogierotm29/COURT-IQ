@@ -10,6 +10,7 @@ import { autoSubscribePush } from "../utils/push";
 import { SHOP_ITEMS, ACHIEVEMENT_DEFS } from "../data/shop";
 import { APP_URL } from "../theme";
 import { getSeason } from "../utils/season";
+import { getToday } from "../utils/date";
 
 export const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
   const {user,save}=userCtx;
@@ -114,7 +115,7 @@ export const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
   // Load picks, leaderboard, wildcard, daily winner when group changes
   useEffect(()=>{
     if(!user||!selGroup) return;
-    const today=new Date().toISOString().split("T")[0];
+    const today=getToday();
     if(localStorage.getItem(`courtiq_locked_${selGroup.id}_${today}`)) setLockedPicks(true);
     else setLockedPicks(false);
     pickemAPI("myPicks",{params:{userId:user.id,groupId:selGroup.id,date:today}}).then(d=>{
@@ -247,7 +248,7 @@ export const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
 
   const makePick=async(gameId,team,homeTeam,awayTeam,conf=1,g=null)=>{
     if(!selGroup) return;
-    const today=new Date().toISOString().split("T")[0];
+    const today=getToday();
     setPicks(p=>({...p,[gameId]:team}));
     const pickedSide=team===homeTeam?"home":"away";
     const wPct=g?.status==="Upcoming"?calcWinPct(g,pickedSide,standings):50;
@@ -933,7 +934,7 @@ export const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
       {subTab==="parlay"&&(()=>{
         const weekGames=upcoming.filter(g=>g.startTime);
         const saveParlay=async()=>{
-          const picks=Object.entries(parlaySelections).map(([gameId,pickedTeam])=>{const g=allGames.find(x=>x.id===gameId);return{game_id:gameId,picked_team:pickedTeam,home_team:g?.home,away_team:g?.away,game_date:new Date().toISOString().split("T")[0]};});
+          const picks=Object.entries(parlaySelections).map(([gameId,pickedTeam])=>{const g=allGames.find(x=>x.id===gameId);return{game_id:gameId,picked_team:pickedTeam,home_team:g?.home,away_team:g?.away,game_date:getToday()};});
           if(picks.length<3||picks.length>5){setMsg("Selecciona entre 3 y 5 juegos");return;}
           setParlayLoading(true);
           const d=await pickemAPI("createParlay",{body:{userId:user.id,groupId:selGroup.id,parlayPicks:picks}});

@@ -943,15 +943,12 @@ export default async function handler(req, res) {
           for (const bet of openBets) {
             const state = gameStates[bet.game_id];
             if (state && state !== "pre") {
-              // Refund requester
-              if (bet.status !== "open") {
-                // pending bets: requester already paid, refund them
-                const bal = await supabase("coin_balances", { filters: `?user_id=eq.${bet.requester_id}&group_id=eq.${bet.group_id}&limit=1` });
-                if (bal?.length) {
-                  await supabase(`coin_balances?user_id=eq.${bet.requester_id}&group_id=eq.${bet.group_id}`, {
-                    method: "PATCH", body: { balance: bal[0].balance + bet.amount }
-                  });
-                }
+              // Devolver monedas al creador — tanto "open" como "pending" descontaron al crearse
+              const bal = await supabase("coin_balances", { filters: `?user_id=eq.${bet.requester_id}&group_id=eq.${bet.group_id}&limit=1` });
+              if (bal?.length) {
+                await supabase(`coin_balances?user_id=eq.${bet.requester_id}&group_id=eq.${bet.group_id}`, {
+                  method: "PATCH", body: { balance: bal[0].balance + bet.amount }
+                });
               }
               await supabase(`bets?id=eq.${bet.id}`, { method: "PATCH", body: { status: "cancelled" } });
               cancelled++;

@@ -172,7 +172,10 @@ export default function App(){
   },[games.map(g=>g.status).join(","),refreshAll]);
 
   // Auto-score picks on load
-  useEffect(()=>{pickemAPI("scoreGames").catch(()=>{});},[]);
+    useEffect(()=>{
+    pickemAPI("scoreGames").catch(()=>{});
+    pickemAPI("settleBets").catch(()=>{});
+  },[]);
 
   // Handle deep-link URL params from push notifications and invite links
   useEffect(()=>{
