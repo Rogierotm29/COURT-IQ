@@ -12,16 +12,16 @@ import { APP_URL } from "../theme";
 import { getSeason } from "../utils/season";
 import { getToday } from "../utils/date";
 
-export const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
+export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,makePick,selGroup,setSelGroup,initSubTab,standalone})=>{
   const {user,save}=userCtx;
-  const [name,setName]=useState("");const [groups,setGroups]=useState([]);const [selGroup,setSelGroup]=useState(null);
-  const [picks,setPicks]=useState({});const [leaderboard,setLeaderboard]=useState([]);
+  const [name,setName]=useState("");const [groups,setGroups]=useState([]);
   const [newGroupName,setNewGroupName]=useState("");const [joinCode,setJoinCode]=useState("");
   const [panel,setPanel]=useState(null);
   const [pin,setPin]=useState(["","","",""]);
   const [subTab,setSubTab]=useState(initSubTab||"ranking");
   const [msg,setMsg]=useState("");const [loading,setLoading]=useState(false);
   const [copied,setCopied]=useState(false);
+  const [leaderboard,setLeaderboard]=useState([]);
   const [nameStatus,setNameStatus]=useState(null);
   // New features state
   const [picksPoints,setPicksPoints]=useState({});
@@ -46,7 +46,6 @@ export const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
   const [shopItems,setShopItems]=useState([]);
   const [myEquipped,setMyEquipped]=useState(()=>JSON.parse(localStorage.getItem("courtiq_equipped_"+(typeof user!=="undefined"?user?.id:""))||"{}"));
   const [lockedPicks,setLockedPicks]=useState(false);
-  const [confidence,setConfidence]=useState({});
   const [authMode,setAuthMode]=useState("auto"); // "auto"|"recovery"|"emailRecovery"|"emailCode"
   const [recCode,setRecCode]=useState(""); // shown once after new registration
   const [recInput,setRecInput]=useState(""); // recovery code input
@@ -80,18 +79,11 @@ export const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
   useEffect(()=>{
     if(!user) return;
     pickemAPI("myGroups",{params:{userId:user.id}}).then(d=>{
-      if(d.ok&&d.groups?.length){
-        setGroups(d.groups);
-        const saved=localStorage.getItem("courtiq_lastgroup");
-        const found=d.groups.find(g=>g.id===saved);
-        setSelGroup(found||d.groups[0]);
-      }
+      if(d.ok&&d.groups?.length) setGroups(d.groups);
     });
-    // Auto-fill invite code if arrived via invite link
     const invite=localStorage.getItem("courtiq_invite_code");
-
     if(invite){localStorage.removeItem("courtiq_invite_code");setJoinCode(invite);setPanel("join");}
-  },[user]);
+    },[user]);
 
   // Biometric auto-fill — try to pre-fill credentials from browser credential manager
   useEffect(()=>{
@@ -119,7 +111,7 @@ export const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
     if(localStorage.getItem(`courtiq_locked_${selGroup.id}_${today}`)) setLockedPicks(true);
     else setLockedPicks(false);
     pickemAPI("myPicks",{params:{userId:user.id,groupId:selGroup.id,date:today}}).then(d=>{
-      if(d.ok){const map={},pts={},conf={};(d.picks||[]).forEach(p=>{map[p.game_id]=p.picked_team;if(p.points!=null)pts[p.game_id]=p.points;if(p.confidence)conf[p.game_id]=p.confidence;});setPicks(map);setPicksPoints(pts);setConfidence(conf);}
+      if(d.ok){const pts={};(d.picks||[]).forEach(p=>{if(p.points!=null)pts[p.game_id]=p.points;});setPicksPoints(pts);}
     });
     pickemAPI("leaderboard",{params:{groupId:selGroup.id}}).then(d=>{
       if(d.ok){
@@ -246,14 +238,6 @@ export const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
     setLoading(false);
   };
 
-  const makePick=async(gameId,team,homeTeam,awayTeam,conf=1,g=null)=>{
-    if(!selGroup) return;
-    const today=getToday();
-    setPicks(p=>({...p,[gameId]:team}));
-    const pickedSide=team===homeTeam?"home":"away";
-    const wPct=g?.status==="Upcoming"?calcWinPct(g,pickedSide,standings):50;
-    await pickemAPI("makePick",{body:{userId:user.id,groupId:selGroup.id,gameId,gameDate:today,pickedTeam:team,homeTeam,awayTeam,confidence:conf,winPct:wPct}});
-  };
 
   const copyCode=()=>{
     if(!selGroup) return;

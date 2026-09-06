@@ -7,12 +7,10 @@ import { calcWinPct, dynPts, dynBase } from "../utils/scoring";
 import { C, APP_URL } from "../theme";
 import { getSeason } from "../utils/season";
 import { getToday } from "../utils/date";
+
 /* ═══ HOME TAB ═══ */
-export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
+export const HomeTab=({games,live,userCtx,standings,picks,confidence,setConfidence,makePick,selGroup,goToBets,goToGroup})=>{
   const {user}=userCtx||{};
-  const [picks,setPicks]=useState({});
-  const [confidence,setConfidence]=useState({});
-  const [group,setGroup]=useState(null);
 
   const [grpPicks,setGrpPicks]=useState([]);
   const [pendingBets,setPendingBets]=useState([]);
@@ -39,53 +37,44 @@ export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
     setTimeout(()=>setShowConfetti(false),3500);
   };
 
+  // Bonus diario — no depende del grupo
   useEffect(()=>{
-    if(!user)return;
-    const today= getToday();
-    const savedGid=localStorage.getItem("courtiq_lastgroup");
-    // Restaurar grupo del cache sincrónico — picks funcionan de inmediato
-    try{const cached=localStorage.getItem("courtiq_lastgroup_obj");if(cached)setGroup(JSON.parse(cached));}catch(_){}
-    if(savedGid&&localStorage.getItem(`courtiq_locked_${savedGid}_${today}`)) setLockedPicks(true);
-
-    pickemAPI("myGroups",{params:{userId:user.id}}).then(d=>{
-      if(d.ok&&d.groups?.length){
-        const g=d.groups.find(x=>x.id===savedGid)||d.groups[0];
-        setGroup(g);
-        localStorage.setItem("courtiq_lastgroup_obj",JSON.stringify(g));
-        pickemAPI("myPicks",{params:{userId:user.id,groupId:g.id,date:today}}).then(r=>{
-          if(r.ok){
-            const m={},pts={},conf={};
-            (r.picks||[]).forEach(p=>{m[p.game_id]=p.picked_team;if(p.points!=null)pts[p.game_id]=p.points;if(p.confidence)conf[p.game_id]=p.confidence;});
-            setPicks(m);setPicksPoints(pts);setConfidence(conf);
-            // Trigger celebration if there are correct picks today
-            const correctPicks=(r.picks||[]).filter(p=>p.correct&&p.points>0);
-            if(correctPicks.length>0){
-            const yaVistos = correctPicks.every(p =>
-                localStorage.getItem(`courtiq_celebrated_${user.id}_${p.game_id}`)
-            );
-            if(!yaVistos){
-                correctPicks.forEach(p =>
-                localStorage.setItem(`courtiq_celebrated_${user.id}_${p.game_id}`,"1")
-                );
-                const totalPts=correctPicks.reduce((s,p)=>s+(p.points||0),0);
-                setShowConfetti(true);
-                setResultBanner({show:true,correct:true,pts:totalPts,streak:0});
-                setTimeout(()=>setShowConfetti(false),3500);
-            }
-            }
-          }
-        });
-        pickemAPI("groupPicks",{params:{groupId:g.id}}).then(r=>{if(r.ok)setGrpPicks(r.picks||[]);});
-        pickemAPI("groupBets",{params:{groupId:g.id}}).then(r=>{
-          if(r.ok){const challenges=(r.bets||[]).filter(b=>b.status==="pending"&&b.opponent_id===user.id);setPendingBets(challenges);}
-        });
-        pickemAPI("getStreak",{params:{userId:user.id,groupId:g.id}}).then(r=>{if(r.ok)setStreak(r.streak||0);});
-        pickemAPI("periodLeaderboard",{params:{groupId:g.id,period:"week"}}).then(r=>{if(r.ok){const me=(r.leaderboard||[]).find(x=>x.user_id===user.id);setWeeklyStats(me||null);}});
-        if(localStorage.getItem(`courtiq_locked_${g.id}_${today}`)) setLockedPicks(true);
-      }
-    });
+    if(!user) return;
     pickemAPI("dailyBonusStatus",{params:{userId:user.id}}).then(d=>{if(d.ok)setBonusClaimed(d.claimed);});
   },[user]);
+
+  // Datos que dependen del grupo activo
+  useEffect(()=>{
+    if(!user||!selGroup) return;
+    const today=getToday();
+    setLockedPicks(!!localStorage.getItem(`courtiq_locked_${selGroup.id}_${today}`));
+
+    pickemAPI("myPicks",{params:{userId:user.id,groupId:selGroup.id,date:today}}).then(r=>{
+      if(!r.ok) return;
+      const pts={};
+      (r.picks||[]).forEach(p=>{if(p.points!=null)pts[p.game_id]=p.points;});
+      setPicksPoints(pts);
+      // Celebración al entrar si hay aciertos sin ver
+      const correctPicks=(r.picks||[]).filter(p=>p.correct&&p.points>0);
+      if(correctPicks.length>0){
+        const yaVistos=correctPicks.every(p=>localStorage.getItem(`courtiq_celebrated_${user.id}_${p.game_id}`));
+        if(!yaVistos){
+          correctPicks.forEach(p=>localStorage.setItem(`courtiq_celebrated_${user.id}_${p.game_id}`,"1"));
+          const totalPts=correctPicks.reduce((s,p)=>s+(p.points||0),0);
+          setShowConfetti(true);
+          setResultBanner({show:true,correct:true,pts:totalPts,streak:0});
+          setTimeout(()=>setShowConfetti(false),3500);
+        }
+      }
+    });
+
+    pickemAPI("groupPicks",{params:{groupId:selGroup.id}}).then(r=>{if(r.ok)setGrpPicks(r.picks||[]);});
+    pickemAPI("groupBets",{params:{groupId:selGroup.id}}).then(r=>{
+      if(r.ok){const challenges=(r.bets||[]).filter(b=>b.status==="pending"&&b.opponent_id===user.id);setPendingBets(challenges);}
+    });
+    pickemAPI("getStreak",{params:{userId:user.id,groupId:selGroup.id}}).then(r=>{if(r.ok)setStreak(r.streak||0);});
+    pickemAPI("periodLeaderboard",{params:{groupId:selGroup.id,period:"week"}}).then(r=>{if(r.ok){const me=(r.leaderboard||[]).find(x=>x.user_id===user.id);setWeeklyStats(me||null);}});
+  },[user,selGroup]);
 
   // Notificación de racha cuando sube
   useEffect(()=>{
@@ -108,31 +97,21 @@ export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         const key=Date.now()+g.id;
         setFloatingPts(prev=>({...prev,[g.id]:{pts,correct,key}}));
         setTimeout(()=>setFloatingPts(prev=>{const n={...prev};delete n[g.id];return n;}),1400);
-        if(correct) triggerCelebration(pts,streak, g.id);
+        if(correct) triggerCelebration(pts,streak,g.id);
       }
       prevStatusRef.current[g.id]=g.status;
     });
   },[games.map(g=>g.status).join(",")]);
 
   const lockAllPicks=()=>{
-    if(!group) return;
-    const today= getToday();
-    localStorage.setItem(`courtiq_locked_${group.id}_${today}`,"1");
+    if(!selGroup) return;
+    const today=getToday();
+    localStorage.setItem(`courtiq_locked_${selGroup.id}_${today}`,"1");
     setLockedPicks(true);
     setExpandedCard(null);
   };
 
   const anyStarted=games.some(g=>g.status==="LIVE"||g.status==="Final");
-
-  const makePick=async(gameId,team,home,away,g)=>{
-    if(!group||!user)return;
-    setPicks(p=>({...p,[gameId]:team}));
-    const today= getToday();
-    const conf=confidence[gameId]||1;
-    const pickedSide=team===home?"home":"away";
-    const wPct=g?.status==="Upcoming"?calcWinPct(g,pickedSide,standings):50;
-    await pickemAPI("makePick",{body:{userId:user.id,groupId:group.id,gameId,gameDate:today,pickedTeam:team,homeTeam:home,awayTeam:away,confidence:conf,winPct:wPct}});
-  };
 
   const claimBonus=async()=>{
     const d=await pickemAPI("claimDailyBonus",{body:{userId:user.id}});
@@ -147,61 +126,48 @@ export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
     const W=1080,H=finishedWithPick.length*160+340;
     const cv=document.createElement("canvas");cv.width=W;cv.height=H;
     const ctx=cv.getContext("2d");
-    // bg
     const bg=ctx.createLinearGradient(0,0,W,H);bg.addColorStop(0,"#07090f");bg.addColorStop(1,"#0a1520");
     ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
-    // grid dots
     ctx.fillStyle="#ffffff08";
     for(let x=0;x<W;x+=50)for(let y=0;y<H;y+=50){ctx.beginPath();ctx.arc(x,y,1.5,0,Math.PI*2);ctx.fill();}
-    // header glow
     const glow=ctx.createRadialGradient(W/2,100,0,W/2,100,300);glow.addColorStop(0,"#00C2FF18");glow.addColorStop(1,"transparent");
     ctx.fillStyle=glow;ctx.fillRect(0,0,W,200);
-    // logo
     ctx.font="900 64px Arial Black,sans-serif";ctx.textAlign="center";ctx.fillStyle="#ffffff";
     ctx.fillText("COURT",W/2-80,90);
     const tg=ctx.createLinearGradient(W/2,0,W/2+160,0);tg.addColorStop(0,"#00C2FF");tg.addColorStop(1,"#0066ff");
     ctx.fillStyle=tg;ctx.fillText("IQ",W/2+110,90);
-    // user + date
     ctx.fillStyle="#94a3b8";ctx.font="500 30px sans-serif";
     const today=new Date().toLocaleDateString("es-MX",{weekday:"long",month:"long",day:"numeric"});
     ctx.fillText(`${user?.name||""} · ${today}`,W/2,140);
-    // divider
     const dg=ctx.createLinearGradient(60,0,W-60,0);dg.addColorStop(0,"transparent");dg.addColorStop(.5,"#00C2FF44");dg.addColorStop(1,"transparent");
     ctx.fillStyle=dg;ctx.fillRect(60,160,W-120,1);
-    // picks
     let correct=0,totalPts=0;
     finishedWithPick.forEach((g,i)=>{
       const y=200+i*160;const winner=g.homeScore>g.awayScore?g.home:g.away;const ok=picks[g.id]===winner;
       const conf=confidence[g.id]||1;const pct=picks[g.id]===g.home?calcWinPct(g,"home",standings):calcWinPct(g,"away",standings);
       const pts=picksPoints[g.id]??dynPts(pct,conf);if(ok){correct++;totalPts+=pts;}
-      // card bg
       const cardBg=ctx.createLinearGradient(60,y,W-60,y+130);
       cardBg.addColorStop(0,ok?"#00FF9D0a":"#ff44440a");cardBg.addColorStop(1,"#0d1117");
       ctx.fillStyle=cardBg;ctx.beginPath();ctx.roundRect(60,y,W-120,130,16);ctx.fill();
       ctx.strokeStyle=ok?"#00FF9D44":"#ff444444";ctx.lineWidth=1.5;ctx.beginPath();ctx.roundRect(60,y,W-120,130,16);ctx.stroke();
-      // teams
       ctx.fillStyle="#e0eaf5";ctx.font="700 36px sans-serif";ctx.textAlign="left";
       ctx.fillText(`${g.away} vs ${g.home}`,100,y+50);
       ctx.fillStyle="#64748b";ctx.font="400 26px sans-serif";
       ctx.fillText(`${g.awayScore} – ${g.homeScore}`,100,y+90);
-      // pick badge
       const bdg=ok?"#00FF9D":"#ff6666";
       ctx.fillStyle=bdg+"22";ctx.beginPath();ctx.roundRect(W-280,y+20,180,52,26);ctx.fill();
       ctx.fillStyle=bdg;ctx.font="700 24px sans-serif";ctx.textAlign="center";
       ctx.fillText(ok?`✓ +${pts} pts`:`✗ ${picks[g.id]}`,W-190,y+52);
       ctx.textAlign="left";
     });
-    // summary bar
     const sy=200+finishedWithPick.length*160+10;
     const sbg=ctx.createLinearGradient(60,sy,W-60,sy+90);sbg.addColorStop(0,"#00C2FF15");sbg.addColorStop(1,"#0066ff15");
     ctx.fillStyle=sbg;ctx.beginPath();ctx.roundRect(60,sy,W-120,90,16);ctx.fill();
     ctx.strokeStyle="#00C2FF33";ctx.lineWidth=1.5;ctx.beginPath();ctx.roundRect(60,sy,W-120,90,16);ctx.stroke();
     ctx.fillStyle="#ffffff";ctx.font="900 38px Arial Black,sans-serif";ctx.textAlign="center";
     ctx.fillText(`${correct}/${finishedWithPick.length} correctos · +${totalPts} pts`,W/2,sy+58);
-    // footer
     ctx.fillStyle="#334155";ctx.font="400 24px sans-serif";ctx.textAlign="center";
     ctx.fillText(APP_URL,W/2,H-24);
-    // share
     cv.toBlob(blob=>{
       if(!blob) return;
       const file=new File([blob],"court-iq-resultado.png",{type:"image/png"});
@@ -209,7 +175,6 @@ export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
       else{const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="court-iq-resultado.png";a.click();}
     },"image/png");
   };
-
 
   return(<div className="fade-up">
     <Confetti active={showConfetti}/>
@@ -221,8 +186,8 @@ export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
       <div style={{fontSize:11,color:C.muted,marginBottom:16}}>Elige quién gana cada partido · Gana puntos · Sube en el ranking</div>
       <button className="btn" onClick={goToGroup} style={{padding:"14px 36px",borderRadius:12,background:"linear-gradient(135deg,#00C2FF,#0066ff)",color:"#07090f",fontSize:15,fontWeight:900,letterSpacing:1}}>ENTRAR AL PICK'EM 🎯</button>
     </Card>}
-    {user&&<div onClick={group?goToGroup:undefined} style={{cursor:group?"pointer":"default",marginBottom:pendingBets.length?10:22}}>
-      <Card style={{background:"linear-gradient(135deg,#00FF9D08,#0d1117)",borderColor:group?"#00FF9D55":"#FFB80044",padding:"14px 18px",transition:"border-color .2s"}}>
+    {user&&<div onClick={selGroup?goToGroup:undefined} style={{cursor:selGroup?"pointer":"default",marginBottom:pendingBets.length?10:22}}>
+      <Card style={{background:"linear-gradient(135deg,#00FF9D08,#0d1117)",borderColor:selGroup?"#00FF9D55":"#FFB80044",padding:"14px 18px",transition:"border-color .2s"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
           <div style={{flex:1,minWidth:0}}>
             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
@@ -234,7 +199,7 @@ export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
             {lockedPicks&&<Tag c="#FF6B35">🔒 Picks cerrados</Tag>}
-            {group?<Tag c="#00FF9D">👥 {group.name} →</Tag>:<Tag c="#FFB800">Ve a Grupos para crear uno</Tag>}
+            {selGroup?<Tag c="#00FF9D">👥 {selGroup.name} →</Tag>:<Tag c="#FFB800">Ve a Grupos para crear uno</Tag>}
           </div>
         </div>
       </Card>
@@ -247,7 +212,7 @@ export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
       <button className="btn" onClick={claimBonus} style={{padding:"8px 16px",borderRadius:10,background:"linear-gradient(135deg,#FFB800,#ff9500)",color:"#07090f",fontSize:12,fontWeight:900,flexShrink:0}}>Reclamar</button>
     </div>}
     {bonusMsg&&<div style={{marginBottom:10,padding:"8px 14px",background:"#00FF9D11",border:"1px solid #00FF9D44",borderRadius:10,fontSize:12,color:"#00FF9D"}}>{bonusMsg}</div>}
-    {user&&group&&weeklyStats&&weeklyStats.total>0&&<div style={{marginBottom:14,padding:"12px 16px",background:"linear-gradient(135deg,#0055ff11,#0d1117)",border:"1px solid #0055ff33",borderRadius:12,display:"flex",alignItems:"center",gap:12}}>
+    {user&&selGroup&&weeklyStats&&weeklyStats.total>0&&<div style={{marginBottom:14,padding:"12px 16px",background:"linear-gradient(135deg,#0055ff11,#0d1117)",border:"1px solid #0055ff33",borderRadius:12,display:"flex",alignItems:"center",gap:12}}>
       <div style={{fontSize:26,lineHeight:1}}>📊</div>
       <div style={{flex:1}}>
         <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:1.5,marginBottom:3}}>ESTA SEMANA</div>
@@ -268,7 +233,7 @@ export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
       </div>)}
     </div>}
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><ST sub={`NBA ${getSeason()} · Hoy`}>Partidos del Día</ST><LiveBadge live={live.games}/></div>
-    {user&&group&&anyStarted&&<div style={{marginBottom:12,padding:"10px 14px",background:"#ff444411",border:"1px solid #ff444433",borderRadius:10,fontSize:11,color:"#ff6666",display:"flex",alignItems:"center",gap:8}}>🔒 Un partido ya empezó — picks cerrados para hoy</div>}
+    {user&&selGroup&&anyStarted&&<div style={{marginBottom:12,padding:"10px 14px",background:"#ff444411",border:"1px solid #ff444433",borderRadius:10,fontSize:11,color:"#ff6666",display:"flex",alignItems:"center",gap:8}}>🔒 Un partido ya empezó — picks cerrados para hoy</div>}
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:10,marginBottom:28}}>
       {games.length===0?<div style={{color:C.muted,fontSize:13}}>No hay partidos programados.</div>
       :games.map(g=>{
@@ -281,7 +246,7 @@ export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         const gp=grpPicks.filter(p=>p.game_id===g.id);
         const forAway=gp.filter(p=>p.picked_team===g.away);
         const forHome=gp.filter(p=>p.picked_team===g.home);
-        const canPick=user&&group&&isUpcoming&&!lockedPicks&&!anyStarted;
+        const canPick=user&&selGroup&&isUpcoming&&!lockedPicks&&!anyStarted;
         const conf=confidence[g.id]||1;
         const awayPct=calcWinPct(g,"away",standings);const homePct=calcWinPct(g,"home",standings);
         const pickedPct=picked?(picked===g.home?homePct:awayPct):50;
@@ -310,7 +275,7 @@ export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
             idx===1
               ?<div key="vs" style={{textAlign:"center",fontSize:14,color:C.muted,fontWeight:900}}>VS</div>
               :canPick
-                ?<button key={item[1]} className="btn" onClick={()=>makePick(g.id,item[1],g.home,g.away,g)} style={{padding:"14px 8px",borderRadius:14,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:5,background:picked===item[1]?`${tm(item[1]).color}22`:"#0a1018",border:`2.5px solid ${picked===item[1]?tm(item[1]).color:C.border}`,color:picked===item[1]?tm(item[1]).color:C.text,width:"100%",position:"relative"}}>
+                ?<button key={item[1]} className="btn" onClick={()=>makePick(g.id,item[1],g.home,g.away,conf,g)} style={{padding:"14px 8px",borderRadius:14,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:5,background:picked===item[1]?`${tm(item[1]).color}22`:"#0a1018",border:`2.5px solid ${picked===item[1]?tm(item[1]).color:C.border}`,color:picked===item[1]?tm(item[1]).color:C.text,width:"100%",position:"relative"}}>
                     {picked===item[1]&&<div style={{position:"absolute",top:6,right:6,width:18,height:18,borderRadius:"50%",background:tm(item[1]).color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:"#07090f",fontWeight:900}}>✓</div>}
                     {logo(item[1],44)}
                     <span style={{fontSize:15,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif"}}>{item[1]}</span>
@@ -328,11 +293,11 @@ export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         {/* Confidence multiplier — visible al hacer pick */}
         {canPick&&picked&&<div style={{marginTop:10,display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}>
           <span style={{fontSize:10,color:C.muted}}>Confianza:</span>
-          {[1,2,3].map(c=>{const pts=dynPts(pickedPct,c);const labels={1:`✅ +${pts}`,2:`🔥 ±${pts}`,3:`⚡ ±${pts}`};const descs={1:"seguro",2:"riesgo",3:"alto riesgo"};return<button key={c} className="btn" onClick={()=>{setConfidence(cf=>({...cf,[g.id]:c}));pickemAPI("makePick",{body:{userId:user.id,groupId:group.id,gameId:g.id,gameDate:getToday(),pickedTeam:picked,homeTeam:g.home,awayTeam:g.away,confidence:c,winPct:pickedPct}});}} style={{padding:"5px 10px",borderRadius:8,background:conf===c?(c===1?`#00FF9D22`:c===2?`#FF6B3522`:`#ff444422`):"#0a1018",border:`1px solid ${conf===c?(c===1?"#00FF9D44":c===2?"#FF6B3544":"#ff444444"):C.border}`,color:conf===c?(c===1?"#00FF9D":c===2?"#FF6B35":"#ff4444"):C.muted,fontSize:10,fontWeight:700,display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><span>{labels[c]}</span><span style={{fontSize:8,opacity:.7}}>{descs[c]}</span></button>;})}
+          {[1,2,3].map(c=>{const pts=dynPts(pickedPct,c);const labels={1:`✅ +${pts}`,2:`🔥 ±${pts}`,3:`⚡ ±${pts}`};const descs={1:"seguro",2:"riesgo",3:"alto riesgo"};return<button key={c} className="btn" onClick={()=>{setConfidence(cf=>({...cf,[g.id]:c}));makePick(g.id,picked,g.home,g.away,c,g);}} style={{padding:"5px 10px",borderRadius:8,background:conf===c?(c===1?`#00FF9D22`:c===2?`#FF6B3522`:`#ff444422`):"#0a1018",border:`1px solid ${conf===c?(c===1?"#00FF9D44":c===2?"#FF6B3544":"#ff444444"):C.border}`,color:conf===c?(c===1?"#00FF9D":c===2?"#FF6B35":"#ff4444"):C.muted,fontSize:10,fontWeight:700,display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><span>{labels[c]}</span><span style={{fontSize:8,opacity:.7}}>{descs[c]}</span></button>;})}
         </div>}
 
         {/* Consenso del grupo — visible siempre cuando hay picks */}
-        {group&&!canPick&&gp.length>0&&<div style={{marginTop:10,padding:"8px 12px",background:"#0a1018",borderRadius:8,border:`1px solid ${C.border}`}}>
+        {selGroup&&!canPick&&gp.length>0&&<div style={{marginTop:10,padding:"8px 12px",background:"#0a1018",borderRadius:8,border:`1px solid ${C.border}`}}>
           <div style={{display:"flex",height:6,borderRadius:3,overflow:"hidden",marginBottom:6}}>
             <div style={{flex:forAway.length||0.01,background:tm(g.away).color}}/><div style={{flex:forHome.length||0.01,background:tm(g.home).color}}/>
           </div>
@@ -344,7 +309,7 @@ export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         </div>}
 
         {/* Picks del grupo — solo disponible tras cerrar picks */}
-        {lockedPicks&&group&&<button className="btn" onClick={()=>setExpandedCard(showGrpSection?null:g.id)} style={{width:"100%",marginTop:8,padding:"8px",borderRadius:10,background:showGrpSection?`${C.accent}11`:"#0a1018",border:`1px solid ${showGrpSection?C.accent+"55":C.border}`,color:showGrpSection?C.accent:C.muted,fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+        {lockedPicks&&selGroup&&<button className="btn" onClick={()=>setExpandedCard(showGrpSection?null:g.id)} style={{width:"100%",marginTop:8,padding:"8px",borderRadius:10,background:showGrpSection?`${C.accent}11`:"#0a1018",border:`1px solid ${showGrpSection?C.accent+"55":C.border}`,color:showGrpSection?C.accent:C.muted,fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
           {showGrpSection?"▲ Ocultar":"👥 Ver quién eligió qué"}
         </button>}
 
@@ -416,7 +381,7 @@ export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
     </div>}
 
     {/* Botón global de cerrar picks */}
-    {user&&group&&!lockedPicks&&Object.keys(picks).length>0&&<>
+    {user&&selGroup&&!lockedPicks&&Object.keys(picks).length>0&&<>
       <div style={{background:"linear-gradient(135deg,#FF6B3511,#0d1117)",border:"1px solid #FF6B3533",borderRadius:14,padding:"16px 18px",marginBottom:10}}>
         <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:4}}>🔒 ¿Listo con tus picks de hoy?</div>
         <div style={{fontSize:11,color:C.dim,marginBottom:12}}>Al cerrar tus picks, podrás ver qué eligieron los demás en tu grupo. <b>Ya no podrás cambiarlos.</b></div>

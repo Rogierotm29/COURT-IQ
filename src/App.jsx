@@ -22,6 +22,8 @@ import { MiniGamesTab } from "./components/MiniGamesTab";
 import { PickemTab } from "./components/PickemTab";
 import { FloatingChat } from "./components/FloatingChat";
 import { Onboarding } from "./components/Onboarding";
+import { getToday } from "./utils/date";
+
 /* ═══ FALLBACK DATA ═══ */
 const FB_ST=[
   {abbr:"OKC",conf:"W",w:55,l:15,streak:"W5"},{abbr:"SAS",conf:"W",w:51,l:18,streak:"W3"},{abbr:"LAL",conf:"W",w:44,l:25,streak:"W2"},
@@ -114,8 +116,6 @@ async function loadPlayers() {
   return null;
 }
 
-
-
 /* ═══ USER CONTEXT (localStorage) ═══ */
 function useUser() {
   const [user, setUser] = useState(() => {
@@ -125,8 +125,6 @@ function useUser() {
   const logout = () => { setUser(null); localStorage.removeItem("courtiq_user"); };
   return { user, save, logout };
 }
-
-
 
 /* ═══ APP ROOT ═══ */
 const TABS=[{id:"home",icon:"🏠",label:"Home"},{id:"pickem",icon:"👥",label:"Grupos"},{id:"apuestas",icon:"🪙",label:"Apuestas"},{id:"parlay",icon:"🎰",label:"Parlay"},{id:"shop",icon:"🛍️",label:"Shop"},{id:"teams",icon:"🏆",label:"Equipos"},{id:"players",icon:"⭐",label:"Jugadores"},{id:"bracket",icon:"🏅",label:"Playoffs"},{id:"games",icon:"🎮",label:"Juegos"},{id:"settings",icon:"⚙️",label:"Config"}];
@@ -139,6 +137,41 @@ export default function App(){
   const [isOffline,setIsOffline]=useState(!navigator.onLine);
   const [showOnboarding,setShowOnboarding]=useState(()=>!localStorage.getItem("courtiq_onboarded"));
   const userCtx=useUser();
+  const [picks,setPicks]=useState({});
+  const [confidence,setConfidence]=useState({});
+  const [selGroup,setSelGroup]=useState(null);
+
+  const makePick=useCallback(async(gameId,team,home,away,conf=1,g=null)=>{
+    if(!selGroup||!userCtx.user) return;
+    setPicks(p=>({...p,[gameId]:team}));
+    const pickedSide=team===home?"home":"away";
+    const wPct=g?.status==="Upcoming"?calcWinPct(g,pickedSide,standings):50;
+    await pickemAPI("makePick",{body:{
+      userId:userCtx.user.id, groupId:selGroup.id, gameId, gameDate:getToday(),
+      pickedTeam:team, homeTeam:home, awayTeam:away, confidence:conf, winPct:wPct
+    }});
+  },[selGroup,userCtx.user,standings]);
+
+  useEffect(()=>{
+    if(!userCtx.user||!selGroup){setPicks({});setConfidence({});return;}
+    pickemAPI("myPicks",{params:{userId:userCtx.user.id,groupId:selGroup.id,date:getToday()}}).then(r=>{
+      if(!r.ok) return;
+      const m={},conf={};
+      (r.picks||[]).forEach(p=>{
+        m[p.game_id]=p.picked_team;
+        if(p.confidence) conf[p.game_id]=p.confidence;
+      });
+      setPicks(m);setConfidence(conf);
+    });
+  },[userCtx.user,selGroup]);
+
+  useEffect(()=>{
+    if(!userCtx.user) return;
+    const savedGid=localStorage.getItem("courtiq_lastgroup");
+    pickemAPI("myGroups",{params:{userId:userCtx.user.id}}).then(d=>{
+      if(d.ok&&d.groups?.length) setSelGroup(d.groups.find(g=>g.id===savedGid)||d.groups[0]);
+    });
+  },[userCtx.user]);
 
   useEffect(()=>{
     const handler=(e)=>{e.preventDefault();setInstallPrompt(e);};
@@ -253,12 +286,12 @@ export default function App(){
       </div>
     </div>}
     <div style={{maxWidth:1000,margin:"0 auto",padding:"22px 18px 100px"}}>
-      {tab==="home"&&<HomeTab games={games} live={live} userCtx={userCtx} standings={standings} goToBets={()=>setTab("apuestas")} goToGroup={()=>setTab("pickem")}/>}
+      {tab==="home"&&<HomeTab games={games} live={live} userCtx={userCtx} standings={standings} picks={picks} confidence={confidence} setConfidence={setConfidence} makePick={makePick} selGroup={selGroup} goToBets={()=>setTab("apuestas")} goToGroup={()=>setTab("pickem")}/>}
       {tab==="teams"&&<TeamsTab standings={standings} live={live}/>}
       {tab==="players"&&<PlayersTab players={players} live={live}/>}
-      {tab==="pickem"&&<PickemTab games={games} standings={standings} userCtx={userCtx} initSubTab="picks"/>}
-      {tab==="apuestas"&&<PickemTab games={games} standings={standings} userCtx={userCtx} initSubTab="apuestas" standalone/>}
-      {tab==="parlay"&&<PickemTab games={games} standings={standings} userCtx={userCtx} initSubTab="parlay" standalone/>}
+      {tab==="pickem"&&<PickemTab games={games} standings={standings} userCtx={userCtx} picks={picks} confidence={confidence} setConfidence={setConfidence} makePick={makePick} selGroup={selGroup} setSelGroup={setSelGroup} initSubTab="picks"/>}
+      {tab==="apuestas"&&<PickemTab games={games} standings={standings} userCtx={userCtx} picks={picks} confidence={confidence} setConfidence={setConfidence} makePick={makePick} selGroup={selGroup} setSelGroup={setSelGroup} initSubTab="apuestas" standalone/>}
+      {tab==="parlay"&&<PickemTab games={games} standings={standings} userCtx={userCtx} picks={picks} confidence={confidence} setConfidence={setConfidence} makePick={makePick} selGroup={selGroup} setSelGroup={setSelGroup} initSubTab="parlay" standalone/>}
       {tab==="ou"&&<OUTab games={games} userCtx={userCtx}/>}
       {tab==="shop"&&<ShopTab userCtx={userCtx}/>}
       {tab==="bracket"&&<BracketTab userCtx={userCtx} standings={standings}/>}
