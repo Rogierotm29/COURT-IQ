@@ -1,28 +1,23 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { AreaChart, Area, BarChart, Bar, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { TRIVIA_ALL, CHAMPS, PLAYER_CLUES, FLAGS } from "./data/minigames";
-import { ESPN_LOGO,ESPN_ID,TM,FIX,fix } from "./data/teams";
-import { GS, Tag, Card, ST, Divider, Spin, TT } from "./components/ui";
-import { C } from "./theme";
-import { CONF_COLORS, Confetti,ResultBanner,FloatPts,LiveBadge } from "./components/feedback";
-import { tm, logo } from "./components/TeamLogo";
-import { PlayersTab } from "./components/PlayersTab";
-import { TeamsTab } from "./components/TeamsTab";
+import { useState, useEffect, useCallback } from "react";
+import { TM, fix } from "./data/teams";
+import { GS, Spin } from "./components/ui";
+import { C, T } from "./theme";
+import { tm } from "./components/TeamLogo";
 import { pickemAPI } from "./api/pickem";
-import { OUTab } from "./components/OUTab";
-import { getNameColor, getNamePrefix, getBorderColor } from "./utils/cosmetics";
+import { calcWinPct } from "./utils/scoring";
+import { getToday } from "./utils/date";
+import { getSeason } from "./utils/season";
+import { HomeTab } from "./components/HomeTab";
+import { PickemTab } from "./components/PickemTab";
+import { TeamsTab } from "./components/TeamsTab";
+import { PlayersTab } from "./components/PlayersTab";
+import { BracketTab } from "./components/BracketTab";
+import { MiniGamesTab } from "./components/MiniGamesTab";
 import { ShopTab } from "./components/ShopTab";
 import { SettingsTab } from "./components/SettingsTab";
-import { isIOS,VAPID_KEY,autoSubscribePush } from "./utils/push";
-import { SHOP_ITEMS, ACHIEVEMENT_DEFS } from "./data/shop";
-import { SERIES_OPTS, MVP_CANDIDATES, BracketTab } from "./components/BracketTab";
-import { HomeTab } from "./components/HomeTab";
-import { calcWinPct, dynPts, dynBase } from "./utils/scoring";
-import { MiniGamesTab } from "./components/MiniGamesTab";
-import { PickemTab } from "./components/PickemTab";
+import { OUTab } from "./components/OUTab";
 import { FloatingChat } from "./components/FloatingChat";
 import { Onboarding } from "./components/Onboarding";
-import { getToday } from "./utils/date";
 
 /* ═══ FALLBACK DATA ═══ */
 const FB_ST=[
@@ -65,9 +60,7 @@ const FB_PL=[
   {id:24,name:"Jalen Johnson",teamAbbr:"ATL",pos:"F",pts:23.7,ast:8.4,reb:10.4,blk:0.5,stl:1.4,fgPct:52.1,fg3Pct:35.5},
 ].map(p=>({...p,color:tm(p.teamAbbr).color}));
 
-
 /* ═══ API LAYER ═══ */
-
 async function api(path) {
   try {
     const r = await fetch(path, { signal: AbortSignal.timeout(8000) });
@@ -85,7 +78,6 @@ async function espnDirect(url) {
 }
 
 async function loadGames() {
-  // Try Vercel API first, fallback to ESPN direct
   let d = await api("/api/scoreboard");
   if (d?.ok) return d.games;
   d = await espnDirect("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard");
@@ -102,7 +94,6 @@ async function loadGames() {
 async function loadStandings() {
   let d = await api("/api/standings");
   if (d?.ok && d.standings?.length >= 25) return d.standings.map(s=>({id:s.abbr,...s,...tm(s.abbr),pct:s.pct,players:[]}));
-  // ESPN direct fallback
   d = await espnDirect("https://site.api.espn.com/apis/v2/sports/basketball/nba/standings");
   if (!d) return null;
   const results=[];
@@ -127,13 +118,35 @@ function useUser() {
   return { user, save, logout };
 }
 
-/* ═══ APP ROOT ═══ */
-const TABS=[{id:"home",icon:"🏠",label:"Home"},{id:"pickem",icon:"👥",label:"Grupos"},{id:"apuestas",icon:"🪙",label:"Apuestas"},{id:"parlay",icon:"🎰",label:"Parlay"},{id:"shop",icon:"🛍️",label:"Shop"},{id:"teams",icon:"🏆",label:"Equipos"},{id:"players",icon:"⭐",label:"Jugadores"},{id:"bracket",icon:"🏅",label:"Playoffs"},{id:"games",icon:"🎮",label:"Juegos"},{id:"settings",icon:"⚙️",label:"Config"}];
-
+/* ═══ NAVEGACIÓN ═══ */
+const NAV = [
+  { section: "Inicio", items: [{ id:"home", label:"Inicio" }] },
+  { section: "Pick'em", items: [
+    { id:"pickem", label:"Grupos" },
+    { id:"apuestas", label:"Apuestas" },
+    { id:"parlay", label:"Parlay" },
+    { id:"ou", label:"Over / Under" },
+    { id:"shop", label:"Tienda" },
+  ]},
+  { section: "NBA", items: [
+    { id:"teams", label:"Standings" },
+    { id:"players", label:"Jugadores" },
+    { id:"bracket", label:"Playoffs" },
+    { id:"games", label:"Juegos" },
+  ]},
+  { section: "", items: [{ id:"settings", label:"Configuración" }] },
+];
+const ALL_TABS = NAV.flatMap(s => s.items);
 
 export default function App(){
-  const [tab,setTab]=useState("home");const [menuOpen,setMenuOpen]=useState(false);const [games,setGames]=useState([]);const [standings,setStandings]=useState(FB_ST);const [players,setPlayers]=useState(FB_PL);
-  const [live,setLive]=useState({games:false,standings:false,players:false});const [loading,setLoading]=useState(false);const [lastUpd,setLastUpd]=useState(null);
+  const [tab,setTab]=useState("home");
+  const [menuOpen,setMenuOpen]=useState(false);
+  const [games,setGames]=useState([]);
+  const [standings,setStandings]=useState(FB_ST);
+  const [players,setPlayers]=useState(FB_PL);
+  const [live,setLive]=useState({games:false,standings:false,players:false});
+  const [loading,setLoading]=useState(false);
+  const [lastUpd,setLastUpd]=useState(null);
   const [installPrompt,setInstallPrompt]=useState(null);
   const [isOffline,setIsOffline]=useState(!navigator.onLine);
   const [showOnboarding,setShowOnboarding]=useState(()=>!localStorage.getItem("courtiq_onboarded"));
@@ -206,28 +219,23 @@ export default function App(){
 
   useEffect(()=>{refreshAll();},[]);
 
-  // Refresca cada 30s si hay juego en vivo, cada 90s si no
   useEffect(()=>{
     const hasLive=games.some(g=>g.status==="LIVE");
     const t=setInterval(refreshAll,hasLive?30000:90000);
     return()=>clearInterval(t);
   },[games.map(g=>g.status).join(","),refreshAll]);
 
-  // Auto-score picks on load
-    useEffect(()=>{
+  useEffect(()=>{
     pickemAPI("scoreGames").catch(()=>{});
     pickemAPI("settleBets").catch(()=>{});
   },[]);
 
-  // Handle deep-link URL params from push notifications and invite links
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search);
     const tabParam=params.get("tab");
-    const subtabParam=params.get("subtab");
     const joinCode=params.get("join");
     const url=new URL(window.location.href);
     if(joinCode){
-      // Store invite code so PickemTab auto-fills it, then navigate to Grupos
       localStorage.setItem("courtiq_invite_code",joinCode.toUpperCase());
       setTab("pickem");
       url.searchParams.delete("join");
@@ -241,59 +249,65 @@ export default function App(){
   },[]);
 
   const liveGame=games.find(g=>g.status==="LIVE");
-  return(<div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Outfit','Segoe UI',sans-serif",color:C.text}}>
+  const currentTab=ALL_TABS.find(t=>t.id===tab);
+
+  return(<div style={{minHeight:"100vh",background:T.surface[0],fontFamily:"'Outfit','Segoe UI',sans-serif",color:T.text.primary}}>
     <GS/>
     {showOnboarding&&<Onboarding onDone={()=>{localStorage.setItem("courtiq_onboarded","1");setShowOnboarding(false);}}/>}
-    <div style={{background:"#0a0f17ee",borderBottom:`1px solid ${C.border}`,padding:"11px 22px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100,backdropFilter:"blur(16px)"}}>
-      <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <button className="btn" onClick={()=>setTab("home")} style={{display:"flex",alignItems:"center",gap:10,background:"none",padding:0}}>
-          <div style={{width:31,height:31,borderRadius:9,background:"linear-gradient(135deg,#00C2FF,#0055ff)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>🏀</div>
-          <div><div style={{fontSize:15,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1,lineHeight:1}}>COURT IQ</div>
-            <div style={{fontSize:8,color:C.muted,letterSpacing:2}}>{lastUpd?`Live · ${lastUpd.toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}`:"NBA 2025-26"}</div></div>
+
+    {/* ─── HEADER ─── */}
+    <div style={{background:`${T.surface[0]}ee`,borderBottom:`1px solid ${T.border.subtle}`,padding:`${T.space[3]}px ${T.space[5]}px`,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100,backdropFilter:"blur(12px)"}}>
+      <button className="btn" onClick={()=>setTab("home")} style={{display:"flex",alignItems:"baseline",gap:T.space[2],background:"none",padding:0}}>
+        <span style={{fontSize:T.font.lg,fontWeight:800,color:T.text.primary,letterSpacing:-0.4}}>Court</span>
+        <span style={{fontSize:T.font.lg,fontWeight:800,color:T.accent.base,letterSpacing:-0.4,marginLeft:-6}}>IQ</span>
+        <span style={{fontSize:T.font.xs,color:T.text.tertiary,marginLeft:T.space[2]}}>
+          {lastUpd?lastUpd.toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"}):getSeason()}
+        </span>
+      </button>
+
+      <div style={{display:"flex",alignItems:"center",gap:T.space[2]}}>
+        {liveGame&&<div style={{display:"flex",alignItems:"center",gap:T.space[2],background:T.surface[1],border:`1px solid ${T.border.base}`,borderRadius:T.radius.full,padding:`${T.space[1]}px ${T.space[3]}px`}}>
+          <div style={{width:5,height:5,borderRadius:"50%",background:T.danger.base,animation:"pulse 1.5s infinite"}}/>
+          <span style={{fontSize:T.font.xs,color:T.text.secondary}}>{liveGame.away} {liveGame.awayScore}–{liveGame.homeScore} {liveGame.home}</span>
+        </div>}
+        <span style={{fontSize:T.font.sm,fontWeight:600,color:T.text.secondary,padding:`0 ${T.space[2]}px`}}>{currentTab?.label}</span>
+        <button className="btn" onClick={refreshAll} title="Actualizar" style={{background:"transparent",border:`1px solid ${T.border.base}`,borderRadius:T.radius.sm,padding:`${T.space[2]}px ${T.space[3]}px`,color:T.text.tertiary,fontSize:T.font.xs,fontWeight:600,minWidth:38}}>
+          {loading?<Spin s={12}/>:"↻"}
+        </button>
+        <button className="btn" onClick={()=>setMenuOpen(o=>!o)} style={{background:menuOpen?T.accent.subtle:"transparent",border:`1px solid ${menuOpen?T.accent.base:T.border.base}`,borderRadius:T.radius.sm,padding:`${T.space[2]}px ${T.space[3]}px`,color:menuOpen?T.accent.base:T.text.secondary,fontSize:T.font.sm,fontWeight:600}}>
+          Menú
         </button>
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:8}}>
-        {liveGame&&<div style={{display:"flex",alignItems:"center",gap:6,background:"#0a1520",border:"1px solid #1a2c3d",borderRadius:20,padding:"5px 12px"}}><div style={{width:6,height:6,borderRadius:"50%",background:"#ff4444",animation:"pulse 1s infinite"}}/><span style={{fontSize:10,color:"#cc3333",fontWeight:700}}>LIVE</span><span style={{fontSize:10,color:C.muted}}>{liveGame.away} {liveGame.awayScore}–{liveGame.homeScore} {liveGame.home}</span></div>}
-        <div style={{fontSize:11,fontWeight:700,color:C.accent,background:`${C.accent}15`,border:`1px solid ${C.accent}33`,borderRadius:8,padding:"4px 10px"}}>{TABS.find(t=>t.id===tab)?.icon} {TABS.find(t=>t.id===tab)?.label}</div>
-        <button className="btn" onClick={refreshAll} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px",color:C.dim,fontSize:13}}>{loading?<Spin s={13}/>:"🔄"}</button>
-        <button className="btn" onClick={()=>setMenuOpen(o=>!o)} style={{background:menuOpen?`${C.accent}22`:C.card,border:`1px solid ${menuOpen?C.accent:C.border}`,borderRadius:8,padding:"6px 12px",color:menuOpen?C.accent:C.dim,fontSize:16,fontWeight:900,lineHeight:1}}>☰</button>
-      </div>
     </div>
-    {menuOpen&&<div onClick={()=>setMenuOpen(false)} style={{position:"fixed",inset:0,background:"#00000077",zIndex:1200,display:"flex",alignItems:"flex-end"}}>
-      <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxHeight:"80vh",background:"#0d1117",borderTop:`2px solid ${C.accent}33`,borderRadius:"20px 20px 0 0",padding:"20px 18px 32px",overflowY:"auto"}}>
-        <div style={{width:40,height:4,borderRadius:2,background:C.border,margin:"0 auto 18px"}}/>
-        <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>Inicio</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:18}}>
-          {[{id:"home",icon:"🏠",label:"Home"}].map(n=><button key={n.id} className="btn" onClick={()=>{setTab(n.id);setMenuOpen(false);}} style={{padding:"14px 12px",borderRadius:12,background:tab===n.id?`${C.accent}22`:"#0a1018",border:`1.5px solid ${tab===n.id?C.accent:C.border}`,color:tab===n.id?C.accent:C.text,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:8,gridColumn:"1/-1"}}>{n.icon} {n.label}</button>)}
-        </div>
-        <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>Pick'em</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:18}}>
-          {[{id:"pickem",icon:"👥",label:"Grupos"},{id:"apuestas",icon:"🪙",label:"Apuestas"},{id:"parlay",icon:"🎰",label:"Parlay"},{id:"ou",icon:"🎯",label:"Over/Under"},{id:"shop",icon:"🛍️",label:"Shop"}].map(n=><button key={n.id} className="btn" onClick={()=>{setTab(n.id);setMenuOpen(false);}} style={{padding:"14px 12px",borderRadius:12,background:tab===n.id?`${C.accent}22`:"#0a1018",border:`1.5px solid ${tab===n.id?C.accent:C.border}`,color:tab===n.id?C.accent:C.text,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:8}}>{n.icon} {n.label}</button>)}
-        </div>
-        <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>NBA</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:18}}>
-          {[{id:"teams",icon:"🏆",label:"Equipos"},{id:"players",icon:"⭐",label:"Jugadores"},{id:"bracket",icon:"🏅",label:"Playoffs"},{id:"games",icon:"🎮",label:"Juegos"}].map(n=><button key={n.id} className="btn" onClick={()=>{setTab(n.id);setMenuOpen(false);}} style={{padding:"14px 12px",borderRadius:12,background:tab===n.id?`${C.accent}22`:"#0a1018",border:`1.5px solid ${tab===n.id?C.accent:C.border}`,color:tab===n.id?C.accent:C.text,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:8}}>{n.icon} {n.label}</button>)}
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr",gap:8}}>
-          {[{id:"settings",icon:"⚙️",label:"Configuración"}].map(n=><button key={n.id} className="btn" onClick={()=>{setTab(n.id);setMenuOpen(false);}} style={{padding:"14px 12px",borderRadius:12,background:tab===n.id?`${C.accent}22`:"#0a1018",border:`1.5px solid ${tab===n.id?C.accent:C.border}`,color:tab===n.id?C.accent:C.text,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:8}}>{n.icon} {n.label}</button>)}
-        </div>
+
+    {/* ─── MENÚ ─── */}
+    {menuOpen&&<div onClick={()=>setMenuOpen(false)} style={{position:"fixed",inset:0,background:"#00000099",zIndex:1200,display:"flex",alignItems:"flex-end"}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxHeight:"85vh",background:T.surface[1],borderTop:`1px solid ${T.border.base}`,borderRadius:`${T.radius.xl}px ${T.radius.xl}px 0 0`,padding:`${T.space[5]}px ${T.space[5]}px ${T.space[7]}px`,overflowY:"auto",boxShadow:T.shadow.lg}}>
+        <div style={{width:36,height:4,borderRadius:2,background:T.border.strong,margin:`0 auto ${T.space[5]}px`}}/>
+        {NAV.map((sec,si)=><div key={si} style={{marginBottom:T.space[5]}}>
+          {sec.section&&<div style={{fontSize:T.font.xs,color:T.text.tertiary,textTransform:"uppercase",letterSpacing:1.2,fontWeight:600,marginBottom:T.space[3]}}>{sec.section}</div>}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:T.space[2]}}>
+            {sec.items.map(n=><button key={n.id} className="btn" onClick={()=>{setTab(n.id);setMenuOpen(false);}} style={{padding:`${T.space[3]}px ${T.space[4]}px`,borderRadius:T.radius.base,background:tab===n.id?T.accent.subtle:T.surface[2],border:`1px solid ${tab===n.id?T.accent.base:T.border.subtle}`,color:tab===n.id?T.accent.base:T.text.secondary,fontSize:T.font.sm,fontWeight:600,textAlign:"left",gridColumn:sec.items.length===1?"1/-1":undefined}}>{n.label}</button>)}
+          </div>
+        </div>)}
       </div>
     </div>}
-    {isOffline&&<div style={{background:"#ff444422",borderBottom:"1px solid #ff444444",padding:"8px 18px",display:"flex",alignItems:"center",gap:10}}>
-      <span style={{fontSize:16}}>📡</span>
-      <span style={{fontSize:12,color:"#ff8888",fontWeight:700}}>Sin conexión — los datos pueden estar desactualizados</span>
+
+    {/* ─── BANNERS ─── */}
+    {isOffline&&<div style={{background:T.surface[1],borderBottom:`1px solid ${T.border.base}`,padding:`${T.space[2]}px ${T.space[5]}px`}}>
+      <span style={{fontSize:T.font.sm,color:T.text.secondary}}>Sin conexión — los datos pueden estar desactualizados</span>
     </div>}
-    {installPrompt&&<div style={{background:`linear-gradient(135deg,${C.accent}22,#0055ff22)`,borderBottom:`1px solid ${C.accent}33`,padding:"8px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-      <div style={{display:"flex",alignItems:"center",gap:8}}>
-        <span style={{fontSize:18}}>📲</span>
-        <span style={{fontSize:12,color:C.text,fontWeight:600}}>Instala Court IQ en tu celular para mejor experiencia</span>
-      </div>
-      <div style={{display:"flex",gap:6,flexShrink:0}}>
-        <button className="btn" onClick={async()=>{installPrompt.prompt();const{outcome}=await installPrompt.userChoice;if(outcome==="accepted")setInstallPrompt(null);}} style={{padding:"6px 14px",borderRadius:8,background:C.accent,color:"#07090f",fontWeight:900,fontSize:12}}>Instalar</button>
-        <button className="btn" onClick={()=>setInstallPrompt(null)} style={{padding:"6px 10px",borderRadius:8,background:"#0a1018",border:`1px solid ${C.border}`,color:C.dim,fontSize:12}}>✕</button>
+
+    {installPrompt&&<div style={{background:T.surface[1],borderBottom:`1px solid ${T.border.base}`,padding:`${T.space[2]}px ${T.space[5]}px`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:T.space[3]}}>
+      <span style={{fontSize:T.font.sm,color:T.text.secondary}}>Instala Court IQ para una mejor experiencia</span>
+      <div style={{display:"flex",gap:T.space[2],flexShrink:0}}>
+        <button className="btn" onClick={async()=>{installPrompt.prompt();const{outcome}=await installPrompt.userChoice;if(outcome==="accepted")setInstallPrompt(null);}} style={{padding:`${T.space[1]}px ${T.space[4]}px`,borderRadius:T.radius.sm,background:T.accent.base,color:"#fff",fontWeight:600,fontSize:T.font.xs}}>Instalar</button>
+        <button className="btn" onClick={()=>setInstallPrompt(null)} style={{padding:`${T.space[1]}px ${T.space[3]}px`,borderRadius:T.radius.sm,background:"transparent",border:`1px solid ${T.border.base}`,color:T.text.tertiary,fontSize:T.font.xs}}>Cerrar</button>
       </div>
     </div>}
-    <div style={{maxWidth:1000,margin:"0 auto",padding:"22px 18px 100px"}}>
+
+    {/* ─── CONTENIDO ─── */}
+    <div style={{maxWidth:1000,margin:"0 auto",padding:`${T.space[6]}px ${T.space[4]}px 100px`}}>
       {tab==="home"&&<HomeTab games={games} live={live} userCtx={userCtx} standings={standings} picks={picks} confidence={confidence} setConfidence={setConfidence} makePick={makePick} selGroup={selGroup} goToBets={()=>setTab("apuestas")} goToGroup={()=>setTab("pickem")}/>}
       {tab==="teams"&&<TeamsTab standings={standings} live={live}/>}
       {tab==="players"&&<PlayersTab players={players} live={live}/>}
@@ -306,6 +320,7 @@ export default function App(){
       {tab==="games"&&<MiniGamesTab players={players} userCtx={userCtx}/>}
       {tab==="settings"&&<SettingsTab userCtx={userCtx} installPrompt={installPrompt} onInstalled={()=>setInstallPrompt(null)}/>}
     </div>
+
     <FloatingChat userCtx={userCtx}/>
   </div>);
 }
