@@ -65,6 +65,7 @@ const FB_PL=[
   {id:24,name:"Jalen Johnson",teamAbbr:"ATL",pos:"F",pts:23.7,ast:8.4,reb:10.4,blk:0.5,stl:1.4,fgPct:52.1,fg3Pct:35.5},
 ].map(p=>({...p,color:tm(p.teamAbbr).color}));
 
+
 /* ═══ API LAYER ═══ */
 
 async function api(path) {
@@ -140,17 +141,22 @@ export default function App(){
   const [picks,setPicks]=useState({});
   const [confidence,setConfidence]=useState({});
   const [selGroup,setSelGroup]=useState(null);
+  const [groups,setGroups]=useState([]);
 
   const makePick=useCallback(async(gameId,team,home,away,conf=1,g=null)=>{
     if(!selGroup||!userCtx.user) return;
     setPicks(p=>({...p,[gameId]:team}));
     const pickedSide=team===home?"home":"away";
     const wPct=g?.status==="Upcoming"?calcWinPct(g,pickedSide,standings):50;
-    await pickemAPI("makePick",{body:{
-      userId:userCtx.user.id, groupId:selGroup.id, gameId, gameDate:getToday(),
-      pickedTeam:team, homeTeam:home, awayTeam:away, confidence:conf, winPct:wPct
-    }});
-  },[selGroup,userCtx.user,standings]);
+    const today=getToday();
+    const targets=groups.length?groups:[selGroup];
+    await Promise.all(targets.map(grp=>
+      pickemAPI("makePick",{body:{
+        userId:userCtx.user.id, groupId:grp.id, gameId, gameDate:today,
+        pickedTeam:team, homeTeam:home, awayTeam:away, confidence:conf, winPct:wPct
+      }})
+    ));
+  },[selGroup,userCtx.user,standings,groups]);
 
   useEffect(()=>{
     if(!userCtx.user||!selGroup){setPicks({});setConfidence({});return;}
@@ -169,7 +175,10 @@ export default function App(){
     if(!userCtx.user) return;
     const savedGid=localStorage.getItem("courtiq_lastgroup");
     pickemAPI("myGroups",{params:{userId:userCtx.user.id}}).then(d=>{
-      if(d.ok&&d.groups?.length) setSelGroup(d.groups.find(g=>g.id===savedGid)||d.groups[0]);
+      if(d.ok&&d.groups?.length){
+        setGroups(d.groups);
+        setSelGroup(d.groups.find(g=>g.id===savedGid)||d.groups[0]);
+      }
     });
   },[userCtx.user]);
 
