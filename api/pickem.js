@@ -6,6 +6,28 @@ import { createHash, randomInt } from "crypto";
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY;
 
+// ─── SCOREBOARD CACHE (TTL corto, por instancia) ─────────────────────────────
+let _scoreboardCache = { data: null, at: 0 };
+const SCOREBOARD_TTL = 30_000; // 30s
+
+async function getScoreboard() {
+  const now = Date.now();
+  if (_scoreboardCache.data && now - _scoreboardCache.at < SCOREBOARD_TTL) {
+    return _scoreboardCache.data;
+  }
+  const r = await fetch("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard", { signal: AbortSignal.timeout(5000) });
+  if (!r.ok) throw new Error(`ESPN ${r.status}`);
+  const data = await r.json();
+  _scoreboardCache = { data, at: now };
+  return data;
+}
+
+// Devuelve "pre" | "in" | "post" | null (null = no encontrado)
+async function getGameState(gameId) {
+  const data = await getScoreboard();
+  const game = (data.events || []).find(e => e.id === gameId);
+  return game?.competitions?.[0]?.status?.type?.state ?? null;
+}
 // ─── RATE LIMITER (in-memory, resets per cold start) ─────────────────────────
 const rateLimits = new Map();
 function rateLimit(ip, action, max = 30, windowMs = 60_000) {
@@ -360,6 +382,18 @@ export default async function handler(req, res) {
           return res.json({ ok: false, error: "Faltan datos" });
         if (pickedTeam !== homeTeam && pickedTeam !== awayTeam)
           return res.json({ ok: false, error: "Equipo inválido" });
+
+        // ── Validar que el partido no haya empezado ──
+        let gState;
+        try {
+          gState = await getGameState(gameId);
+        } catch (e) {
+          console.warn("makePick: no se pudo verificar el partido:", e.message);
+          return res.json({ ok: false, error: "No pudimos verificar el estado del partido. Intenta de nuevo." });
+        }
+        if (gState === null) return res.json({ ok: false, error: "Este partido ya no está disponible" });
+        if (gState !== "pre") return res.json({ ok: false, error: "Este partido ya empezó — no puedes hacer o cambiar tu pick" });
+
         const conf = Math.min(3, Math.max(1, parseInt(confidence) || 1));
         const wPct = Math.min(95, Math.max(5, parseInt(winPct) || 50));
         const existing = await supabase("picks", {
