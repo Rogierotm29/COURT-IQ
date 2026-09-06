@@ -869,20 +869,19 @@ export default async function handler(req, res) {
         if (bet.status !== "open" && bet.status !== "pending") return res.json({ ok: false, error: "Apuesta ya no disponible" });
         if (bet.requester_id === userId) return res.json({ ok: false, error: "No puedes aceptar tu propia apuesta" });
         if (bet.status === "pending" && bet.opponent_id && bet.opponent_id !== userId) return res.json({ ok: false, error: "Esta apuesta es para otro usuario" });
+
         // Verificar que el partido no haya empezado aún.
         // Si no podemos verificar, bloqueamos: con monedas de por medio, fallar cerrado.
-        let gameState = null;
+        let gameState;
         try {
-          const espnRes = await fetch("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard", { signal: AbortSignal.timeout(5000) });
-          const espnData = await espnRes.json();
-          const game = (espnData.events || []).find(e => e.id === bet.game_id);
-          gameState = game?.competitions?.[0]?.status?.type?.state ?? null;
+          gameState = await getGameState(bet.game_id);
         } catch (e) {
-          console.warn("acceptBet: no se pudo verificar el partido en ESPN:", e.message);
+          console.warn("acceptBet: no se pudo verificar el partido:", e.message);
           return res.json({ ok: false, error: "No pudimos verificar el estado del partido. Intenta de nuevo en un momento." });
         }
         if (gameState === null) return res.json({ ok: false, error: "❌ Este partido ya no está disponible — probablemente ya terminó" });
         if (gameState !== "pre") return res.json({ ok: false, error: "❌ Este partido ya empezó o terminó — no puedes aceptar esta apuesta" });
+
         const rows = await supabase("coin_balances", { filters: `?user_id=eq.${userId}&group_id=eq.${bet.group_id}&limit=1` });
         if (!rows?.length || rows[0].balance < bet.amount) return res.json({ ok: false, error: "Saldo insuficiente" });
         await supabase(`coin_balances?user_id=eq.${userId}&group_id=eq.${bet.group_id}`, {
