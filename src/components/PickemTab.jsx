@@ -9,6 +9,7 @@ import { getNameColor, getNamePrefix, getBorderColor } from "../utils/cosmetics"
 import { autoSubscribePush } from "../utils/push";
 import { SHOP_ITEMS, ACHIEVEMENT_DEFS } from "../data/shop";
 import { APP_URL } from "../theme";
+import { getSeason } from "../utils/season";
 
 export const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
   const {user,save}=userCtx;
@@ -609,7 +610,7 @@ export const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
       {subTab==="ranking"&&<>
         {/* Banner temporada */}
         {lbPeriod==="season"&&activeLb.length>=3&&<Card style={{marginBottom:12,background:"linear-gradient(135deg,#FFB80014,#0d1117)",borderColor:"#FFB80033"}}>
-          <div style={{fontSize:9,color:"#FFB800",textTransform:"uppercase",letterSpacing:2,marginBottom:8}}>🏆 Temporada 2024–25 · Top 3</div>
+          <div style={{fontSize:9,color:"#FFB800",textTransform:"uppercase",letterSpacing:2,marginBottom:8}}>{getSeason()} · Top 3</div>
           <div style={{display:"flex",gap:10,justifyContent:"center",alignItems:"flex-end",marginBottom:8}}>
             {[1,0,2].map((pos)=>{
               const r=activeLb[pos];if(!r)return null;
@@ -627,7 +628,7 @@ export const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
               </div>;
             })}
           </div>
-          <div style={{fontSize:9,color:C.dim,textAlign:"center"}}>La temporada NBA 24–25 termina en Junio 2025 — sigue acumulando puntos 🏀</div>
+          
         </Card>}
         <div style={{display:"flex",gap:8,marginBottom:14}}>
           {[["season","🏀 Temporada"],["month","📅 Mes"],["week","📆 Semana"]].map(([p,l])=><button key={p} className="btn" onClick={()=>setLbPeriod(p)} style={{padding:"7px 14px",borderRadius:20,background:lbPeriod===p?C.accent:"#0d1117",border:`1px solid ${lbPeriod===p?C.accent:C.border}`,color:lbPeriod===p?"#07090f":C.dim,fontWeight:700,fontSize:11}}>{l}</button>)}
