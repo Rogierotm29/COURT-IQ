@@ -1,4 +1,3 @@
-
 import { useEffect, useState, useRef } from "react";
 import { C } from "../theme";
 import { Spin } from "./ui";
@@ -15,6 +14,10 @@ export const FloatingChat=({userCtx})=>{
   const [unread,setUnread]=useState(0);
   const endRef=useRef(null);
   const groupRef=useRef(null);
+  const openRef=useRef(false);
+
+  // Mantener openRef sincronizado con el estado
+  useEffect(()=>{openRef.current=open;},[open]);
 
   const getLastRead=(gid)=>localStorage.getItem(`courtiq_chat_read_${gid}`)||"0";
   const markRead=(gid)=>localStorage.setItem(`courtiq_chat_read_${gid}`,new Date().toISOString());
@@ -28,8 +31,8 @@ export const FloatingChat=({userCtx})=>{
         markRead(g.id);
         setUnread(0);
       } else {
-        const lastRead=getLastRead(g.id);
-        const count=messages.filter(m=>m.user_id!==user.id&&m.created_at>lastRead).length;
+        const lastRead=new Date(getLastRead(g.id)).getTime()||0;
+        const count=messages.filter(m=>m.user_id!==user.id&&new Date(m.created_at).getTime()>lastRead).length;
         setUnread(count);
       }
     });
@@ -38,7 +41,7 @@ export const FloatingChat=({userCtx})=>{
   const switchGroup=(g)=>{
     setGroup(g);groupRef.current=g;
     setUnread(0);setMsgs([]);
-    loadMsgs(g,open);
+    loadMsgs(g,openRef.current);
   };
 
   // Load group on mount — also handle ?chat=groupId from notification tap
@@ -73,17 +76,17 @@ export const FloatingChat=({userCtx})=>{
     };
     window.addEventListener("courtiq_group_changed",handler);
     return()=>window.removeEventListener("courtiq_group_changed",handler);
-  },[user,open]);
+  },[user]);
 
-  // Poll every 20s for new messages
+  // Poll every 20s — pausa si la pestaña está oculta
   useEffect(()=>{
     const t=setInterval(()=>{
-      if(groupRef.current&&user){
-        loadMsgs(groupRef.current,open);
+      if(groupRef.current&&user&&!document.hidden){
+        loadMsgs(groupRef.current,openRef.current);
       }
     },20000);
     return()=>clearInterval(t);
-  },[user,open]);
+  },[user]);
 
   // When chat opens: load messages and mark as read
   useEffect(()=>{
