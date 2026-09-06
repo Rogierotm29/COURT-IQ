@@ -7,3 +7,5 @@ export const C = {
   text:   "#e0eaf5",
   accent: "#00C2FF"
 };
+
+export const APP_URL = "court-iq-woad.vercel.app";

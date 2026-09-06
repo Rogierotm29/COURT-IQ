@@ -8,7 +8,7 @@ import { calcWinPct, dynPts, dynBase } from "../utils/scoring";
 import { getNameColor, getNamePrefix, getBorderColor } from "../utils/cosmetics";
 import { autoSubscribePush } from "../utils/push";
 import { SHOP_ITEMS, ACHIEVEMENT_DEFS } from "../data/shop";
-
+import { APP_URL } from "../theme";
 
 export const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
   const {user,save}=userCtx;
@@ -347,7 +347,7 @@ export const PickemTab=({games,standings,userCtx,initSubTab,standalone})=>{
     });
     // Footer
     ctx.fillStyle="#0d1117";ctx.fillRect(0,H-FOOTER,W,FOOTER);
-    ctx.fillStyle="#566880";ctx.font="10px Arial,sans-serif";ctx.textAlign="center";ctx.fillText("court-iq.vercel.app",W/2,H-16);ctx.textAlign="left";
+    ctx.fillStyle="#566880";ctx.font="10px Arial,sans-serif";ctx.textAlign="center";ctx.fillText(APP_URL,W/2,H-16);ctx.textAlign="left";
     canvas.toBlob(async blob=>{
       if(navigator.share&&blob&&navigator.canShare?.({files:[new File([blob],"picks.png",{type:"image/png"})]})){
         try{await navigator.share({files:[new File([blob],"picks.png",{type:"image/png"})],title:"Mis picks Court IQ"});return;}catch(_){}

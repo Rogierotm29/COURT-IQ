@@ -5,7 +5,7 @@ import { Confetti, ResultBanner, FloatPts, LiveBadge } from "./feedback";
 import { tm, logo } from "./TeamLogo";
 import { pickemAPI } from "../api/pickem";
 import { calcWinPct, dynPts, dynBase } from "../utils/scoring";
-
+import { APP_URL } from "../theme";
 /* ═══ HOME TAB ═══ */
 export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
   const {user}=userCtx||{};
@@ -190,7 +190,7 @@ export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
     ctx.fillText(`${correct}/${finishedWithPick.length} correctos · +${totalPts} pts`,W/2,sy+58);
     // footer
     ctx.fillStyle="#334155";ctx.font="400 24px sans-serif";ctx.textAlign="center";
-    ctx.fillText("appbasket.vercel.app",W/2,H-24);
+    ctx.fillText(APP_URL,W/2,H-24);
     // share
     cv.toBlob(blob=>{
       if(!blob) return;
