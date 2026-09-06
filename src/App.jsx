@@ -235,7 +235,6 @@ export default function App(){
     }
     if(tabParam){
       setTab(tabParam);
-      if(subtabParam&&["apuestas","parlay","picks","ranking","historial","estadisticas"].includes(subtabParam)) setTab(subtabParam);
       url.searchParams.delete("tab");url.searchParams.delete("subtab");
       window.history.replaceState({},"",url.toString());
     }
