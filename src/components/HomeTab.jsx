@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { C } from "../theme";
 import { Card, ST, Tag } from "./ui";
 import { Confetti, ResultBanner, FloatPts, LiveBadge } from "./feedback";
 import { tm, logo } from "./TeamLogo";
 import { pickemAPI } from "../api/pickem";
 import { calcWinPct, dynPts, dynBase } from "../utils/scoring";
-import { APP_URL } from "../theme";
+import { C, APP_URL } from "../theme";
 import { getSeason } from "../utils/season";
 
 /* ═══ HOME TAB ═══ */
@@ -31,9 +30,8 @@ export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
   const prevStatusRef=useRef({});
   const prevStreakRef=useRef(streak);
 
-  const triggerCelebration=(correctPts,str)=>{
-    const today=new Date().toISOString().split("T")[0];
-    const cKey=`courtiq_celebrated_${user?.id}_${today}`;
+  const triggerCelebration=(correctPts,str,gameId)=>{
+    const cKey=`courtiq_celebrated_${user?.id}_${gameId}`;
     if(localStorage.getItem(cKey)) return;
     localStorage.setItem(cKey,"1");
     setShowConfetti(true);
@@ -62,8 +60,18 @@ export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
             // Trigger celebration if there are correct picks today
             const correctPicks=(r.picks||[]).filter(p=>p.correct&&p.points>0);
             if(correctPicks.length>0){
-              const totalPts=correctPicks.reduce((s,p)=>s+(p.points||0),0);
-              triggerCelebration(totalPts,0);
+            const yaVistos = correctPicks.every(p =>
+                localStorage.getItem(`courtiq_celebrated_${user.id}_${p.game_id}`)
+            );
+            if(!yaVistos){
+                correctPicks.forEach(p =>
+                localStorage.setItem(`courtiq_celebrated_${user.id}_${p.game_id}`,"1")
+                );
+                const totalPts=correctPicks.reduce((s,p)=>s+(p.points||0),0);
+                setShowConfetti(true);
+                setResultBanner({show:true,correct:true,pts:totalPts,streak:0});
+                setTimeout(()=>setShowConfetti(false),3500);
+            }
             }
           }
         });
@@ -100,7 +108,7 @@ export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         const key=Date.now()+g.id;
         setFloatingPts(prev=>({...prev,[g.id]:{pts,correct,key}}));
         setTimeout(()=>setFloatingPts(prev=>{const n={...prev};delete n[g.id];return n;}),1400);
-        if(correct) triggerCelebration(pts,streak);
+        if(correct) triggerCelebration(pts,streak, g.id);
       }
       prevStatusRef.current[g.id]=g.status;
     });
