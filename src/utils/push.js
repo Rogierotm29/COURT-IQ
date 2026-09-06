@@ -1,7 +1,6 @@
 import { pickemAPI } from "../api/pickem";
 
-export const VAPID_KEY="BKMJ55qDz8klBdhztjHMlXcXAWbF1FecmMqFzq2j6XbFotJUe_Cwdx-WMKERkQ51qv4X_DrFjsK1wP8LFpIjz_k";
-
+export const VAPID_KEY="BNLsOsg_9dCoIF16dC2C_2OGKl9-H3Baha0X4FjhK3OQOSJw757SSXIVZoMT014qs8PMkOeDZ4NLGUzPpie7NAs"
 export const isIOS=()=>/iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream;
 export const isStandalone=()=>window.matchMedia("(display-mode: standalone)").matches||window.navigator.standalone===true;
 

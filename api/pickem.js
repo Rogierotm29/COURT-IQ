@@ -814,7 +814,6 @@ export default async function handler(req, res) {
         if (bet.status !== "open" && bet.status !== "pending") return res.json({ ok: false, error: "Apuesta ya no disponible" });
         if (bet.requester_id === userId) return res.json({ ok: false, error: "No puedes aceptar tu propia apuesta" });
         if (bet.status === "pending" && bet.opponent_id && bet.opponent_id !== userId) return res.json({ ok: false, error: "Esta apuesta es para otro usuario" });
-        // Verificar que el partido no haya empezado aún
         // Verificar que el partido no haya empezado aún.
         // Si no podemos verificar, bloqueamos: con monedas de por medio, fallar cerrado.
         let gameState = null;
