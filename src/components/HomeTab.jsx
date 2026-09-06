@@ -6,6 +6,8 @@ import { tm, logo } from "./TeamLogo";
 import { pickemAPI } from "../api/pickem";
 import { calcWinPct, dynPts, dynBase } from "../utils/scoring";
 import { APP_URL } from "../theme";
+import { getSeason } from "../utils/season";
+
 /* ═══ HOME TAB ═══ */
 export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
   const {user}=userCtx||{};
@@ -257,7 +259,7 @@ export const HomeTab=({games,live,userCtx,standings,goToBets,goToGroup})=>{
         <span style={{fontSize:10,color:"#FFB800",fontWeight:700}}>Ver →</span>
       </div>)}
     </div>}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><ST sub="NBA 2025-26 · Hoy">Partidos del Día</ST><LiveBadge live={live.games}/></div>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><ST sub={`NBA ${getSeason()} · Hoy`}>Partidos del Día</ST><LiveBadge live={live.games}/></div>
     {user&&group&&anyStarted&&<div style={{marginBottom:12,padding:"10px 14px",background:"#ff444411",border:"1px solid #ff444433",borderRadius:10,fontSize:11,color:"#ff6666",display:"flex",alignItems:"center",gap:8}}>🔒 Un partido ya empezó — picks cerrados para hoy</div>}
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:10,marginBottom:28}}>
       {games.length===0?<div style={{color:C.muted,fontSize:13}}>No hay partidos programados.</div>

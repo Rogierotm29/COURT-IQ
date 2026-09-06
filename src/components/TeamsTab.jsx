@@ -4,7 +4,7 @@ import { ESPN_ID } from "../data/teams";
 import { Card, ST, Spin, Tag } from "./ui";
 import { LiveBadge } from "./feedback";
 import { logo } from "./TeamLogo";
-
+import { getSeason } from "../utils/season";
 
 /* ═══ TEAMS TAB ═══ */
 export const TeamsTab=({standings,live})=>{
@@ -36,7 +36,7 @@ export const TeamsTab=({standings,live})=>{
   const pickTeam=(t)=>{setSel(t);setGridOpen(false);loadLiveRoster(t.abbr);};
 
   return(<div className="fade-up">
-    <ST sub="NBA 2025-26">30 Equipos</ST>
+    <ST sub={`NBA ${getSeason()}`}>30 Equipos</ST>
 
     {/* Selector de equipo — colapsable */}
     {!gridOpen&&sel
@@ -70,7 +70,7 @@ export const TeamsTab=({standings,live})=>{
       </div></Card>
     <Card style={{marginBottom:28}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-        <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2}}>Roster 2025-26</div>
+        <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2}}>Roster {getSeason()}</div>
         {rosterLoading?<Spin s={12}/>:liveRoster?<span style={{fontSize:9,color:"#00FF9D"}}>🟢 Live</span>:<span style={{fontSize:9,color:C.muted}}>📦 Cache</span>}
       </div>
       {rosterLoading
@@ -85,7 +85,7 @@ export const TeamsTab=({standings,live})=>{
     </Card>
     </>}
 
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><ST sub="2025-26">Clasificación</ST><LiveBadge live={live.standings}/></div>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><ST sub={getSeason()}>Clasificación</ST><LiveBadge live={live.standings}/></div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:14}}>
       {[["Este",east],["Oeste",west]].map(([label,teams])=><Card key={label}>
         <div style={{fontSize:11,fontWeight:700,color:C.dim,marginBottom:12}}>{label}</div>
