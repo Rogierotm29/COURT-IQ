@@ -51,10 +51,10 @@ export const MiniGamesTab=({players,userCtx})=>{
   const mathTimerRef=useRef(null);
   // Leaderboard
   const [scores,setScores]=useState([]);
-  const [allRankings,setAllRankings]=useState({scorer:[],trivia:[],guess:[],champs:[],react:[],flags:[],math:[]});
+  const [allRankings,setAllRankings]=useState({scorer:[],trivia:[],guess:[],champs:[],react:[],flags:[],math:[],memory:[]});
 
   useEffect(()=>{
-    const types=["scorer","trivia","guess","champs","react","flags","math"];
+    const types=["scorer","trivia","guess","champs","react","flags","math","memory"];
     Promise.all(types.map(t=>pickemAPI("getMiniScores",{params:{gameType:t}}))).then(results=>{
       const r={};
       types.forEach((t,i)=>{r[t]=results[i].ok?results[i].scores||[]:[]; });
