@@ -1,4 +1,4 @@
-
+import { SHOP_ITEMS } from "../data/shop";
 
 // equipped = {color:"color_gold", title:"title_rey", border:"border_neon"} — solo 1 activo por tipo
 export const getNameColor=(items=[],equipped={})=>{
