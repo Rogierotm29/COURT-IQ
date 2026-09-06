@@ -169,15 +169,36 @@ export default async function handler(req, res) {
           filters: `?name=eq.${encodeURIComponent(rawName)}&limit=1`,
         });
         if (existing && existing.length > 0) {
-          // Verify PIN — support both hashed (new) and plain (legacy migration)
-          const storedPin = existing[0].pin || "";
-          const match = storedPin === pinHash || storedPin === rawPin;
-          if (!match) return res.json({ ok: false, error: "PIN incorrecto" });
-          // Migrate plain PIN to hash on successful login
-          if (storedPin === rawPin) {
-            await supabase(`users?id=eq.${existing[0].id}`, { method: "PATCH", body: { pin: pinHash } });
+          const u = existing[0];
+
+          // ── Bloqueo por intentos fallidos ──
+          if (u.locked_until && new Date(u.locked_until) > new Date()) {
+            const mins = Math.ceil((new Date(u.locked_until) - new Date()) / 60000);
+            return res.json({ ok: false, error: `Demasiados intentos fallidos. Intenta de nuevo en ${mins} minuto${mins !== 1 ? "s" : ""}.` });
           }
-          const { pin: _p, ...safeUser } = existing[0];
+
+          const storedPin = u.pin || "";
+          const match = storedPin === pinHash || storedPin === rawPin;
+
+          if (!match) {
+            const attempts = (u.failed_attempts || 0) + 1;
+            const patch = { failed_attempts: attempts };
+            // A partir del 5º fallo, bloqueo creciente: 5, 10, 20, 40... minutos
+            if (attempts >= 5) {
+              const lockMins = Math.min(60, 5 * Math.pow(2, attempts - 5));
+              patch.locked_until = new Date(Date.now() + lockMins * 60000).toISOString();
+            }
+            await supabase(`users?id=eq.${u.id}`, { method: "PATCH", body: patch });
+            const left = Math.max(0, 5 - attempts);
+            return res.json({ ok: false, error: left > 0 ? `PIN incorrecto. Te quedan ${left} intento${left !== 1 ? "s" : ""}.` : "PIN incorrecto. Cuenta bloqueada temporalmente." });
+          }
+
+          // Login exitoso — resetear contador
+          const patch = { failed_attempts: 0, locked_until: null };
+          if (storedPin === rawPin) patch.pin = pinHash; // migrar PIN plano a hash
+          await supabase(`users?id=eq.${u.id}`, { method: "PATCH", body: patch });
+
+          const { pin: _p, ...safeUser } = u;
           return res.json({ ok: true, user: safeUser, reconnected: true });
         }
         // Create new user with hashed PIN
