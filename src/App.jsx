@@ -233,8 +233,8 @@ export default function App(){
   },[games.map(g=>g.status).join(","),refreshAll]);
 
   useEffect(()=>{
-    pickemAPI("scoreGames").catch(()=>{});
-    pickemAPI("settleBets").catch(()=>{});
+    pickemAPI("scoreGames").then(d=>{if(!d.ok)console.warn("scoreGames:",d.error);});
+    pickemAPI("settleBets").then(d=>{if(!d.ok)console.warn("settleBets:",d.error);});
   },[]);
 
   useEffect(()=>{

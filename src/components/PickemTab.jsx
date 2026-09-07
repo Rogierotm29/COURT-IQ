@@ -859,9 +859,9 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
         <div style={{display:"flex",flexDirection:"column",gap:T.space[3],marginBottom:T.space[4],maxHeight:380,overflowY:"auto"}}>
           {chat.length===0
           ?<Card style={{textAlign:"center",padding:T.space[6]}}><div style={{fontSize:T.font.sm,color:T.text.tertiary}}>Sin mensajes aún</div></Card>
-          :chat.map((m,i)=>{
+          :chat.map((m)=>{
             const isMe=m.user_id===user.id;
-            return<div key={i} style={{display:"flex",gap:T.space[2],alignItems:"flex-end",flexDirection:isMe?"row-reverse":"row"}}>
+            return<div key={m.id||m.created_at} style={{display:"flex",gap:T.space[2],alignItems:"flex-end",flexDirection:isMe?"row-reverse":"row"}}>
               <div style={{width:26,height:26,borderRadius:"50%",background:T.surface[3],border:`1px solid ${T.border.subtle}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:T.font.sm,flexShrink:0}}>{isMe?(user.avatar_emoji||"🏀"):(m.users?.avatar_emoji||"🏀")}</div>
               <div style={{maxWidth:"76%"}}>
                 {!isMe&&<div style={{fontSize:T.font.xs,color:T.text.tertiary,marginBottom:3,fontWeight:600}}>{m.users?.name}</div>}

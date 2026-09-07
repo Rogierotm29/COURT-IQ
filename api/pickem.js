@@ -510,7 +510,7 @@ export default async function handler(req, res) {
             const dateStr = date.replace(/-/g, "");
             const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${dateStr}`);
             if (r.ok) parseEspn(await r.json());
-          } catch (_) {}
+          } catch (e) { console.warn(`scoreGames: falló ESPN para ${date}:`, e.message); }
         }));
 
         let scored = 0;
@@ -567,7 +567,7 @@ export default async function handler(req, res) {
               await supabase(`parlays?id=eq.${parlay.id}`, { method: "PATCH", body: { picks: JSON.stringify(picks) } });
             }
           }
-        } catch (_) {}
+        } catch (e) { console.warn("scoreGames: error calificando parlays:", e.message); }
 
         // Push notifications for scored picks
         try {
@@ -956,7 +956,7 @@ export default async function handler(req, res) {
             const dateStr = date.replace(/-/g, "");
             const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${dateStr}`);
             if (r.ok) parseEspn(await r.json());
-          } catch (_) {}
+          } catch (e) { console.warn(`settleBets: ESPN falló para ${date}:`, e.message); }
         }));
         let settled = 0;
         for (const bet of activeBets) {
@@ -995,7 +995,7 @@ export default async function handler(req, res) {
                   gameStates[e.id] = state || "pre";
                 });
               }
-            } catch (_) {}
+            } catch (e) { console.warn(`settleBets: no se pudo leer el estado de ${date}:`, e.message); }
           }));
           for (const bet of openBets) {
             const state = gameStates[bet.game_id];
