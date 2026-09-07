@@ -2,17 +2,16 @@
 
 const TIMEOUT_MS = 12000;
 
+/* ─── Observador de salud ───
+   App.jsx registra un listener y se entera de cada fallo o recuperación
+   sin que los componentes tengan que reportar nada. */
+let healthListener = null;
+export const onApiHealthChange = (fn) => { healthListener = fn; };
+const reportHealth = (ok, kind) => { if (healthListener) healthListener(ok, kind); };
+
 /**
  * Cliente de la API. Siempre resuelve con { ok, error?, errorKind? } —
  * nunca lanza, para que el llamador no tenga que envolver todo en try/catch.
- *
- * errorKind permite a la UI reaccionar distinto según la causa:
- *   "offline"  — el dispositivo no tiene conexión
- *   "timeout"  — el servidor tardó demasiado
- *   "network"  — falló la petición (DNS, CORS, servidor caído)
- *   "server"   — el servidor respondió con 5xx
- *   "client"   — el servidor respondió con 4xx
- *   "parse"    — la respuesta no era JSON válido
  */
 export async function pickemAPI(action, opts = {}) {
   const { body, params } = opts;
@@ -32,31 +31,39 @@ export async function pickemAPI(action, opts = {}) {
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (e) {
-    if (e.name === "TimeoutError" || e.name === "AbortError") {
-      console.warn(`pickemAPI[${action}] timeout tras ${TIMEOUT_MS}ms`);
-      return { ok: false, errorKind: "timeout", error: "El servidor tardó demasiado. Intenta de nuevo." };
-    }
-    console.warn(`pickemAPI[${action}] falló la petición:`, e.message);
-    return { ok: false, errorKind: "network", error: "No pudimos conectar con el servidor" };
+    const kind = (e.name === "TimeoutError" || e.name === "AbortError") ? "timeout" : "network";
+    console.warn(`pickemAPI[${action}] ${kind}:`, e.message);
+    reportHealth(false, kind);
+    return {
+      ok: false,
+      errorKind: kind,
+      error: kind === "timeout"
+        ? "El servidor tardó demasiado. Intenta de nuevo."
+        : "No pudimos conectar con el servidor",
+    };
   }
 
-  // Respuestas de error con cuerpo JSON: preferimos el mensaje del servidor
   let data;
   try {
     data = await r.json();
   } catch {
     console.warn(`pickemAPI[${action}] respuesta no-JSON, status ${r.status}`);
+    const kind = r.status >= 500 ? "server" : "parse";
+    if (kind === "server") reportHealth(false, kind);
     return {
       ok: false,
-      errorKind: r.status >= 500 ? "server" : "parse",
-      error: r.status >= 500
+      errorKind: kind,
+      error: kind === "server"
         ? "El servidor tuvo un problema. Intenta en un momento."
         : "Respuesta inesperada del servidor",
     };
   }
 
   if (!r.ok) {
-    const kind = r.status === 429 ? "client" : r.status >= 500 ? "server" : "client";
+    const kind = r.status >= 500 ? "server" : "client";
+    // Sólo un 5xx significa que la API está caída; un 4xx es error de validación
+    if (kind === "server") reportHealth(false, kind);
+    else reportHealth(true);
     return {
       ok: false,
       errorKind: kind,
@@ -66,5 +73,6 @@ export async function pickemAPI(action, opts = {}) {
     };
   }
 
+  reportHealth(true);
   return data;
 }

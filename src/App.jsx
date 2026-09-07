@@ -3,7 +3,6 @@ import { TM, fix } from "./data/teams";
 import { GS, Spin } from "./components/ui";
 import { C, T } from "./theme";
 import { tm } from "./components/TeamLogo";
-import { pickemAPI } from "./api/pickem";
 import { calcWinPct } from "./utils/scoring";
 import { getToday } from "./utils/date";
 import { getSeason } from "./utils/season";
@@ -18,6 +17,7 @@ import { SettingsTab } from "./components/SettingsTab";
 import { OUTab } from "./components/OUTab";
 import { FloatingChat } from "./components/FloatingChat";
 import { Onboarding } from "./components/Onboarding";
+import { pickemAPI, onApiHealthChange } from "./api/pickem";
 
 /* ═══ FALLBACK DATA ═══ */
 const FB_ST=[
@@ -155,6 +155,7 @@ export default function App(){
   const [confidence,setConfidence]=useState({});
   const [selGroup,setSelGroup]=useState(null);
   const [groups,setGroups]=useState([]);
+  const [apiDown,setApiDown]=useState(false);
 
   const makePick=useCallback(async(gameId,team,home,away,conf=1,g=null)=>{
     if(!selGroup||!userCtx.user) return;
@@ -170,6 +171,12 @@ export default function App(){
       }})
     ));
   },[selGroup,userCtx.user,standings,groups]);
+
+  // Escucha la salud de la API — el cliente reporta cada fallo o recuperación
+  useEffect(()=>{
+    onApiHealthChange((ok)=>setApiDown(!ok));
+    return()=>onApiHealthChange(null);
+  },[]);
 
   useEffect(()=>{
     if(!userCtx.user||!selGroup){setPicks({});setConfidence({});return;}
@@ -293,7 +300,13 @@ export default function App(){
       </div>
     </div>}
 
+    
+
     {/* ─── BANNERS ─── */}
+    {apiDown&&!isOffline&&<div style={{background:T.surface[1],borderBottom:`1px solid ${T.border.base}`,borderLeft:`3px solid ${T.warning.base}`,padding:`${T.space[2]}px ${T.space[5]}px`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:T.space[3]}}>
+      <span style={{fontSize:T.font.sm,color:T.text.secondary}}>Problemas para conectar con el servidor — algunos datos pueden no estar actualizados</span>
+      <button className="btn" onClick={refreshAll} style={{padding:`${T.space[1]}px ${T.space[3]}px`,borderRadius:T.radius.sm,background:T.surface[2],border:`1px solid ${T.border.base}`,color:T.text.secondary,fontSize:T.font.xs,fontWeight:600,flexShrink:0}}>Reintentar</button>
+    </div>}
     {isOffline&&<div style={{background:T.surface[1],borderBottom:`1px solid ${T.border.base}`,padding:`${T.space[2]}px ${T.space[5]}px`}}>
       <span style={{fontSize:T.font.sm,color:T.text.secondary}}>Sin conexión — los datos pueden estar desactualizados</span>
     </div>}
