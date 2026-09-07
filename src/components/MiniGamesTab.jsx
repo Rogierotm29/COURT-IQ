@@ -176,9 +176,11 @@ export const MiniGamesTab=({players,userCtx})=>{
     setGuessFeedback({ok,chosen:p.name});
     if(ok) setGuessScore(s=>s+1);
     setTimeout(()=>{
+      if(!ok){ setGuessDone(true); saveScore("guess",guessScore); return; }
       const next=guessRound+1;
-      if(next>=8){setGuessDone(true);saveScore("guess",ok?guessScore+1:guessScore);}
-      else{setGuessRound(next);setGuessQ(buildClueQ(guessPool,next));setGuessFeedback(null);}
+      setGuessRound(next);
+      setGuessQ(buildClueQ(guessPool,next%guessPool.length));
+      setGuessFeedback(null);
     },1000);
   };
 
@@ -192,19 +194,22 @@ export const MiniGamesTab=({players,userCtx})=>{
     return{correct,opts:[correct,...others].sort(()=>Math.random()-.5)};
   };
   const startChamps=()=>{
-    const pool=[...CHAMPS].sort(()=>Math.random()-.5).slice(0,10);
+    const pool=[...CHAMPS].sort(()=>Math.random()-.5);   // sin .slice(0,10)
     setChampsRound(0);setChampsScore(0);setChampsDone(false);setChampsFeedback(null);
     setChampsPool(pool);setChampsQ(buildChampsQ(pool,0));setGame("champs");setScreen("game");
   };
+
   const answerChamps=(team)=>{
     if(champsFeedback!==null) return;
     const ok=team===champsQ.correct.team;
     setChampsFeedback({ok,chosen:team});
     if(ok) setChampsScore(s=>s+1);
     setTimeout(()=>{
+      if(!ok){ setChampsDone(true); saveScore("champs",champsScore); return; }
       const next=champsRound+1;
-      if(next>=10){setChampsDone(true);saveScore("champs",ok?champsScore+1:champsScore);}
-      else{setChampsRound(next);setChampsQ(buildChampsQ(champsPool,next));setChampsFeedback(null);}
+      setChampsRound(next);
+      setChampsQ(buildChampsQ(champsPool,next%champsPool.length));
+      setChampsFeedback(null);
     },1000);
   };
 
@@ -233,20 +238,20 @@ export const MiniGamesTab=({players,userCtx})=>{
   };
 
   const startTrivia=()=>{
-    setTriviaSet([...TRIVIA_ALL].sort(()=>Math.random()-.5).slice(0,10));
+    setTriviaSet([...TRIVIA_ALL].sort(()=>Math.random()-.5));
     setTriviaQ(0);setTriviaScore(0);setTriviaDone(false);setTriviaFeedback(null);
     setGame("trivia");setScreen("game");
   };
   const answerTrivia=(idx)=>{
     if(triviaFeedback!==null) return;
-    const q=triviaSet[triviaQ];
+    const q=triviaSet[triviaQ%triviaSet.length];
     const ok=idx===q.a;
     setTriviaFeedback({ok,chosen:idx});
     if(ok) setTriviaScore(s=>s+1);
     setTimeout(()=>{
-      const next=triviaQ+1;
-      if(next>=triviaSet.length){setTriviaDone(true);saveScore("trivia",ok?triviaScore+1:triviaScore);}
-      else{setTriviaQ(next);setTriviaFeedback(null);}
+      if(!ok){ setTriviaDone(true); saveScore("trivia",triviaScore); return; }
+      setTriviaQ(n=>n+1);
+      setTriviaFeedback(null);
     },900);
   };
 
@@ -362,9 +367,9 @@ export const MiniGamesTab=({players,userCtx})=>{
     {key:"flags", label:"Banderas",         desc:"Reconoce 10 países por su bandera", start:startFlags, max:10, cat:"general", unit:"/10"},
     {key:"math",  label:"Mate rápido",      desc:"10 operaciones, 5 segundos cada una", start:startMath, max:10, cat:"general", unit:"/10"},
     {key:"scorer",label:"¿Quién anota más?",desc:"Adivina qué jugador promedia más puntos", start:startScorer, max:10, cat:"nba", unit:"/10"},
-    {key:"trivia",label:"Trivia NBA",       desc:"10 preguntas sobre la liga", start:startTrivia, max:10, cat:"nba", unit:"/10"},
-    {key:"guess", label:"Adivina el jugador",desc:"Cuatro pistas de carrera, ocho rondas", start:startGuess, max:8, cat:"nba", unit:"/8"},
-    {key:"champs",label:"Campeones",        desc:"¿Quién ganó ese año? 1947 a 2024", start:startChamps, max:10, cat:"nba", unit:"/10"},
+    {key:"trivia",label:"Trivia NBA",       desc:"¿Cuántas seguidas puedes acertar?", start:startTrivia, max:999, cat:"nba", unit:" seguidas"},
+    {key:"guess", label:"Adivina el jugador",desc:"Cuatro pistas por jugador — hasta que falles", start:startGuess, max:999, cat:"nba", unit:" seguidas"},
+    {key:"champs",label:"Campeones",        desc:"¿Quién ganó ese año? Hasta que falles", start:startChamps, max:999, cat:"nba", unit:" seguidas"},
   ];
 
   /* ═══ MENÚ ═══ */
@@ -444,13 +449,13 @@ export const MiniGamesTab=({players,userCtx})=>{
 
   /* ═══ TRIVIA ═══ */
   if(screen==="game"&&game==="trivia"){
-    if(triviaDone) return<Result title="Trivia NBA" score={triviaScore} suffix="/10"
-      verdict={triviaScore>=8?"Sabes de la liga":triviaScore>=5?"Nada mal":"Sigue aprendiendo"} onRetry={startTrivia}/>;
+    if(triviaDone) return<Result title="Trivia NBA" score={triviaScore} suffix=" seguidas"
+      verdict={triviaScore>=20?"Impresionante":triviaScore>=10?"Muy bien":triviaScore>=5?"Nada mal":"Sigue practicando"} onRetry={startTrivia}/>;
     const q=triviaSet[triviaQ]||triviaSet[0];
     if(!q) return null;
     const revealed=triviaFeedback!==null;
     return(<div className="fade-up">
-      <GameHeader sub="Trivia NBA" title={`Pregunta ${triviaQ+1} de ${triviaSet.length||10}`} score={triviaScore}/>
+            <GameHeader sub="Trivia NBA" title={`Racha: ${triviaScore}`} score={triviaScore} scoreLabel="seguidas"/>
       <Card style={{marginBottom:T.space[4],padding:T.space[5]}}>
         <div style={{fontSize:T.font.base,fontWeight:600,color:T.text.primary,lineHeight:1.5}}>{q.q}</div>
       </Card>
@@ -466,13 +471,13 @@ export const MiniGamesTab=({players,userCtx})=>{
 
   /* ═══ ADIVINA EL JUGADOR ═══ */
   if(screen==="game"&&game==="guess"){
-    if(guessDone) return<Result title="Adivina el jugador" score={guessScore} suffix="/8"
-      verdict={guessScore>=7?"Los reconoces a todos":guessScore>=5?"Buen ojo":"Ve más partidos"} onRetry={startGuess}/>;
+    if(guessDone) return<Result title="Adivina el jugador" score={guessScore} suffix=" seguidas"
+      verdict={guessScore>=15?"Los reconoces a todos":guessScore>=8?"Buen ojo":guessScore>=4?"Nada mal":"Ve más partidos"} onRetry={startGuess}/>;
     if(!guessQ) return null;
     const{correct,opts}=guessQ;
     const revealed=guessFeedback!==null;
     return(<div className="fade-up">
-      <GameHeader sub="Adivina el jugador" title={`Ronda ${guessRound+1} de 8`} score={guessScore}/>
+      <GameHeader sub="Adivina el jugador" title={`Racha: ${guessScore}`} score={guessScore} scoreLabel="seguidas"/>
       <Card style={{marginBottom:T.space[4],padding:T.space[5]}}>
         <div style={{...label,marginBottom:T.space[3]}}>Pistas</div>
         {correct.clues.map((clue,i)=>(
@@ -497,13 +502,13 @@ export const MiniGamesTab=({players,userCtx})=>{
 
   /* ═══ CAMPEONES ═══ */
   if(screen==="game"&&game==="champs"){
-    if(champsDone) return<Result title="Campeones" score={champsScore} suffix="/10"
-      verdict={champsScore>=9?"Historiador de la NBA":champsScore>=6?"Buen conocimiento":"A repasar la historia"} onRetry={startChamps}/>;
+    if(champsDone) return<Result title="Campeones" score={champsScore} suffix=" seguidas"
+      verdict={champsScore>=20?"Historiador de la NBA":champsScore>=10?"Buen conocimiento":champsScore>=5?"Nada mal":"A repasar"} onRetry={startChamps}/>;
     if(!champsQ) return null;
     const{correct,opts}=champsQ;
     const revealed=champsFeedback!==null;
     return(<div className="fade-up">
-      <GameHeader sub="Campeones" title={`Ronda ${champsRound+1} de 10`} score={champsScore}/>
+      <GameHeader sub="Campeones" title={`Racha: ${champsScore}`} score={champsScore} scoreLabel="seguidas"/>
       <Card style={{marginBottom:T.space[5],textAlign:"center",padding:T.space[6]}}>
         <div style={{...label,marginBottom:T.space[2]}}>¿Quién fue campeón en</div>
         <div style={{fontSize:T.font["3xl"],fontWeight:700,color:T.text.primary,letterSpacing:-1,lineHeight:1}}>{correct.year}</div>
