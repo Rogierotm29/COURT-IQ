@@ -954,87 +954,138 @@ export default async function handler(req, res) {
       // ─── SETTLE BETS (auto-score after games finish) ───────
       case "settleBets": {
         const wp = await initWebPush();
-        const activeBets = await supabase("bets", { filters: `?status=eq.active&limit=100` });
-        if (!activeBets?.length) return res.json({ ok: true, settled: 0 });
-        // Fetch last 3 days of scoreboards to cover multi-day bets
+
+        // Un solo fetch a ESPN por fecha, reutilizado para liquidar y para cancelar
         const dates = [];
         for (let i = 0; i < 3; i++) {
           const d = new Date();
           d.setDate(d.getDate() - i);
           dates.push(d.toISOString().split("T")[0]);
         }
-        const finished = {};
-        const parseEspn = (data) => {
-          (data.events || []).forEach((e) => {
-            const comp = e.competitions?.[0];
-            if (!comp?.status?.type?.completed) return;
-            const home = comp.competitors?.find((c) => c.homeAway === "home");
-            const away = comp.competitors?.find((c) => c.homeAway === "away");
-            const winner = parseInt(home?.score || 0) > parseInt(away?.score || 0) ? fix(home?.team?.abbreviation) : fix(away?.team?.abbreviation);
-            finished[e.id] = winner;
-          });
-        };
-        await Promise.all(dates.map(async (date) => {
+        const finished = {};   // gameId -> abreviatura del ganador
+        const gameStates = {}; // gameId -> "pre" | "in" | "post"
+
+        await Promise.allSettled(dates.map(async (date) => {
           try {
-            const dateStr = date.replace(/-/g, "");
-            const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${dateStr}`);
-            if (r.ok) parseEspn(await r.json());
+            const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${date.replace(/-/g, "")}`, { signal: AbortSignal.timeout(6000) });
+            if (!r.ok) throw new Error(`ESPN ${r.status}`);
+            const data = await r.json();
+            (data.events || []).forEach((e) => {
+              const comp = e.competitions?.[0];
+              gameStates[e.id] = comp?.status?.type?.state || "pre";
+              if (!comp?.status?.type?.completed) return;
+              const home = comp.competitors?.find((c) => c.homeAway === "home");
+              const away = comp.competitors?.find((c) => c.homeAway === "away");
+              finished[e.id] = parseInt(home?.score || 0) > parseInt(away?.score || 0)
+                ? fix(home?.team?.abbreviation)
+                : fix(away?.team?.abbreviation);
+            });
           } catch (e) { console.warn(`settleBets: ESPN falló para ${date}:`, e.message); }
         }));
+
+        /* ─── LIQUIDAR APUESTAS ACTIVAS ─── */
+        const activeBets = await supabase("bets", { filters: `?status=eq.active&limit=100` });
+        const toSettle = (activeBets || []).filter(b => finished[b.game_id]);
         let settled = 0;
-        for (const bet of activeBets) {
-          const winner = finished[bet.game_id];
-          if (!winner) continue;
-          const winnerId = bet.picked_team === winner ? bet.requester_id : bet.opponent_id;
-          const winRows = await supabase("coin_balances", { filters: `?user_id=eq.${winnerId}&group_id=eq.${bet.group_id}&limit=1` });
-          if (winRows?.length) {
-            await supabase(`coin_balances?user_id=eq.${winnerId}&group_id=eq.${bet.group_id}`, {
-              method: "PATCH", body: { balance: winRows[0].balance + bet.amount * 2 },
-            });
+
+        if (toSettle.length) {
+          // Un solo query para todos los saldos involucrados, en vez de uno por apuesta
+          const winnerIds = [...new Set(toSettle.map(b =>
+            b.picked_team === finished[b.game_id] ? b.requester_id : b.opponent_id
+          ).filter(Boolean))];
+          const groupIds = [...new Set(toSettle.map(b => b.group_id))];
+
+          const balances = winnerIds.length
+            ? await supabase("coin_balances", { filters: `?user_id=in.(${winnerIds.join(",")})&group_id=in.(${groupIds.join(",")})&select=id,user_id,group_id,balance` })
+            : [];
+          const balMap = {};
+          for (const b of (balances || [])) balMap[`${b.user_id}|${b.group_id}`] = b;
+
+          const subs = winnerIds.length
+            ? await supabase("push_subscriptions", { filters: `?user_id=in.(${winnerIds.join(",")})&select=user_id,endpoint,p256dh,auth` })
+            : [];
+          const subMap = {};
+          for (const s of (subs || [])) subMap[s.user_id] = s;
+
+          // Acumulamos por si un usuario gana varias apuestas del mismo grupo
+          const credits = {};
+          for (const bet of toSettle) {
+            const winner = finished[bet.game_id];
+            const winnerId = bet.picked_team === winner ? bet.requester_id : bet.opponent_id;
+            if (!winnerId) continue;
+            const key = `${winnerId}|${bet.group_id}`;
+            credits[key] = (credits[key] || 0) + bet.amount * 2;
           }
-          await supabase(`bets?id=eq.${bet.id}`, { method: "PATCH", body: { status: "settled", winner_id: winnerId, actual_winner: winner } });
-          grantAchievement(winnerId, "bet_won");
-          // Push notification al ganador
+
+          const results = await Promise.allSettled([
+            // Un PATCH por saldo, con el total acumulado
+            ...Object.entries(credits).map(([key, amount]) => {
+              const row = balMap[key];
+              if (!row) return Promise.resolve();
+              return supabase(`coin_balances?id=eq.${row.id}`, { method: "PATCH", body: { balance: row.balance + amount } });
+            }),
+            // Un PATCH por apuesta
+            ...toSettle.map(bet => {
+              const winner = finished[bet.game_id];
+              const winnerId = bet.picked_team === winner ? bet.requester_id : bet.opponent_id;
+              return supabase(`bets?id=eq.${bet.id}`, { method: "PATCH", body: { status: "settled", winner_id: winnerId, actual_winner: winner } });
+            }),
+          ]);
+          settled = results.filter(r => r.status === "fulfilled").length - Object.keys(credits).length;
+          const failed = results.filter(r => r.status === "rejected");
+          if (failed.length) console.warn(`settleBets: ${failed.length} operaciones fallaron`, failed[0].reason?.message);
+
+          // Logros y notificaciones — no bloquean la liquidación
+          for (const bet of toSettle) {
+            const winner = finished[bet.game_id];
+            const winnerId = bet.picked_team === winner ? bet.requester_id : bet.opponent_id;
+            if (winnerId) grantAchievement(winnerId, "bet_won");
+          }
           if (wp) {
-            const winSub = await supabase("push_subscriptions", { filters: `?user_id=eq.${winnerId}&limit=1` });
-            if (winSub?.length) await sendPush(wp, winSub[0], { title: "🏆 ¡Ganaste la apuesta!", body: `${winner} ganó — ¡cobras 🪙${bet.amount * 2} monedas!`, tag: `bet-won-${bet.id}`, url: "/?tab=apuestas" });
+            await Promise.allSettled(toSettle.map(bet => {
+              const winner = finished[bet.game_id];
+              const winnerId = bet.picked_team === winner ? bet.requester_id : bet.opponent_id;
+              const sub = subMap[winnerId];
+              if (!sub) return Promise.resolve();
+              return sendPush(wp, sub, { title: "Ganaste la apuesta", body: `${winner} ganó — cobras ${bet.amount * 2} monedas`, tag: `bet-won-${bet.id}`, url: "/?tab=apuestas" });
+            }));
           }
-          settled++;
         }
-        // ─── Auto-cancel open/pending bets whose game already started ───
+
+        /* ─── CANCELAR APUESTAS ABIERTAS DE PARTIDOS QUE YA EMPEZARON ─── */
         const openBets = await supabase("bets", { filters: `?status=in.(open,pending)&limit=200` });
+        const toCancel = (openBets || []).filter(b => {
+          const st = gameStates[b.game_id];
+          return st && st !== "pre";
+        });
         let cancelled = 0;
-        if (openBets?.length) {
-          // Build set of game ids that are no longer in "pre" state (already started or ended)
-          const gameStates = {};
-          await Promise.all(dates.map(async (date) => {
-            try {
-              const dateStr = date.replace(/-/g, "");
-              const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${dateStr}`);
-              if (r.ok) {
-                const data = await r.json();
-                (data.events || []).forEach(e => {
-                  const state = e.competitions?.[0]?.status?.type?.state;
-                  gameStates[e.id] = state || "pre";
-                });
-              }
-            } catch (e) { console.warn(`settleBets: no se pudo leer el estado de ${date}:`, e.message); }
-          }));
-          for (const bet of openBets) {
-            const state = gameStates[bet.game_id];
-            if (state && state !== "pre") {
-              // Devolver monedas al creador — tanto "open" como "pending" descontaron al crearse
-              const bal = await supabase("coin_balances", { filters: `?user_id=eq.${bet.requester_id}&group_id=eq.${bet.group_id}&limit=1` });
-              if (bal?.length) {
-                await supabase(`coin_balances?user_id=eq.${bet.requester_id}&group_id=eq.${bet.group_id}`, {
-                  method: "PATCH", body: { balance: bal[0].balance + bet.amount }
-                });
-              }
-              await supabase(`bets?id=eq.${bet.id}`, { method: "PATCH", body: { status: "cancelled" } });
-              cancelled++;
-            }
+
+        if (toCancel.length) {
+          const requesterIds = [...new Set(toCancel.map(b => b.requester_id))];
+          const groupIds = [...new Set(toCancel.map(b => b.group_id))];
+          const balances = await supabase("coin_balances", { filters: `?user_id=in.(${requesterIds.join(",")})&group_id=in.(${groupIds.join(",")})&select=id,user_id,group_id,balance` });
+          const balMap = {};
+          for (const b of (balances || [])) balMap[`${b.user_id}|${b.group_id}`] = b;
+
+          const refunds = {};
+          for (const bet of toCancel) {
+            const key = `${bet.requester_id}|${bet.group_id}`;
+            refunds[key] = (refunds[key] || 0) + bet.amount;
           }
+
+          const results = await Promise.allSettled([
+            ...Object.entries(refunds).map(([key, amount]) => {
+              const row = balMap[key];
+              if (!row) return Promise.resolve();
+              return supabase(`coin_balances?id=eq.${row.id}`, { method: "PATCH", body: { balance: row.balance + amount } });
+            }),
+            ...toCancel.map(bet => supabase(`bets?id=eq.${bet.id}`, { method: "PATCH", body: { status: "cancelled" } })),
+          ]);
+          cancelled = toCancel.length;
+          const failed = results.filter(r => r.status === "rejected");
+          if (failed.length) console.warn(`settleBets: ${failed.length} cancelaciones fallaron`, failed[0].reason?.message);
         }
+
         return res.json({ ok: true, settled, cancelled });
       }
 
