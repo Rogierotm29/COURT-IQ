@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { C } from "../theme";
+import { T } from "../theme";
 import { ESPN_ID } from "../data/teams";
 import { Card, ST, Spin, Tag } from "./ui";
 import { LiveBadge } from "./feedback";
@@ -8,96 +8,113 @@ import { getSeason } from "../utils/season";
 
 /* ═══ TEAMS TAB ═══ */
 export const TeamsTab=({standings,live})=>{
-  const [conf,setConf]=useState("ALL");
-  const [sel,setSel]=useState(standings.find(t=>t.abbr==="DET")||standings[0]);
-  const [gridOpen,setGridOpen]=useState(true);
+  const [sel,setSel]=useState(null);
   const [liveRoster,setLiveRoster]=useState(null);
   const [rosterLoading,setRosterLoading]=useState(false);
-  const visible=standings.filter(t=>conf==="ALL"||t.conf===conf).sort((a,b)=>b.w-a.w);
 
-  useEffect(()=>{if(sel) loadLiveRoster(sel.abbr);},[]);
-  const east=standings.filter(t=>t.conf==="E").sort((a,b)=>b.w-a.w);
-  const west=standings.filter(t=>t.conf==="W").sort((a,b)=>b.w-a.w);
+  const east=standings.filter(t=>t.conf==="E").sort((a,b)=>b.pct-a.pct);
+  const west=standings.filter(t=>t.conf==="W").sort((a,b)=>b.pct-a.pct);
 
   const loadLiveRoster=async(abbr)=>{
     const id=ESPN_ID[abbr];
-    if(!id) return;
+    if(!id){setLiveRoster(null);return;}
     setRosterLoading(true);setLiveRoster(null);
     try{
       const r=await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/${id}/roster`,{signal:AbortSignal.timeout(5000)});
-      if(!r.ok) throw new Error();
+      if(!r.ok) throw new Error(`ESPN ${r.status}`);
       const d=await r.json();
       const players=(d.athletes||[]).flatMap(g=>g.items||[g]).map(a=>`${a.firstName} ${a.lastName}`).filter(Boolean);
       if(players.length>0) setLiveRoster(players);
-    }catch(_){}
+    }catch(e){
+      console.warn("No se pudo cargar el roster de",abbr,e.message);
+    }
     setRosterLoading(false);
   };
 
-  const pickTeam=(t)=>{setSel(t);setGridOpen(false);loadLiveRoster(t.abbr);};
+  const toggleTeam=(t)=>{
+    if(sel?.id===t.id){setSel(null);setLiveRoster(null);return;}
+    setSel(t);
+    loadLiveRoster(t.abbr);
+  };
+
+  const statLabel={fontSize:T.font.xs,color:T.text.tertiary};
+
+  const Row=({t,i,isLast})=>{
+    const open=sel?.id===t.id;
+    const roster=open?(liveRoster||t.players||[]):[];
+    // 1-6 playoffs directo · 7-10 play-in
+    const seedColor=i<6?T.accent.base:i<10?T.text.secondary:T.text.tertiary;
+    return <div>
+      <div
+        onClick={()=>toggleTeam(t)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();toggleTeam(t);}}}
+        style={{
+          display:"flex", alignItems:"center", gap:T.space[3],
+          padding:`${T.space[3]}px ${T.space[2]}px`, cursor:"pointer",
+          background:open?T.surface[2]:"transparent",
+          borderRadius:open?`${T.radius.sm}px ${T.radius.sm}px 0 0`:T.radius.sm,
+          borderBottom:isLast&&!open?"none":`1px solid ${T.border.subtle}`,
+        }}
+      >
+        <span style={{fontSize:T.font.xs,width:18,color:seedColor,fontWeight:600,flexShrink:0}}>{i+1}</span>
+        {logo(t.abbr,22)}
+        <span style={{flex:1,fontSize:T.font.sm,fontWeight:600,color:T.text.primary,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.name}</span>
+        <span style={{fontSize:T.font.sm,color:T.text.secondary,width:52,textAlign:"right",flexShrink:0}}>{t.w}–{t.l}</span>
+        <span style={{fontSize:T.font.xs,color:T.text.tertiary,width:44,textAlign:"right",flexShrink:0}}>{(t.pct*100).toFixed(0)}%</span>
+        <span style={{width:36,textAlign:"right",flexShrink:0}}>
+          <Tag c={t.streak?.startsWith("W")?T.success.base:T.danger.base}>{t.streak}</Tag>
+        </span>
+      </div>
+
+      {open&&<div style={{background:T.surface[2],borderRadius:`0 0 ${T.radius.sm}px ${T.radius.sm}px`,padding:T.space[4],marginBottom:T.space[2],borderBottom:`1px solid ${T.border.subtle}`}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:T.space[3]}}>
+          <div style={{fontSize:T.font.xs,color:T.text.tertiary,textTransform:"uppercase",letterSpacing:1.2,fontWeight:600}}>Roster {getSeason()}</div>
+          {rosterLoading?<Spin s={12}/>:<span style={{fontSize:T.font.xs,color:T.text.tertiary}}>{liveRoster?"En vivo":"Caché"}</span>}
+        </div>
+        {rosterLoading
+          ?<div style={{padding:`${T.space[3]}px 0`,color:T.text.tertiary,fontSize:T.font.sm}}>Cargando roster…</div>
+          :roster.length===0
+            ?<div style={{padding:`${T.space[3]}px 0`,color:T.text.tertiary,fontSize:T.font.sm}}>Roster no disponible</div>
+            :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:`${T.space[1]}px ${T.space[4]}px`}}>
+              {roster.map((p,idx)=><div key={p} style={{display:"flex",alignItems:"center",gap:T.space[2],padding:`${T.space[1]}px 0`}}>
+                <span style={{fontSize:T.font.xs,color:T.text.disabled,width:18,flexShrink:0}}>{idx+1}</span>
+                <span style={{fontSize:T.font.sm,color:T.text.secondary}}>{p}</span>
+              </div>)}
+            </div>}
+      </div>}
+    </div>;
+  };
 
   return(<div className="fade-up">
-    <ST sub={`NBA ${getSeason()}`}>30 Equipos</ST>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:T.space[4]}}>
+      <ST sub={`NBA ${getSeason()}`} style={{marginBottom:0}}>Standings</ST>
+      <LiveBadge live={live.standings}/>
+    </div>
 
-    {/* Selector de equipo — colapsable */}
-    {!gridOpen&&sel
-      ?<Card style={{marginBottom:14,background:`linear-gradient(135deg,${sel.color}14,${C.card})`,borderColor:`${sel.color}55`,padding:"12px 16px"}}>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
-            {logo(sel.abbr,40)}
-            <div style={{flex:1}}>
-              <div style={{fontSize:18,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:sel.color}}>{sel.name}</div>
-              <div style={{fontSize:11,color:C.muted}}>{sel.conf==="E"?"Este":"Oeste"} · {sel.w}–{sel.l}</div>
-            </div>
-            <button className="btn" onClick={()=>setGridOpen(true)} style={{padding:"8px 14px",borderRadius:10,background:"#0a1018",border:`1px solid ${C.border}`,color:C.accent,fontSize:12,fontWeight:700}}>✏️ Cambiar</button>
+    <div style={{fontSize:T.font.sm,color:T.text.tertiary,marginBottom:T.space[4]}}>
+      Toca un equipo para ver su roster.
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:T.space[4]}}>
+      {[["Conferencia Este",east],["Conferencia Oeste",west]].map(([label,teams])=>
+        <Card key={label} style={{padding:T.space[4]}}>
+          <div style={{fontSize:T.font.xs,color:T.text.tertiary,textTransform:"uppercase",letterSpacing:1.2,fontWeight:600,marginBottom:T.space[3]}}>{label}</div>
+
+          {/* Encabezado de columnas */}
+          <div style={{display:"flex",alignItems:"center",gap:T.space[3],padding:`0 ${T.space[2]}px ${T.space[2]}px`,borderBottom:`1px solid ${T.border.base}`,...statLabel}}>
+            <span style={{width:18,flexShrink:0}}>#</span>
+            <span style={{width:22,flexShrink:0}}/>
+            <span style={{flex:1}}>Equipo</span>
+            <span style={{width:52,textAlign:"right",flexShrink:0}}>V–D</span>
+            <span style={{width:44,textAlign:"right",flexShrink:0}}>PCT</span>
+            <span style={{width:36,textAlign:"right",flexShrink:0}}>Racha</span>
           </div>
+
+          {teams.map((t,i)=><Row key={t.id} t={t} i={i} isLast={i===teams.length-1}/>)}
         </Card>
-      :<>
-        <div style={{display:"flex",gap:8,marginBottom:14}}>
-          {[["Todos","ALL"],["Este","E"],["Oeste","W"]].map(([l,v])=><button key={v} className="btn" onClick={()=>setConf(v)} style={{padding:"7px 16px",borderRadius:20,background:conf===v?C.accent:"#0d1117",border:`1px solid ${conf===v?C.accent:C.border}`,color:conf===v?"#07090f":C.dim,fontWeight:700,fontSize:12}}>{l}</button>)}
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(84px,1fr))",gap:7,marginBottom:sel?14:22}}>
-          {visible.map(t=><button key={t.id} className="btn" onClick={()=>pickTeam(t)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:"10px 6px",borderRadius:12,background:sel?.id===t.id?`${t.color}22`:"#0d1117",border:`2px solid ${sel?.id===t.id?t.color:C.border}`}}>
-            {logo(t.abbr,30)}<span style={{fontSize:10,fontWeight:800,color:sel?.id===t.id?t.color:C.dim}}>{t.abbr}</span><span style={{fontSize:9,color:C.muted}}>{t.w}–{t.l}</span>
-          </button>)}
-        </div>
-      </>}
-
-    {/* Info del equipo seleccionado */}
-    {sel&&<><Card style={{marginBottom:14,background:`linear-gradient(135deg,${sel.color}14,${C.card})`,borderColor:`${sel.color}44`}}>
-      <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
-        {logo(sel.abbr,56)}
-        <div><div style={{fontSize:22,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:sel.color}}>{sel.name}</div><div style={{fontSize:11,color:C.muted}}>{sel.conf==="E"?"Este":"Oeste"} · {sel.div}</div></div>
-        <div style={{marginLeft:"auto",display:"flex",gap:18,flexWrap:"wrap"}}>{[[sel.w,"V",C.text],[sel.l,"D","#ff6666"],[(sel.pct*100).toFixed(1)+"%","%","#00FF9D"]].map(([v,l,c])=><div key={l} style={{textAlign:"center"}}><div style={{fontSize:28,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:c}}>{v}</div><div style={{fontSize:9,color:C.muted}}>{l}</div></div>)}</div>
-      </div></Card>
-    <Card style={{marginBottom:28}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-        <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:2}}>Roster {getSeason()}</div>
-        {rosterLoading?<Spin s={12}/>:liveRoster?<span style={{fontSize:9,color:"#00FF9D"}}>🟢 Live</span>:<span style={{fontSize:9,color:C.muted}}>📦 Cache</span>}
-      </div>
-      {rosterLoading
-        ?<div style={{textAlign:"center",padding:"20px 0",color:C.dim,fontSize:12}}>Cargando roster...</div>
-        :<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
-          {(liveRoster||sel.players||[]).map((p,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0"}}>
-            <span style={{fontSize:9,fontWeight:800,color:sel.color,width:16}}>{i+1}</span>
-            <span style={{fontSize:12,fontWeight:600,color:C.text}}>{p}</span>
-          </div>)}
-        </div>
-      }
-    </Card>
-    </>}
-
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><ST sub={getSeason()}>Clasificación</ST><LiveBadge live={live.standings}/></div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:14}}>
-      {[["Este",east],["Oeste",west]].map(([label,teams])=><Card key={label}>
-        <div style={{fontSize:11,fontWeight:700,color:C.dim,marginBottom:12}}>{label}</div>
-        {teams.slice(0,10).map((t,i)=>{
-          const isSelected=sel?.id===t.id;
-          return<div key={t.id} onClick={()=>pickTeam(t)} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 6px",borderRadius:8,marginBottom:2,cursor:"pointer",background:isSelected?`${t.color}18`:"transparent",border:isSelected?`1px solid ${t.color}44`:"1px solid transparent",borderBottom:!isSelected&&i<9?`1px solid ${C.border}`:"none",transition:"background .15s"}}>
-            <span style={{fontSize:10,width:16,color:i<6?"#FFB800":i<8?"#00C2FF":C.muted,fontWeight:800}}>{i+1}</span>
-            {logo(t.abbr,22)}<span style={{flex:1,fontSize:12,fontWeight:isSelected?800:600,color:isSelected?t.color:C.text}}>{t.abbr}</span>
-            <span style={{fontSize:11,color:C.dim,width:44}}>{t.w}–{t.l}</span>
-            <Tag c={t.streak?.startsWith("W")?"#00FF9D":"#ff6666"}>{t.streak}</Tag>
-          </div>;
-        })}</Card>)}
+      )}
     </div>
   </div>);
 };
