@@ -10,6 +10,7 @@ import { autoSubscribePush } from "../utils/push";
 import { SHOP_ITEMS, ACHIEVEMENT_DEFS } from "../data/shop";
 import { getSeason } from "../utils/season";
 import { getToday } from "../utils/date";
+import { store } from "../utils/storage";
 
 export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,makePick,selGroup,setSelGroup,initSubTab,standalone})=>{
   const {user,save}=userCtx;
@@ -42,7 +43,7 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
   const [shields,setShields]=useState(0);
   const [parlay,setParlay]=useState(null);const [parlaySelections,setParlaySelections]=useState({});const [parlayLoading,setParlayLoading]=useState(false);
   const [shopItems,setShopItems]=useState([]);
-  const [myEquipped,setMyEquipped]=useState(()=>JSON.parse(localStorage.getItem("courtiq_equipped_"+(typeof user!=="undefined"?user?.id:""))||"{}"));
+  const [myEquipped,setMyEquipped]=useState(()=>store.getJSON("courtiq_equipped_"+(user?.id||""),{}));
   const [lockedPicks,setLockedPicks]=useState(false);
   const [authMode,setAuthMode]=useState("auto");
   const [recCode,setRecCode]=useState("");
@@ -85,8 +86,8 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
     pickemAPI("myGroups",{params:{userId:user.id}}).then(d=>{
       if(d.ok&&d.groups?.length) setGroups(d.groups);
     });
-    const invite=localStorage.getItem("courtiq_invite_code");
-    if(invite){localStorage.removeItem("courtiq_invite_code");setJoinCode(invite);setPanel("join");}
+    const invite=store.get("courtiq_invite_code");
+    if(invite){store.remove("courtiq_invite_code");setJoinCode(invite);setPanel("join");}
   },[user]);
 
   useEffect(()=>{
@@ -100,8 +101,8 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
 
   useEffect(()=>{
     if(selGroup){
-      localStorage.setItem("courtiq_lastgroup",selGroup.id);
-      localStorage.setItem("courtiq_lastgroup_obj",JSON.stringify(selGroup));
+      store.set("courtiq_lastgroup",selGroup.id);
+      store.setJSON("courtiq_lastgroup_obj",selGroup);
       window.dispatchEvent(new CustomEvent("courtiq_group_changed",{detail:selGroup}));
     }
   },[selGroup]);
@@ -109,7 +110,7 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
   useEffect(()=>{
     if(!user||!selGroup) return;
     const today=getToday();
-    setLockedPicks(!!localStorage.getItem(`courtiq_locked_${selGroup.id}_${today}`));
+    setLockedPicks(!!store.get(`courtiq_locked_${selGroup.id}_${today}`));
     pickemAPI("myPicks",{params:{userId:user.id,groupId:selGroup.id,date:today}}).then(d=>{
       if(d.ok){const pts={};(d.picks||[]).forEach(p=>{if(p.points!=null)pts[p.game_id]=p.points;});setPicksPoints(pts);}
     });
@@ -153,13 +154,13 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
     if(!user) return;
     pickemAPI("getShields",{params:{userId:user.id}}).then(d=>{if(d.ok)setShields(d.shields||0);});
     pickemAPI("myShopItems",{params:{userId:user.id}}).then(d=>{if(d.ok)setShopItems(d.items||[]);});
-    pickemAPI("checkAchievements",{params:{userId:user.id,groupId:localStorage.getItem("courtiq_lastgroup")||""}}).catch(()=>{});
+    pickemAPI("checkAchievements",{params:{userId:user.id,groupId:store.get("courtiq_lastgroup")||""}}).catch(()=>{});
   },[user]);
 
   useEffect(()=>{
     if(!user) return;
     const handler=()=>pickemAPI("myShopItems",{params:{userId:user.id}}).then(d=>{if(d.ok)setShopItems(d.items||[]);});
-    const eqHandler=()=>setMyEquipped(JSON.parse(localStorage.getItem("courtiq_equipped_"+user.id)||"{}"));
+    const eqHandler=()=>setMyEquipped(store.getJSON("courtiq_equipped_"+user.id,{}));
     window.addEventListener("courtiq_items_purchased",handler);
     window.addEventListener("courtiq_equipped_changed",eqHandler);
     return()=>{window.removeEventListener("courtiq_items_purchased",handler);window.removeEventListener("courtiq_equipped_changed",eqHandler);};

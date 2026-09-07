@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { T } from "../theme";
 import { Spin } from "./ui";
 import { pickemAPI } from "../api/pickem";
+import { store } from "../utils/storage";
 
 /* ═══ FLOATING CHAT ═══ */
 export const FloatingChat=({userCtx})=>{
@@ -18,8 +19,8 @@ export const FloatingChat=({userCtx})=>{
 
   useEffect(()=>{openRef.current=open;},[open]);
 
-  const getLastRead=(gid)=>localStorage.getItem(`courtiq_chat_read_${gid}`)||"0";
-  const markRead=(gid)=>localStorage.setItem(`courtiq_chat_read_${gid}`,new Date().toISOString());
+  const getLastRead=(gid)=>store.get(`courtiq_chat_read_${gid}`,"0");
+  const markRead=(gid)=>store.set(`courtiq_chat_read_${gid}`,new Date().toISOString());
 
   const loadMsgs=(g,markAsRead=false)=>{
     pickemAPI("getChat",{params:{groupId:g.id}}).then(r=>{
@@ -47,7 +48,7 @@ export const FloatingChat=({userCtx})=>{
     if(!user) return;
     const params=new URLSearchParams(window.location.search);
     const chatParam=params.get("chat");
-    const gid=chatParam||localStorage.getItem("courtiq_lastgroup");
+    const gid=chatParam||store.get("courtiq_lastgroup");
     if(!gid) return;
     if(chatParam){
       const url=new URL(window.location.href);

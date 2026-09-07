@@ -7,7 +7,7 @@ import { calcWinPct, dynPts, dynBase } from "../utils/scoring";
 import { C, T, APP_URL } from "../theme";
 import { getSeason } from "../utils/season";
 import { getToday } from "../utils/date";
-
+import { store } from "../utils/storage";
 /* ═══ HOME TAB ═══ */
 export const HomeTab=({games,live,userCtx,standings,picks,confidence,setConfidence,makePick,selGroup,goToBets,goToGroup})=>{
   const {user}=userCtx||{};
@@ -30,8 +30,8 @@ export const HomeTab=({games,live,userCtx,standings,picks,confidence,setConfiden
 
   const triggerCelebration=(correctPts,str,gameId)=>{
     const cKey=`courtiq_celebrated_${user?.id}_${gameId}`;
-    if(localStorage.getItem(cKey)) return;
-    localStorage.setItem(cKey,"1");
+    if(store.get(cKey)) return;
+    store.set(cKey,"1");
     setShowConfetti(true);
     setResultBanner({show:true,correct:true,pts:correctPts,streak:str});
     setTimeout(()=>setShowConfetti(false),3500);
@@ -45,7 +45,7 @@ export const HomeTab=({games,live,userCtx,standings,picks,confidence,setConfiden
   useEffect(()=>{
     if(!user||!selGroup) return;
     const today=getToday();
-    setLockedPicks(!!localStorage.getItem(`courtiq_locked_${selGroup.id}_${today}`));
+    setLockedPicks(!!store.get(`courtiq_locked_${selGroup.id}_${today}`));
 
     pickemAPI("myPicks",{params:{userId:user.id,groupId:selGroup.id,date:today}}).then(r=>{
       if(!r.ok) return;
@@ -54,9 +54,9 @@ export const HomeTab=({games,live,userCtx,standings,picks,confidence,setConfiden
       setPicksPoints(pts);
       const correctPicks=(r.picks||[]).filter(p=>p.correct&&p.points>0);
       if(correctPicks.length>0){
-        const yaVistos=correctPicks.every(p=>localStorage.getItem(`courtiq_celebrated_${user.id}_${p.game_id}`));
+        const yaVistos=correctPicks.every(p=>store.get(`courtiq_celebrated_${user.id}_${p.game_id}`));
         if(!yaVistos){
-          correctPicks.forEach(p=>localStorage.setItem(`courtiq_celebrated_${user.id}_${p.game_id}`,"1"));
+          correctPicks.forEach(p=>store.set(`courtiq_celebrated_${user.id}_${p.game_id}`,"1"));
           const totalPts=correctPicks.reduce((s,p)=>s+(p.points||0),0);
           setShowConfetti(true);
           setResultBanner({show:true,correct:true,pts:totalPts,streak:0});
@@ -105,7 +105,7 @@ export const HomeTab=({games,live,userCtx,standings,picks,confidence,setConfiden
 
   const lockAllPicks=()=>{
     if(!selGroup) return;
-    localStorage.setItem(`courtiq_locked_${selGroup.id}_${getToday()}`,"1");
+    store.set(`courtiq_locked_${selGroup.id}_${getToday()}`,"1");
     setLockedPicks(true);
     setExpandedCard(null);
   };
@@ -314,7 +314,7 @@ export const HomeTab=({games,live,userCtx,standings,picks,confidence,setConfiden
           {gp.length===0
             ?<div style={{textAlign:"center",padding:`${T.space[2]}px 0`,color:T.text.tertiary,fontSize:T.font.sm}}>Nadie hizo pick aún</div>
             :<div style={{display:"flex",flexWrap:"wrap",gap:T.space[2]}}>
-                {gp.map((p,i)=><div key={p.id} style={{display:"flex",alignItems:"center",gap:T.space[1],background:T.surface[3],border:`1px solid ${T.border.base}`,borderRadius:T.radius.full,padding:`${T.space[1]}px ${T.space[3]}px`}}>
+                {gp.map((p)=><div key={p.id} style={{display:"flex",alignItems:"center",gap:T.space[1],background:T.surface[3],border:`1px solid ${T.border.base}`,borderRadius:T.radius.full,padding:`${T.space[1]}px ${T.space[3]}px`}}>
                   <span style={{fontSize:T.font.sm}}>{p.users?.avatar_emoji||"🏀"}</span>
                   <span style={{fontSize:T.font.xs,color:T.text.secondary,fontWeight:600}}>{p.users?.name||"?"}</span>
                   {logo(p.picked_team,14)}

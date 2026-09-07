@@ -18,6 +18,7 @@ import { OUTab } from "./components/OUTab";
 import { FloatingChat } from "./components/FloatingChat";
 import { Onboarding } from "./components/Onboarding";
 import { pickemAPI, onApiHealthChange } from "./api/pickem";
+import { store } from "./utils/storage";
 
 /* ═══ FALLBACK DATA ═══ */
 const FB_ST=[
@@ -110,11 +111,9 @@ async function loadPlayers() {
 
 /* ═══ USER CONTEXT (localStorage) ═══ */
 function useUser() {
-  const [user, setUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("courtiq_user")); } catch { return null; }
-  });
-  const save = (u) => { setUser(u); localStorage.setItem("courtiq_user", JSON.stringify(u)); };
-  const logout = () => { setUser(null); localStorage.removeItem("courtiq_user"); };
+  const [user, setUser] = useState(() => store.getJSON("courtiq_user", null));
+  const save = (u) => { setUser(u); store.set("courtiq_user", JSON.stringify(u)); };
+  const logout = () => { setUser(null); store.remove("courtiq_user"); };
   return { user, save, logout };
 }
 
@@ -149,7 +148,7 @@ export default function App(){
   const [lastUpd,setLastUpd]=useState(null);
   const [installPrompt,setInstallPrompt]=useState(null);
   const [isOffline,setIsOffline]=useState(!navigator.onLine);
-  const [showOnboarding,setShowOnboarding]=useState(()=>!localStorage.getItem("courtiq_onboarded"));
+  const [showOnboarding,setShowOnboarding]=useState(()=>!store.get("courtiq_onboarded"));
   const userCtx=useUser();
   const [picks,setPicks]=useState({});
   const [confidence,setConfidence]=useState({});
@@ -193,7 +192,7 @@ export default function App(){
 
   useEffect(()=>{
     if(!userCtx.user) return;
-    const savedGid=localStorage.getItem("courtiq_lastgroup");
+    const savedGid=store.get("courtiq_lastgroup");
     pickemAPI("myGroups",{params:{userId:userCtx.user.id}}).then(d=>{
       if(d.ok&&d.groups?.length){
         setGroups(d.groups);
@@ -243,7 +242,7 @@ export default function App(){
     const joinCode=params.get("join");
     const url=new URL(window.location.href);
     if(joinCode){
-      localStorage.setItem("courtiq_invite_code",joinCode.toUpperCase());
+      store.set("courtiq_invite_code",joinCode.toUpperCase());
       setTab("pickem");
       url.searchParams.delete("join");
       window.history.replaceState({},"",url.toString());
@@ -260,7 +259,7 @@ export default function App(){
 
   return(<div style={{minHeight:"100vh",background:T.surface[0],fontFamily:"'Outfit','Segoe UI',sans-serif",color:T.text.primary}}>
     <GS/>
-    {showOnboarding&&<Onboarding onDone={()=>{localStorage.setItem("courtiq_onboarded","1");setShowOnboarding(false);}}/>}
+    {showOnboarding&&<Onboarding onDone={()=>{store.set("courtiq_onboarded","1");setShowOnboarding(false);}}/>}
 
     {/* ─── HEADER ─── */}
     <div style={{background:`${T.surface[0]}ee`,borderBottom:`1px solid ${T.border.subtle}`,padding:`${T.space[3]}px ${T.space[5]}px`,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100,backdropFilter:"blur(12px)"}}>
