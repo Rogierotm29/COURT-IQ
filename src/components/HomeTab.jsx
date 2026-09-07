@@ -75,7 +75,7 @@ export const HomeTab=({games,live,userCtx,standings,picks,confidence,setConfiden
   // Recargar picks del grupo cuando cambia el estado de los juegos
   useEffect(()=>{
     if(!user||!selGroup) return;
-    pickemAPI("groupPicks",{params:{groupId:selGroup.id}}).then(r=>{if(r.ok)setGrpPicks(r.picks||[]);});
+    pickemAPI("groupPicks",{params:{groupId:selGroup.id,date:getToday()}}).then(r=>{if(r.ok)setGrpPicks(r.picks||[]);});
   },[user,selGroup,games.map(g=>g.status).join(",")]);
 
   useEffect(()=>{
@@ -295,7 +295,7 @@ export const HomeTab=({games,live,userCtx,standings,picks,confidence,setConfiden
           {[1,2,3].map(c=>{const pts=dynPts(pickedPct,c);return<button key={c} className="btn" onClick={()=>{setConfidence(cf=>({...cf,[g.id]:c}));makePick(g.id,picked,g.home,g.away,c,g);}} style={{padding:`${T.space[1]}px ${T.space[3]}px`,borderRadius:T.radius.sm,background:conf===c?T.accent.subtle:T.surface[2],border:`1px solid ${conf===c?T.accent.base:T.border.subtle}`,color:conf===c?T.accent.base:T.text.tertiary,fontSize:T.font.xs,fontWeight:600}}>{c===1?`+${pts}`:`±${pts}`}</button>;})}
         </div>}
 
-        {selGroup&&!canPick&&gp.length>0&&<div style={{marginTop:T.space[3],padding:`${T.space[2]}px ${T.space[3]}px`,background:T.surface[2],borderRadius:T.radius.sm}}>
+        {selGroup&&gp.length>0&&<div style={{marginTop:T.space[3],padding:`${T.space[2]}px ${T.space[3]}px`,background:T.surface[2],borderRadius:T.radius.sm}}>
           <div style={{display:"flex",height:4,borderRadius:2,overflow:"hidden",marginBottom:T.space[2]}}>
             <div style={{flex:forAway.length||0.01,background:T.accent.base}}/><div style={{flex:forHome.length||0.01,background:T.border.strong}}/>
           </div>

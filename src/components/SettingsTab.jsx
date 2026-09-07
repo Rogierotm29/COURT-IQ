@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { C } from "../theme";
-import { Card, ST, Spin } from "./ui";
+import { T } from "../theme";
+import { Card, ST, Spin, Tag } from "./ui";
 import { SHOP_ITEMS, ACHIEVEMENT_DEFS } from "../data/shop";
 import { pickemAPI } from "../api/pickem";
 import { getNameColor, getNamePrefix, getBorderColor } from "../utils/cosmetics";
@@ -9,54 +9,65 @@ import { isIOS, autoSubscribePush } from "../utils/push";
 /* ═══ SETTINGS TAB ═══ */
 const EMOJI_OPTS=["🏀","🏆","🔥","⭐","💎","👑","🦁","🐺","🦅","🐯","💪","🎯","🚀","✨","🌟","🎮","🃏","🥇","🎖️","🏅","🧠","💫","⚡","🎪","🦎","🐻","🏟️","🔮","🎲","🌊"];
 
+const NOTIF_OPTS=[
+  ["picks_reminder","Recordatorio de picks","30 minutos antes del primer partido"],
+  ["win_notify","Cuando aciertes","Aviso por cada predicción correcta"],
+  ["loss_notify","Cuando falles","Aviso cuando un pick no salga"],
+  ["daily_summary","Resumen del día","Precisión y puntos al cerrar la jornada"],
+];
+
 export const SettingsTab=({userCtx,installPrompt,onInstalled})=>{
   const {user,logout,save}=userCtx||{};
   const [showEmojiPicker,setShowEmojiPicker]=useState(false);
   const [notifGranted,setNotifGranted]=useState(typeof Notification!=="undefined"&&Notification.permission==="granted");
   const [notifPrefs,setNotifPrefs]=useState({picks_reminder:true,win_notify:true,loss_notify:true,daily_summary:true});
   const [notifLoading,setNotifLoading]=useState(false);
-  const [msg,setMsg]=useState("");
+  const [msg,setMsg]=useState(null);              // {text, kind}
   const [achievements,setAchievements]=useState([]);
   const [showDeleteConfirm,setShowDeleteConfirm]=useState(false);
   const [deleteLoading,setDeleteLoading]=useState(false);
   const [emailInput,setEmailInput]=useState("");
   const [emailLoading,setEmailLoading]=useState(false);
-  const [emailMsg,setEmailMsg]=useState("");
+  const [emailMsg,setEmailMsg]=useState(null);
   const [myStats,setMyStats]=useState(null);
   const [myShopItems,setMyShopItems]=useState([]);
-  const [myEquippedSettings,setMyEquippedSettings]=useState(()=>JSON.parse(localStorage.getItem("courtiq_equipped_"+(user?.id||""))||"{}"));
+  const [myEquipped,setMyEquipped]=useState({});
+
+  const readEquipped=(uid)=>{
+    try{ return JSON.parse(localStorage.getItem("courtiq_equipped_"+uid)||"{}"); }
+    catch(e){ console.warn("No se pudieron leer los items equipados:",e.message); return {}; }
+  };
 
   useEffect(()=>{
     if(!user) return;
     pickemAPI("getNotifPrefs",{params:{userId:user.id}}).then(d=>{if(d.ok)setNotifPrefs(d.prefs);});
     pickemAPI("getAchievements",{params:{userId:user.id}}).then(d=>{if(d.ok)setAchievements(d.achievements||[]);});
     pickemAPI("userProfile",{params:{userId:user.id,targetId:user.id}}).then(d=>{if(d.ok){setMyStats(d.stats);setMyShopItems(d.shopItems||[]);}});
-    setMyEquippedSettings(JSON.parse(localStorage.getItem("courtiq_equipped_"+user.id)||"{}"));
-    // Pre-fill email from stored user
+    setMyEquipped(readEquipped(user.id));
     if(user.email) setEmailInput(user.email);
   },[user]);
 
+  const flash=(text,kind="ok")=>{setMsg({text,kind});setTimeout(()=>setMsg(null),4500);};
+
   const saveEmail=async()=>{
-    setEmailLoading(true);setEmailMsg("");
+    setEmailLoading(true);setEmailMsg(null);
     const d=await pickemAPI("updateEmail",{body:{userId:user.id,email:emailInput.trim()}});
-    if(d.ok){setEmailMsg("✅ Correo guardado");save({...user,email:emailInput.trim()||undefined});}
-    else setEmailMsg(d.error||"Error");
+    if(d.ok){setEmailMsg({text:"Correo guardado",kind:"ok"});save({...user,email:emailInput.trim()||undefined});}
+    else setEmailMsg({text:d.error||"No se pudo guardar",kind:"error"});
     setEmailLoading(false);
-    setTimeout(()=>setEmailMsg(""),4000);
+    setTimeout(()=>setEmailMsg(null),4000);
   };
 
   const subscribePush=async()=>{
-    setNotifLoading(true);setMsg("");
+    setNotifLoading(true);setMsg(null);
     try{
       await autoSubscribePush(user.id);
       setNotifGranted(true);
-      setMsg("✅ ¡Notificaciones activadas correctamente!");
+      flash("Notificaciones activadas");
     }catch(e){
       if(e.message==="iOS_NOT_INSTALLED"){
-        setMsg("📲 En iPhone debes instalar la app primero: toca Compartir → 'Agregar a inicio'. Después activa las notificaciones.");
-      } else {
-        setMsg("❌ "+e.message);
-      }
+        flash("En iPhone debes instalar la app primero: Compartir → Agregar a inicio. Después activa las notificaciones.","error");
+      } else flash(e.message,"error");
     }
     setNotifLoading(false);
   };
@@ -69,8 +80,8 @@ export const SettingsTab=({userCtx,installPrompt,onInstalled})=>{
       if(sub) await sub.unsubscribe();
       await pickemAPI("unsubscribePush",{body:{userId:user.id}});
       setNotifGranted(false);
-      setMsg("🔕 Notificaciones desactivadas");
-    }catch(e){setMsg("Error: "+e.message);}
+      flash("Notificaciones desactivadas");
+    }catch(e){flash(e.message,"error");}
     setNotifLoading(false);
   };
 
@@ -89,124 +100,160 @@ export const SettingsTab=({userCtx,installPrompt,onInstalled})=>{
   const deleteAccount=async()=>{
     setDeleteLoading(true);
     const d=await pickemAPI("deleteAccount",{body:{userId:user.id}});
-    if(d.ok){
-      logout();
-      localStorage.clear();
-    } else {
-      setMsg("Error al eliminar: "+d.error);
-      setShowDeleteConfirm(false);
-    }
+    if(d.ok){logout();localStorage.clear();}
+    else {flash("No se pudo eliminar: "+d.error,"error");setShowDeleteConfirm(false);}
     setDeleteLoading(false);
   };
 
+  const label={fontSize:T.font.xs,color:T.text.tertiary,textTransform:"uppercase",letterSpacing:1.2,fontWeight:600};
+  const inputBase={background:T.surface[2],border:`1px solid ${T.border.base}`,borderRadius:T.radius.base,padding:`${T.space[3]}px ${T.space[4]}px`,color:T.text.primary,fontSize:T.font.sm,boxSizing:"border-box"};
+  const btnPrimary={background:T.accent.base,color:"#fff",borderRadius:T.radius.base,fontWeight:600};
+  const btnGhost={background:T.surface[2],border:`1px solid ${T.border.base}`,color:T.text.secondary,borderRadius:T.radius.base,fontWeight:600};
+
   if(!user) return(
     <div className="fade-up">
-      <Card style={{textAlign:"center",padding:"40px 20px"}}>
-        <div style={{fontSize:48,marginBottom:12}}>⚙️</div>
-        <div style={{fontSize:16,fontWeight:700,color:C.text,marginBottom:8}}>Inicia sesión primero</div>
-        <div style={{fontSize:12,color:C.dim}}>Ve a Grupos para crear tu perfil</div>
+      <ST sub="Cuenta">Configuración</ST>
+      <Card style={{textAlign:"center",padding:T.space[7]}}>
+        <div style={{fontSize:T.font.base,fontWeight:600,color:T.text.primary,marginBottom:T.space[2]}}>Inicia sesión primero</div>
+        <div style={{fontSize:T.font.sm,color:T.text.tertiary}}>Ve a Grupos para crear tu perfil</div>
       </Card>
     </div>
   );
 
-  const settingsNameClr=getNameColor(myShopItems,myEquippedSettings);
-  const settingsPrefix=getNamePrefix(myShopItems,myEquippedSettings);
-  const settingsBorder=getBorderColor(myShopItems,myEquippedSettings);
+  const nameClr=getNameColor(myShopItems,myEquipped);
+  const prefix=getNamePrefix(myShopItems,myEquipped);
+  const borderClr=getBorderColor(myShopItems,myEquipped);
 
   return(<div className="fade-up">
-    {/* Perfil */}
-    <ST sub="Cuenta">Mi Perfil</ST>
-    <Card style={{marginBottom:14,background:`linear-gradient(135deg,${C.accent}11,${C.card})`,borderColor:`${C.accent}33`}}>
-      <div style={{display:"flex",alignItems:"center",gap:14}}>
-        <button className="btn" onClick={()=>setShowEmojiPicker(p=>!p)} style={{width:58,height:58,borderRadius:"50%",background:`${C.accent}20`,border:`2px solid ${settingsBorder||( showEmojiPicker?C.accent:C.accent+"44")}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,flexShrink:0,boxShadow:settingsBorder?`0 0 10px ${settingsBorder}55`:undefined}} title="Cambiar avatar">{user.avatar_emoji||"🏀"}</button>
-        <div style={{flex:1}}>
-          <div style={{fontSize:20,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:settingsNameClr||C.text}}>{settingsPrefix}{user.name}</div>
-          <div style={{fontSize:10,color:C.muted,letterSpacing:1,marginBottom:4}}>Toca el emoji para cambiar avatar</div>
-          {myShopItems.length>0&&<div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+    {/* ─── PERFIL ─── */}
+    <ST sub="Cuenta">Mi perfil</ST>
+    <Card style={{marginBottom:T.space[4]}}>
+      <div style={{display:"flex",alignItems:"center",gap:T.space[4]}}>
+        <button className="btn" onClick={()=>setShowEmojiPicker(p=>!p)} title="Cambiar avatar" style={{
+          width:52, height:52, borderRadius:"50%", background:T.surface[2],
+          border:`1px solid ${borderClr||(showEmojiPicker?T.accent.base:T.border.base)}`,
+          display:"flex", alignItems:"center", justifyContent:"center",
+          fontSize:T.font.xl, flexShrink:0,
+          boxShadow:borderClr?`0 0 8px ${borderClr}55`:undefined,
+        }}>{user.avatar_emoji||"🏀"}</button>
+
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:T.font.lg,fontWeight:600,color:nameClr||T.text.primary}}>{prefix}{user.name}</div>
+          <div style={{fontSize:T.font.xs,color:T.text.tertiary,marginBottom:myShopItems.length?T.space[2]:0}}>Toca el avatar para cambiarlo</div>
+          {myShopItems.length>0&&<div style={{display:"flex",gap:T.space[1],flexWrap:"wrap"}}>
             {["title","color","border"].map(type=>{
-              const key=myEquippedSettings[type];
+              const key=myEquipped[type];
               const item=key?SHOP_ITEMS.find(i=>i.key===key):null;
-              return item?<span key={type} style={{fontSize:10,background:"#0d1117",border:`1px solid ${C.border}`,borderRadius:12,padding:"2px 7px",color:C.dim}}>{item.emoji} {item.name.replace("Título ","").replace("Nombre ","").replace("Marco ","")}</span>:null;
+              return item?<Tag key={type} c={T.text.tertiary}>{item.name.replace("Título ","").replace("Nombre ","").replace("Marco ","")}</Tag>:null;
             })}
           </div>}
         </div>
-        <button className="btn" onClick={logout} style={{padding:"8px 16px",borderRadius:8,background:"#ff444422",border:"1px solid #ff444444",color:"#ff6666",fontSize:12,fontWeight:700}}>Salir</button>
+
+        <button className="btn" onClick={logout} style={{...btnGhost,padding:`${T.space[2]}px ${T.space[4]}px`,fontSize:T.font.sm,flexShrink:0}}>Salir</button>
       </div>
-      {showEmojiPicker&&<div style={{marginTop:14,paddingTop:12,borderTop:`1px solid ${C.border}`}}>
-        <div style={{fontSize:10,color:C.muted,marginBottom:8,letterSpacing:1}}>ELIGE TU AVATAR</div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-          {EMOJI_OPTS.map(e=><button key={e} className="btn" onClick={()=>saveEmoji(e)} style={{width:40,height:40,borderRadius:10,background:user.avatar_emoji===e?`${C.accent}22`:"#0a1018",border:`1px solid ${user.avatar_emoji===e?C.accent:C.border}`,fontSize:20}}>{e}</button>)}
+
+      {showEmojiPicker&&<div style={{marginTop:T.space[4],paddingTop:T.space[3],borderTop:`1px solid ${T.border.subtle}`}}>
+        <div style={{...label,marginBottom:T.space[3]}}>Elige tu avatar</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:T.space[2]}}>
+          {EMOJI_OPTS.map(e=><button key={e} className="btn" onClick={()=>saveEmoji(e)} style={{
+            width:38, height:38, borderRadius:T.radius.sm,
+            background:user.avatar_emoji===e?T.accent.subtle:T.surface[2],
+            border:`1px solid ${user.avatar_emoji===e?T.accent.base:T.border.subtle}`,
+            fontSize:T.font.lg,
+          }}>{e}</button>)}
         </div>
       </div>}
     </Card>
 
-    {/* Stats personales */}
-    {myStats&&<Card style={{marginBottom:14,background:"#0a1018"}}>
-      <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>📊 Mis estadísticas</div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6}}>
-        {[["🎯",myStats.totalPicks||0,"Picks",C.accent],["✅",myStats.totalCorrect||0,"Aciertos","#00FF9D"],["📊",`${myStats.accuracy||0}%`,"Precisión","#FFB800"],["⭐",myStats.totalPoints||0,"Puntos","#FF6B35"],["🔥",myStats.bestStreak||0,"Mejor racha","#FF6B35"]].map(([icon,v,l,c])=><div key={l} style={{background:"#0d1117",borderRadius:10,padding:"10px 4px",textAlign:"center"}}>
-          <div style={{fontSize:10,marginBottom:2}}>{icon}</div>
-          <div style={{fontSize:16,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:c}}>{v}</div>
-          <div style={{fontSize:8,color:C.muted,marginTop:1,lineHeight:1.2}}>{l}</div>
-        </div>)}
+    {/* ─── STATS ─── */}
+    {myStats&&<Card style={{marginBottom:T.space[5]}}>
+      <div style={{...label,marginBottom:T.space[3]}}>Mis estadísticas</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(84px,1fr))",gap:T.space[2]}}>
+        {[[myStats.totalPicks||0,"Picks"],[myStats.totalCorrect||0,"Aciertos"],[`${myStats.accuracy||0}%`,"Precisión"],[myStats.totalPoints||0,"Puntos"],[myStats.bestStreak||0,"Mejor racha"]].map(([v,l])=>
+          <div key={l} style={{background:T.surface[2],borderRadius:T.radius.sm,padding:`${T.space[3]}px ${T.space[1]}px`,textAlign:"center"}}>
+            <div style={{fontSize:T.font.lg,fontWeight:700,color:T.text.primary}}>{v}</div>
+            <div style={{fontSize:T.font.xs,color:T.text.tertiary,marginTop:2}}>{l}</div>
+          </div>)}
       </div>
     </Card>}
 
-    {/* Instalar App */}
+    {/* ─── INSTALAR ─── */}
     {(installPrompt||isIOS())&&<>
-      <ST sub="PWA">Instalar App</ST>
-      <Card style={{marginBottom:18,borderColor:`${C.accent}33`}}>
+      <ST sub="Aplicación">Instalar Court IQ</ST>
+      <Card style={{marginBottom:T.space[5]}}>
         {isIOS()
           ?<div>
-            <div style={{display:"flex",gap:12,alignItems:"flex-start",marginBottom:12}}>
-              <span style={{fontSize:32}}>📲</span>
-              <div>
-                <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:4}}>Instalar en iPhone / iPad</div>
-                <div style={{fontSize:12,color:C.dim,lineHeight:1.6}}>Para instalar Court IQ y habilitar notificaciones:</div>
-              </div>
+            <div style={{fontSize:T.font.sm,color:T.text.secondary,lineHeight:1.6,marginBottom:T.space[4]}}>
+              En iPhone o iPad debes instalar la app desde Safari para recibir notificaciones.
             </div>
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {[["1","Toca el botón","📤 Compartir","en Safari (barra inferior)"],["2","Baja y busca","➕ Agregar a pantalla de inicio",""],["3","Toca","Agregar","en la esquina superior derecha"]].map(([n,pre,bold,post])=>
-                <div key={n} style={{display:"flex",gap:10,alignItems:"center",padding:"8px 12px",background:"#0a1018",borderRadius:10,border:`1px solid ${C.border}`}}>
-                  <div style={{width:24,height:24,borderRadius:"50%",background:C.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#07090f",flexShrink:0}}>{n}</div>
-                  <div style={{fontSize:12,color:C.text}}>{pre} <span style={{color:C.accent,fontWeight:700}}>{bold}</span> {post}</div>
+            <div style={{display:"flex",flexDirection:"column",gap:T.space[2]}}>
+              {[["1","Toca","Compartir","en la barra inferior de Safari"],["2","Baja y elige","Agregar a pantalla de inicio",""],["3","Confirma con","Agregar","arriba a la derecha"]].map(([n,pre,bold,post])=>
+                <div key={n} style={{display:"flex",gap:T.space[3],alignItems:"center",padding:`${T.space[2]}px ${T.space[3]}px`,background:T.surface[2],borderRadius:T.radius.sm}}>
+                  <div style={{width:20,height:20,borderRadius:"50%",background:T.accent.base,display:"flex",alignItems:"center",justifyContent:"center",fontSize:T.font.xs,fontWeight:700,color:"#fff",flexShrink:0}}>{n}</div>
+                  <div style={{fontSize:T.font.sm,color:T.text.secondary}}>{pre} <b style={{color:T.text.primary}}>{bold}</b> {post}</div>
                 </div>
               )}
             </div>
           </div>
           :<div>
-            <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:12}}>
-              <span style={{fontSize:32}}>📱</span>
-              <div>
-                <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:2}}>Instalar Court IQ</div>
-                <div style={{fontSize:12,color:C.dim}}>Acceso directo desde tu pantalla de inicio, sin navegador</div>
-              </div>
+            <div style={{fontSize:T.font.sm,color:T.text.secondary,lineHeight:1.6,marginBottom:T.space[4]}}>
+              Instálala para tener acceso directo desde tu pantalla de inicio, sin barra de navegador.
             </div>
-            <button className="btn" onClick={async()=>{if(!installPrompt)return;installPrompt.prompt();const{outcome}=await installPrompt.userChoice;if(outcome==="accepted")onInstalled?.();}} style={{width:"100%",padding:"13px",borderRadius:10,background:`linear-gradient(135deg,${C.accent},#0066ff)`,color:"#07090f",fontWeight:900,fontSize:14}}>📲 Instalar App</button>
+            <button className="btn" onClick={async()=>{if(!installPrompt)return;installPrompt.prompt();const{outcome}=await installPrompt.userChoice;if(outcome==="accepted")onInstalled?.();}} style={{...btnPrimary,width:"100%",padding:T.space[3],fontSize:T.font.base}}>Instalar</button>
           </div>
         }
       </Card>
     </>}
 
-    {/* Notificaciones */}
+    {/* ─── NOTIFICACIONES ─── */}
     <ST sub="Push">Notificaciones</ST>
-    <Card style={{marginBottom:18}}>
-      {msg&&<div style={{fontSize:11,color:"#00FF9D",marginBottom:10,padding:"8px 10px",background:"#00FF9D11",borderRadius:8}}>{msg}</div>}
+    <Card style={{marginBottom:T.space[5]}}>
+      {msg&&<div style={{
+        marginBottom:T.space[4], padding:`${T.space[3]}px ${T.space[4]}px`,
+        background:T.surface[2], borderLeft:`3px solid ${msg.kind==="error"?T.danger.base:T.success.base}`,
+        borderRadius:T.radius.sm, fontSize:T.font.sm, color:T.text.secondary, lineHeight:1.5,
+      }}>{msg.text}</div>}
+
       {!notifGranted
         ?<>
-          <div style={{fontSize:12,color:C.dim,marginBottom:12}}>Activa notificaciones para recordatorios de picks, alertas de aciertos y resúmenes diarios</div>
-          <button className="btn" onClick={subscribePush} disabled={notifLoading} style={{width:"100%",padding:"13px",borderRadius:10,background:`linear-gradient(135deg,${C.accent},#0066ff)`,color:"#07090f",fontSize:13,fontWeight:900}}>{notifLoading?<Spin s={13}/>:"🔔 Activar notificaciones"}</button>
+          <div style={{fontSize:T.font.sm,color:T.text.secondary,lineHeight:1.6,marginBottom:T.space[4]}}>
+            Actívalas para recibir recordatorios antes de los partidos, avisos de resultados y tu resumen diario.
+          </div>
+          <button className="btn" onClick={subscribePush} disabled={notifLoading} style={{...btnPrimary,width:"100%",padding:T.space[3],fontSize:T.font.base}}>
+            {notifLoading?<Spin s={14}/>:"Activar notificaciones"}
+          </button>
         </>
         :<>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-            <div style={{fontSize:11,color:"#00FF9D"}}>✅ Activas — elige cuáles recibir:</div>
-            <button className="btn" onClick={unsubscribePush} disabled={notifLoading} style={{padding:"6px 12px",borderRadius:8,background:"#ff444422",border:"1px solid #ff444444",color:"#ff6666",fontSize:11,fontWeight:700}}>{notifLoading?<Spin s={11}/>:"🔕 Apagar"}</button>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:T.space[4],gap:T.space[3]}}>
+            <div style={{fontSize:T.font.sm,color:T.text.secondary}}>Activas — elige cuáles recibir</div>
+            <button className="btn" onClick={unsubscribePush} disabled={notifLoading} style={{...btnGhost,padding:`${T.space[1]}px ${T.space[3]}px`,fontSize:T.font.xs,flexShrink:0}}>
+              {notifLoading?<Spin s={11}/>:"Desactivar"}
+            </button>
           </div>
-          {[["picks_reminder","⏰ Recordatorio de picks","30 min antes del primer partido"],["win_notify","🎉 Cuando aciertes","Celebra cada predicción correcta"],["loss_notify","😅 Cuando falles","Para que aprendas jeje"],["daily_summary","📊 Resumen del día","Precisión y puntos al final del día"]].map(([key,label,desc])=>
-            <div key={key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 0",borderBottom:`1px solid ${C.border}`}}>
-              <div><div style={{fontSize:13,fontWeight:700,color:C.text}}>{label}</div><div style={{fontSize:10,color:C.dim}}>{desc}</div></div>
-              <button className="btn" onClick={()=>saveNotifPref(key,!notifPrefs[key])} style={{width:46,height:26,borderRadius:13,background:notifPrefs[key]?C.accent:"#0a1018",border:`2px solid ${notifPrefs[key]?C.accent:C.border}`,position:"relative",flexShrink:0}}>
-                <div style={{width:18,height:18,borderRadius:"50%",background:"#07090f",position:"absolute",top:2,left:notifPrefs[key]?"calc(100% - 22px)":2,transition:"left .2s"}}/>
+          {NOTIF_OPTS.map(([key,lbl,desc],i)=>
+            <div key={key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:T.space[3],padding:`${T.space[3]}px 0`,borderBottom:i<NOTIF_OPTS.length-1?`1px solid ${T.border.subtle}`:"none"}}>
+              <div style={{minWidth:0}}>
+                <div style={{fontSize:T.font.sm,fontWeight:600,color:T.text.primary}}>{lbl}</div>
+                <div style={{fontSize:T.font.xs,color:T.text.tertiary,marginTop:2}}>{desc}</div>
+              </div>
+              <button
+                className="btn"
+                onClick={()=>saveNotifPref(key,!notifPrefs[key])}
+                role="switch"
+                aria-checked={!!notifPrefs[key]}
+                aria-label={lbl}
+                style={{
+                  width:42, height:24, borderRadius:12, flexShrink:0, position:"relative",
+                  background:notifPrefs[key]?T.accent.base:T.surface[3],
+                  border:`1px solid ${notifPrefs[key]?T.accent.base:T.border.base}`,
+                  transition:"background .2s",
+                }}
+              >
+                <div style={{
+                  width:16, height:16, borderRadius:"50%", background:"#fff",
+                  position:"absolute", top:3, left:notifPrefs[key]?"calc(100% - 20px)":3,
+                  transition:"left .2s",
+                }}/>
               </button>
             </div>
           )}
@@ -214,79 +261,101 @@ export const SettingsTab=({userCtx,installPrompt,onInstalled})=>{
       }
     </Card>
 
-    {/* Puntuación */}
-    <ST sub="Cómo funciona">Sistema de Puntos</ST>
-    <Card style={{marginBottom:18}}>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-        {[["✅ Acierto","10 pts","#00FF9D"],["🔥 Racha","bonus","#FF6B35"],["🪙 Apuestas","vs grupo",C.accent]].map(([l,v,c])=>
-          <div key={l} style={{background:"#0a1018",borderRadius:10,padding:"12px 8px",textAlign:"center"}}>
-            <div style={{fontSize:18,marginBottom:4}}>{l.split(" ")[0]}</div>
-            <div style={{fontSize:10,color:C.dim,marginBottom:4}}>{l.split(" ").slice(1).join(" ")}</div>
-            <div style={{fontSize:17,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:c}}>{v}</div>
-          </div>
-        )}
-      </div>
-    </Card>
-
-    {/* Logros */}
-    <ST sub="Logros">Mis Badges</ST>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8,marginBottom:24}}>
-      {ACHIEVEMENT_DEFS.filter(a=>!a.key.startsWith("shop_")).map(a=>{
-        const unlocked=achievements.some(x=>x.achievement_key===a.key);
-        return<Card key={a.key} style={{textAlign:"center",padding:"14px 10px",opacity:unlocked?1:0.35,borderColor:unlocked?`${C.accent}44`:C.border}}>
-          <div style={{fontSize:28,marginBottom:6}}>{a.emoji}</div>
-          <div style={{fontSize:11,fontWeight:800,color:unlocked?C.text:C.muted}}>{a.name}</div>
-          <div style={{fontSize:9,color:C.dim,marginTop:2}}>{a.desc}</div>
-          {unlocked&&<div style={{fontSize:8,color:C.accent,marginTop:4}}>✅ Desbloqueado</div>}
-        </Card>;
-      })}
-    </div>
-
-    {/* Legal */}
-    <ST sub="Legal">Privacidad</ST>
-    <Card style={{marginBottom:18}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <div>
-          <div style={{fontSize:13,fontWeight:700,color:C.text}}>Política de Privacidad</div>
-          <div style={{fontSize:10,color:C.dim,marginTop:2}}>Qué datos guardamos y cómo los usamos</div>
+    {/* ─── LOGROS ─── */}
+    <ST sub="Progreso">Logros</ST>
+    {(()=>{
+      const defs=ACHIEVEMENT_DEFS.filter(a=>!a.key.startsWith("shop_"));
+      const unlockedCount=defs.filter(a=>achievements.some(x=>x.achievement_key===a.key)).length;
+      return<>
+        <div style={{fontSize:T.font.sm,color:T.text.tertiary,marginBottom:T.space[3]}}>
+          {unlockedCount} de {defs.length} desbloqueados
         </div>
-        <a href="/privacy.html" target="_blank" style={{padding:"8px 14px",borderRadius:8,background:`${C.accent}15`,border:`1px solid ${C.accent}33`,color:C.accent,fontSize:12,fontWeight:700,textDecoration:"none",flexShrink:0}}>Ver →</a>
-      </div>
-    </Card>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:T.space[2],marginBottom:T.space[5]}}>
+          {defs.map(a=>{
+            const unlocked=achievements.some(x=>x.achievement_key===a.key);
+            return<Card key={a.key} style={{padding:T.space[3],opacity:unlocked?1:.45,borderColor:unlocked?T.accent.border:T.border.subtle}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:T.space[2],marginBottom:T.space[1]}}>
+                <div style={{fontSize:T.font.sm,fontWeight:600,color:T.text.primary}}>{a.name}</div>
+                {unlocked&&<div style={{width:6,height:6,borderRadius:"50%",background:T.accent.base,flexShrink:0}}/>}
+              </div>
+              <div style={{fontSize:T.font.xs,color:T.text.tertiary,lineHeight:1.5}}>{a.desc}</div>
+            </Card>;
+          })}
+        </div>
+      </>;
+    })()}
 
-    {/* Correo de recuperación */}
+    {/* ─── CORREO ─── */}
     <ST sub="Seguridad">Correo de recuperación</ST>
-    <Card style={{marginBottom:18}}>
-      <div style={{fontSize:12,color:C.dim,marginBottom:12}}>Vincula un correo para poder recuperar tu PIN si lo olvidas.</div>
-      <div style={{display:"flex",gap:8}}>
-        <input value={emailInput} onChange={e=>setEmailInput(e.target.value)} type="email" placeholder="tu@correo.com" style={{flex:1,background:"#0a1018",border:`1px solid ${user?.email?C.accent:C.border}`,borderRadius:10,padding:"11px 14px",color:C.text,fontSize:13,minWidth:0}}/>
-        <button className="btn" onClick={saveEmail} disabled={emailLoading} style={{padding:"11px 16px",borderRadius:10,background:`linear-gradient(135deg,${C.accent},#0066ff)`,color:"#07090f",fontSize:13,fontWeight:800,flexShrink:0}}>{emailLoading?<Spin s={13}/>:"Guardar"}</button>
+    <Card style={{marginBottom:T.space[5]}}>
+      <div style={{fontSize:T.font.sm,color:T.text.secondary,lineHeight:1.6,marginBottom:T.space[4]}}>
+        Vincula un correo para poder recuperar tu PIN si lo olvidas.
       </div>
-      {user?.email&&<div style={{fontSize:10,color:"#22c55e",marginTop:6}}>✓ Correo vinculado — puedes recuperar tu PIN por email</div>}
-      {emailMsg&&<div style={{fontSize:11,color:emailMsg.startsWith("✅")?"#22c55e":"#ff6666",marginTop:6}}>{emailMsg}</div>}
+      <div style={{display:"flex",gap:T.space[2]}}>
+        <input value={emailInput} onChange={e=>setEmailInput(e.target.value)} type="email" placeholder="tu@correo.com"
+          style={{...inputBase,flex:1,minWidth:0,borderColor:user?.email?T.accent.border:T.border.base}}/>
+        <button className="btn" onClick={saveEmail} disabled={emailLoading} style={{...btnPrimary,padding:`${T.space[3]}px ${T.space[4]}px`,fontSize:T.font.sm,flexShrink:0}}>
+          {emailLoading?<Spin s={13}/>:"Guardar"}
+        </button>
+      </div>
+      {user?.email&&<div style={{fontSize:T.font.xs,color:T.text.tertiary,marginTop:T.space[2]}}>Correo vinculado — puedes recuperar tu PIN por email</div>}
+      {emailMsg&&<div style={{fontSize:T.font.xs,color:emailMsg.kind==="error"?T.danger.base:T.success.base,marginTop:T.space[2]}}>{emailMsg.text}</div>}
     </Card>
 
-    {/* Zona peligrosa */}
-    <ST sub="Zona peligrosa">Cuenta</ST>
-    <Card style={{marginBottom:18,borderColor:"#ff444433"}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+    {/* ─── LEGAL ─── */}
+    <ST sub="Legal">Privacidad</ST>
+    <Card style={{marginBottom:T.space[5]}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:T.space[3]}}>
         <div>
-          <div style={{fontSize:13,fontWeight:700,color:"#ff6666"}}>Eliminar cuenta</div>
-          <div style={{fontSize:10,color:C.dim,marginTop:2}}>Borra permanentemente todos tus datos</div>
+          <div style={{fontSize:T.font.sm,fontWeight:600,color:T.text.primary}}>Política de privacidad</div>
+          <div style={{fontSize:T.font.xs,color:T.text.tertiary,marginTop:2}}>Qué datos guardamos y cómo los usamos</div>
         </div>
-        <button className="btn" onClick={()=>setShowDeleteConfirm(true)} style={{padding:"8px 14px",borderRadius:8,background:"#ff444422",border:"1px solid #ff444444",color:"#ff6666",fontSize:12,fontWeight:700,flexShrink:0}}>Eliminar</button>
+        <a href="/privacy.html" target="_blank" rel="noopener noreferrer" style={{
+          padding:`${T.space[2]}px ${T.space[4]}px`, borderRadius:T.radius.base,
+          background:T.surface[2], border:`1px solid ${T.border.base}`,
+          color:T.text.secondary, fontSize:T.font.sm, fontWeight:600,
+          textDecoration:"none", flexShrink:0,
+        }}>Ver</a>
       </div>
     </Card>
 
-    {/* Modal confirmar eliminar */}
-    {showDeleteConfirm&&<div onClick={()=>!deleteLoading&&setShowDeleteConfirm(false)} style={{position:"fixed",inset:0,background:"#00000099",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:C.card,border:"1px solid #ff444444",borderRadius:20,padding:28,maxWidth:320,width:"100%",textAlign:"center"}}>
-        <div style={{fontSize:44,marginBottom:12}}>⚠️</div>
-        <div style={{fontSize:17,fontWeight:900,color:C.text,marginBottom:8}}>¿Eliminar tu cuenta?</div>
-        <div style={{fontSize:12,color:C.dim,lineHeight:1.6,marginBottom:20}}>Esta acción es <b style={{color:"#ff6666"}}>permanente e irreversible</b>. Se eliminarán todos tus picks, monedas, logros y mensajes.</div>
-        <div style={{display:"flex",gap:10}}>
-          <button className="btn" onClick={()=>setShowDeleteConfirm(false)} disabled={deleteLoading} style={{flex:1,padding:"13px",borderRadius:10,background:"#0a1018",border:`1px solid ${C.border}`,color:C.dim,fontWeight:700,fontSize:13}}>Cancelar</button>
-          <button className="btn" onClick={deleteAccount} disabled={deleteLoading} style={{flex:1,padding:"13px",borderRadius:10,background:"#ff444422",border:"1px solid #ff444444",color:"#ff6666",fontWeight:900,fontSize:13}}>{deleteLoading?<Spin s={13}/>:"Sí, eliminar"}</button>
+    {/* ─── ZONA PELIGROSA ─── */}
+    <ST sub="Zona peligrosa">Eliminar cuenta</ST>
+    <Card style={{marginBottom:T.space[5],borderColor:T.danger.border}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:T.space[3]}}>
+        <div>
+          <div style={{fontSize:T.font.sm,fontWeight:600,color:T.text.primary}}>Eliminar mi cuenta</div>
+          <div style={{fontSize:T.font.xs,color:T.text.tertiary,marginTop:2}}>Borra permanentemente todos tus datos</div>
+        </div>
+        <button className="btn" onClick={()=>setShowDeleteConfirm(true)} style={{
+          padding:`${T.space[2]}px ${T.space[4]}px`, borderRadius:T.radius.base,
+          background:T.danger.subtle, border:`1px solid ${T.danger.border}`,
+          color:T.danger.base, fontSize:T.font.sm, fontWeight:600, flexShrink:0,
+        }}>Eliminar</button>
+      </div>
+    </Card>
+
+    {/* Modal eliminar */}
+    {showDeleteConfirm&&<div
+      onClick={()=>!deleteLoading&&setShowDeleteConfirm(false)}
+      role="dialog" aria-modal="true"
+      style={{position:"fixed",inset:0,background:"#00000099",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center",padding:T.space[5]}}
+    >
+      <div onClick={e=>e.stopPropagation()} style={{
+        background:T.surface[1], border:`1px solid ${T.danger.border}`,
+        borderRadius:T.radius.lg, padding:T.space[5], maxWidth:340, width:"100%",
+        boxShadow:T.shadow.lg,
+      }}>
+        <div style={{fontSize:T.font.lg,fontWeight:700,color:T.text.primary,marginBottom:T.space[2]}}>¿Eliminar tu cuenta?</div>
+        <div style={{fontSize:T.font.sm,color:T.text.secondary,lineHeight:1.6,marginBottom:T.space[5]}}>
+          Esta acción es <b style={{color:T.danger.base}}>permanente</b>. Se eliminarán todos tus picks, monedas, logros y mensajes.
+        </div>
+        <div style={{display:"flex",gap:T.space[2]}}>
+          <button className="btn" onClick={()=>setShowDeleteConfirm(false)} disabled={deleteLoading} style={{...btnGhost,flex:1,padding:T.space[3],fontSize:T.font.sm}}>Cancelar</button>
+          <button className="btn" onClick={deleteAccount} disabled={deleteLoading} style={{
+            flex:1, padding:T.space[3], borderRadius:T.radius.base,
+            background:T.danger.base, color:"#fff", fontSize:T.font.sm, fontWeight:600,
+          }}>{deleteLoading?<Spin s={13}/>:"Eliminar"}</button>
         </div>
       </div>
     </div>}

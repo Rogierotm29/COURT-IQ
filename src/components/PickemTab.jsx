@@ -124,7 +124,7 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
         });
       }
     });
-    pickemAPI("dailyWinner",{params:{groupId:selGroup.id}}).then(d=>{if(d.ok)setDailyWinner(d.winner);});
+    pickemAPI("dailyWinner",{params:{groupId:selGroup.id,date:getToday()}}).then(d=>{if(d.ok)setDailyWinner(d.winner);});
   },[user,selGroup]);
 
   useEffect(()=>{
@@ -167,7 +167,7 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
 
   useEffect(()=>{
     if(!user||!selGroup) return;
-    pickemAPI("groupPicks",{params:{groupId:selGroup.id}}).then(d=>{if(d.ok)setGrpPicks(d.picks||[]);});
+    pickemAPI("groupPicks",{params:{groupId:selGroup.id,date:getToday()}}).then(d=>{if(d.ok)setGrpPicks(d.picks||[]);});
   },[user,selGroup,games.map(g=>g.status).join(",")]);
 
   const register=async()=>{
