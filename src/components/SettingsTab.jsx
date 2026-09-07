@@ -13,14 +13,14 @@ const NOTIF_OPTS=[
   ["picks_reminder","Recordatorio de picks","30 minutos antes del primer partido"],
   ["win_notify","Cuando aciertes","Aviso por cada predicción correcta"],
   ["loss_notify","Cuando falles","Aviso cuando un pick no salga"],
+  ["bet_notify","Apuestas del grupo","Cuando alguien abra una apuesta"],
   ["daily_summary","Resumen del día","Precisión y puntos al cerrar la jornada"],
 ];
 
 export const SettingsTab=({userCtx,installPrompt,onInstalled})=>{
   const {user,logout,save}=userCtx||{};
   const [showEmojiPicker,setShowEmojiPicker]=useState(false);
-  const [notifGranted,setNotifGranted]=useState(typeof Notification!=="undefined"&&Notification.permission==="granted");
-  const [notifPrefs,setNotifPrefs]=useState({picks_reminder:true,win_notify:true,loss_notify:true,daily_summary:true});
+  const [notifGranted,setNotifGranted]=useState(typeof Notification!=="undefined"&&Notification.permission==="granted");  
   const [notifLoading,setNotifLoading]=useState(false);
   const [msg,setMsg]=useState(null);              // {text, kind}
   const [achievements,setAchievements]=useState([]);
@@ -30,7 +30,8 @@ export const SettingsTab=({userCtx,installPrompt,onInstalled})=>{
   const [emailLoading,setEmailLoading]=useState(false);
   const [emailMsg,setEmailMsg]=useState(null);
   const [myStats,setMyStats]=useState(null);
-    const { items:myShopItems, equipped:myEquipped } = useCosmetics();
+  const [notifPrefs,setNotifPrefs]=useState({picks_reminder:true,win_notify:true,loss_notify:true,daily_summary:true,bet_notify:true});
+  const { items:myShopItems, equipped:myEquipped } = useCosmetics();
 
   const readEquipped=(uid)=>{
     try{ return JSON.parse(localStorage.getItem("courtiq_equipped_"+uid)||"{}"); }

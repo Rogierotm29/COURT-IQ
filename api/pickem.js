@@ -332,6 +332,8 @@ export default async function handler(req, res) {
           method: "POST",
           body: { group_id: group.id, user_id: userId },
         });
+
+        
         return res.json({ ok: true, group });
       }
 
@@ -910,6 +912,7 @@ export default async function handler(req, res) {
       }
 
       // ─── CREATE BET ────────────────────────────────────────
+      // ─── CREATE BET ────────────────────────────────────────
       case "createBet": {
         const { userId, groupId, gameId, amount, pickedTeam, homeTeam, awayTeam } = body;
         if (!userId || !groupId || !gameId || !amount || !pickedTeam) return res.json({ ok: false, error: "Faltan datos" });
@@ -922,6 +925,36 @@ export default async function handler(req, res) {
           method: "POST",
           body: { requester_id: userId, group_id: groupId, game_id: gameId, amount: parseInt(amount), picked_team: pickedTeam, home_team: homeTeam, away_team: awayTeam, status: "open" },
         });
+
+        // Avisar al grupo que hay una apuesta abierta
+        try {
+          const wp = await initWebPush();
+          if (wp) {
+            const requesterRows = await supabase("users", { filters: `?id=eq.${userId}&select=name&limit=1` });
+            const requesterName = requesterRows?.[0]?.name || "Alguien";
+
+            const members = await supabase("group_members", { filters: `?group_id=eq.${groupId}&user_id=neq.${userId}&select=user_id` });
+            if (members?.length) {
+              const ids = members.map(m => m.user_id).join(",");
+              // Filtramos a quienes la tengan apagada: sin registro, por defecto reciben
+              const prefs = await supabase("notification_prefs", { filters: `?user_id=in.(${ids})&select=user_id,bet_notify` });
+              const muted = new Set((prefs || []).filter(p => p.bet_notify === false).map(p => p.user_id));
+              const targets = members.filter(m => !muted.has(m.user_id)).map(m => m.user_id);
+
+              if (targets.length) {
+                const subs = await supabase("push_subscriptions", { filters: `?user_id=in.(${targets.join(",")})&select=endpoint,p256dh,auth,user_id` });
+                const payload = {
+                  title: "Nueva apuesta en el grupo",
+                  body: `${requesterName} apostó ${amount} monedas en ${awayTeam} vs ${homeTeam}`,
+                  tag: `bet-open-${bet.id}`,
+                  url: "/?tab=apuestas",
+                };
+                await Promise.allSettled((subs || []).map(s => sendPush(wp, s, payload)));
+              }
+            }
+          }
+        } catch (e) { console.warn("createBet: no se pudo notificar al grupo:", e.message); }
+
         return res.json({ ok: true, bet });
       }
 
@@ -1201,20 +1234,19 @@ export default async function handler(req, res) {
         const { userId } = req.query;
         if (!userId) return res.json({ ok: false, error: "userId requerido" });
         const rows = await supabase("notification_prefs", { filters: `?user_id=eq.${userId}&limit=1` });
-        return res.json({ ok: true, prefs: rows?.[0] || { picks_reminder: true, win_notify: true, loss_notify: true, daily_summary: true } });
-      }
+        return res.json({ ok: true, prefs: rows?.[0] || { picks_reminder: true, win_notify: true, loss_notify: true, daily_summary: true, bet_notify: true } });      }
 
       case "setNotifPrefs": {
-        const { userId, picks_reminder, win_notify, loss_notify, daily_summary } = body;
+        const { userId, picks_reminder, win_notify, loss_notify, daily_summary, bet_notify } = body;
         if (!userId) return res.json({ ok: false, error: "userId requerido" });
         const existing = await supabase("notification_prefs", { filters: `?user_id=eq.${userId}&limit=1` });
         if (existing?.length) {
           await supabase(`notification_prefs?id=eq.${existing[0].id}`, {
-            method: "PATCH", body: { picks_reminder, win_notify, loss_notify, daily_summary },
+            method: "PATCH", body: { picks_reminder, win_notify, loss_notify, daily_summary, bet_notify },
           });
         } else {
           await supabase("notification_prefs", {
-            method: "POST", body: { user_id: userId, picks_reminder, win_notify, loss_notify, daily_summary },
+            method: "POST", body: { user_id: userId, picks_reminder, win_notify, loss_notify, daily_summary, bet_notify },
           });
         }
         return res.json({ ok: true });
