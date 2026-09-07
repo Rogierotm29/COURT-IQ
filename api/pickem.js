@@ -1594,7 +1594,18 @@ export default async function handler(req, res) {
       case "makeOUPick": {
         const { userId, gameId, gameDate, choice, line } = body;
         if (!userId || !gameId || !choice || !line) return res.json({ ok: false, error: "Faltan datos" });
-        // Store as a special pick with game_id prefixed with "ou_"
+
+        // Validar que el partido no haya empezado
+        let ouState;
+        try {
+          ouState = await getGameState(gameId);
+        } catch (e) {
+          console.warn("makeOUPick: no se pudo verificar el partido:", e.message);
+          return res.json({ ok: false, error: "No pudimos verificar el estado del partido. Intenta de nuevo." });
+        }
+        if (ouState === null) return res.json({ ok: false, error: "Este partido ya no está disponible" });
+        if (ouState !== "pre") return res.json({ ok: false, error: "Este partido ya empezó — no puedes hacer o cambiar tu pick" });
+
         const ouGameId = `ou_${gameId}`;
         const existing = await supabase("ou_picks", { filters: `?user_id=eq.${userId}&game_id=eq.${ouGameId}&limit=1` });
         if (existing?.length) {
@@ -1628,6 +1639,12 @@ export default async function handler(req, res) {
           const gameId = pick.game_id.replace("ou_", "");
           const total = totals[gameId];
           if (total == null) continue;
+          // Push: el total cae exacto en la línea — nadie gana ni pierde
+          if (total === pick.line) {
+            await supabase(`ou_picks?id=eq.${pick.id}`, { method: "PATCH", body: { scored: true, correct: null, total_scored: total, points: 0 } });
+            scored++;
+            continue;
+          }
           const correct = (pick.choice === "over" && total > pick.line) || (pick.choice === "under" && total < pick.line);
           const points = correct ? 5 : -5;
           await supabase(`ou_picks?id=eq.${pick.id}`, { method: "PATCH", body: { scored: true, correct, total_scored: total, points } });
