@@ -135,9 +135,9 @@ export const FloatingChat=({userCtx})=>{
       <div style={{flex:1,overflowY:"auto",padding:`${T.space[3]}px ${T.space[3]}px`,display:"flex",flexDirection:"column",gap:T.space[3]}}>
         {msgs.length===0
           ?<div style={{textAlign:"center",color:T.text.tertiary,fontSize:T.font.sm,marginTop:T.space[7]}}>Sin mensajes aún</div>
-          :msgs.map((m,i)=>{
+          :msgs.map((m)=>{
             const isMe=m.user_id===user.id;
-            return<div key={i} style={{display:"flex",gap:T.space[2],alignItems:"flex-end",flexDirection:isMe?"row-reverse":"row"}}>
+            return<div key={m.id||m.created_at} style={{display:"flex",gap:T.space[2],alignItems:"flex-end",flexDirection:isMe?"row-reverse":"row"}}>
               <div style={{
                 width:26, height:26, borderRadius:"50%",
                 background:T.surface[3], border:`1px solid ${T.border.subtle}`,

@@ -314,7 +314,7 @@ export const HomeTab=({games,live,userCtx,standings,picks,confidence,setConfiden
           {gp.length===0
             ?<div style={{textAlign:"center",padding:`${T.space[2]}px 0`,color:T.text.tertiary,fontSize:T.font.sm}}>Nadie hizo pick aún</div>
             :<div style={{display:"flex",flexWrap:"wrap",gap:T.space[2]}}>
-                {gp.map((p,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:T.space[1],background:T.surface[3],border:`1px solid ${T.border.base}`,borderRadius:T.radius.full,padding:`${T.space[1]}px ${T.space[3]}px`}}>
+                {gp.map((p,i)=><div key={p.id} style={{display:"flex",alignItems:"center",gap:T.space[1],background:T.surface[3],border:`1px solid ${T.border.base}`,borderRadius:T.radius.full,padding:`${T.space[1]}px ${T.space[3]}px`}}>
                   <span style={{fontSize:T.font.sm}}>{p.users?.avatar_emoji||"🏀"}</span>
                   <span style={{fontSize:T.font.xs,color:T.text.secondary,fontWeight:600}}>{p.users?.name||"?"}</span>
                   {logo(p.picked_team,14)}
