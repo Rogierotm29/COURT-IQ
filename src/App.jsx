@@ -112,9 +112,45 @@ async function loadStandings() {
 }
 
 async function loadPlayers() {
-  const d = await api("/api/players");
-  if (d?.ok && d.players?.length > 10) return d.players.map((p,i)=>({...p,id:i+1,color:tm(p.teamAbbr).color}));
-  return null;
+  // Dos fuentes: /api/players trae líderes CON estadísticas (~50),
+  // /api/rosters trae la liga completa SIN estadísticas (~450).
+  // Las combinamos para tener búsqueda y plantillas completas.
+  const [statsRes, rostersRes] = await Promise.all([
+    api("/api/players"),
+    api("/api/rosters"),
+  ]);
+
+  const withStats = statsRes?.ok ? (statsRes.players || []) : [];
+  const roster = rostersRes?.ok ? (rostersRes.players || []) : [];
+
+  if (!withStats.length && !roster.length) return null;
+
+  // Indexamos las stats por nombre normalizado para cruzarlas
+  const norm = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  const statsByName = {};
+  for (const p of withStats) statsByName[norm(p.name)] = p;
+
+  // Base: el roster completo, enriquecido con stats donde existan
+  const merged = roster.map((p, i) => {
+    const s = statsByName[norm(p.name)];
+    return {
+      ...p,
+      id: p.id || `r${i}`,
+      color: tm(p.teamAbbr).color,
+      pts: s?.pts ?? null, ast: s?.ast ?? null, reb: s?.reb ?? null,
+      blk: s?.blk ?? null, stl: s?.stl ?? null,
+      fgPct: s?.fgPct ?? null, fg3Pct: s?.fg3Pct ?? null,
+      hasStats: !!s,
+    };
+  });
+
+  // Los que tienen stats pero no aparecieron en ningún roster (traspasos recientes)
+  const rosterNames = new Set(roster.map(p => norm(p.name)));
+  const orphans = withStats
+    .filter(p => !rosterNames.has(norm(p.name)))
+    .map((p, i) => ({ ...p, id: p.id || `s${i}`, color: tm(p.teamAbbr).color, hasStats: true }));
+
+  return [...merged, ...orphans];
 }
 
 /* ═══ USER CONTEXT (localStorage) ═══ */
@@ -232,7 +268,7 @@ export default function App(){
     if(g.games.length>0){setGames(g.games);setLive(l=>({...l,games:true}));}
     if(g.seasonType!=null) setSeasonType(g.seasonType);
     const st=await loadStandings();if(st?.length>=25){setStandings(st);setLive(l=>({...l,standings:true}));}
-    const pl=await loadPlayers();if(pl?.length>10){setPlayers(pl);setLive(l=>({...l,players:true}));} else {setPlayers(FB_PL);}
+    const pl=await loadPlayers();if(pl?.length>100){setPlayers(pl);setLive(l=>({...l,players:true}));} else {setPlayers(FB_PL);}
     setLastUpd(new Date());setLoading(false);
   },[]);
 
