@@ -19,6 +19,7 @@ import { FloatingChat } from "./components/FloatingChat";
 import { Onboarding } from "./components/Onboarding";
 import { pickemAPI, onApiHealthChange } from "./api/pickem";
 import { store } from "./utils/storage";
+import { CosmeticsProvider } from "./context/CosmeticsContext";
 
 /* ═══ FALLBACK DATA ═══ */
 const FB_ST=[
@@ -259,7 +260,8 @@ export default function App(){
   const liveGame=games.find(g=>g.status==="LIVE");
   const currentTab=ALL_TABS.find(t=>t.id===tab);
 
-  return(<div style={{minHeight:"100vh",background:T.surface[0],fontFamily:"'Outfit','Segoe UI',sans-serif",color:T.text.primary}}>
+    return(<CosmeticsProvider userId={userCtx.user?.id}>
+    <div style={{minHeight:"100vh",background:T.surface[0],fontFamily:"'Outfit','Segoe UI',sans-serif",color:T.text.primary}}>
     <GS/>
     {showOnboarding&&<Onboarding onDone={()=>{store.set("courtiq_onboarded","1");setShowOnboarding(false);}}/>}
 
@@ -301,8 +303,6 @@ export default function App(){
       </div>
     </div>}
 
-    
-
     {/* ─── BANNERS ─── */}
     {apiDown&&!isOffline&&<div style={{background:T.surface[1],borderBottom:`1px solid ${T.border.base}`,borderLeft:`3px solid ${T.warning.base}`,padding:`${T.space[2]}px ${T.space[5]}px`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:T.space[3]}}>
       <span style={{fontSize:T.font.sm,color:T.text.secondary}}>Problemas para conectar con el servidor — algunos datos pueden no estar actualizados</span>
@@ -335,6 +335,7 @@ export default function App(){
       {tab==="settings"&&<SettingsTab userCtx={userCtx} installPrompt={installPrompt} onInstalled={()=>setInstallPrompt(null)}/>}
     </div>
 
-    <FloatingChat userCtx={userCtx}/>
-  </div>);
+    <FloatingChat userCtx={userCtx} selGroup={selGroup}/>
+    </div>
+  </CosmeticsProvider>);
 }

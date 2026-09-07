@@ -11,6 +11,8 @@ import { SHOP_ITEMS, ACHIEVEMENT_DEFS } from "../data/shop";
 import { getSeason } from "../utils/season";
 import { getToday } from "../utils/date";
 import { store } from "../utils/storage";
+import { useCosmetics } from "../context/CosmeticsContext";
+
 
 export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,makePick,selGroup,setSelGroup,initSubTab,standalone})=>{
   const {user,save}=userCtx;
@@ -40,10 +42,7 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
   const [lbPeriod,setLbPeriod]=useState("season");
   const [dailyWinner,setDailyWinner]=useState(null);
   const [myStatsData,setMyStatsData]=useState(null);
-  const [shields,setShields]=useState(0);
   const [parlay,setParlay]=useState(null);const [parlaySelections,setParlaySelections]=useState({});const [parlayLoading,setParlayLoading]=useState(false);
-  const [shopItems,setShopItems]=useState([]);
-  const [myEquipped,setMyEquipped]=useState(()=>store.getJSON("courtiq_equipped_"+(user?.id||""),{}));
   const [lockedPicks,setLockedPicks]=useState(false);
   const [authMode,setAuthMode]=useState("auto");
   const [recCode,setRecCode]=useState("");
@@ -58,6 +57,7 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
   const [editGroup,setEditGroup]=useState(false);const [editGroupName,setEditGroupName]=useState("");const [editGroupEmoji,setEditGroupEmoji]=useState("");
   const [profileModal,setProfileModal]=useState(null);const [profileData,setProfileData]=useState(null);
   const gameStatusKey = games.map(g=>`${g.id}:${g.status}`).join("|");
+  const { items:shopItems, equipped:myEquipped, shields, useShield } = useCosmetics();
 
   const now=new Date();
   const upcoming=games.filter(g=>g.startTime?now<new Date(g.startTime):g.status==="Upcoming");
@@ -104,7 +104,7 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
     if(selGroup){
       store.set("courtiq_lastgroup",selGroup.id);
       store.setJSON("courtiq_lastgroup_obj",selGroup);
-      window.dispatchEvent(new CustomEvent("courtiq_group_changed",{detail:selGroup}));
+      
     }
   },[selGroup]);
 
@@ -149,19 +149,11 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
 
   useEffect(()=>{
     if(!user) return;
-    pickemAPI("getShields",{params:{userId:user.id}}).then(d=>{if(d.ok)setShields(d.shields||0);});
-    pickemAPI("myShopItems",{params:{userId:user.id}}).then(d=>{if(d.ok)setShopItems(d.items||[]);});
-    pickemAPI("checkAchievements",{params:{userId:user.id,groupId:store.get("courtiq_lastgroup")||""}}).catch(()=>{});
+    pickemAPI("checkAchievements",{params:{userId:user.id,groupId:store.get("courtiq_lastgroup")||""}})
+      .then(d=>{if(!d.ok)console.warn("checkAchievements:",d.error);});
   },[user]);
 
-  useEffect(()=>{
-    if(!user) return;
-    const handler=()=>pickemAPI("myShopItems",{params:{userId:user.id}}).then(d=>{if(d.ok)setShopItems(d.items||[]);});
-    const eqHandler=()=>setMyEquipped(store.getJSON("courtiq_equipped_"+user.id,{}));
-    window.addEventListener("courtiq_items_purchased",handler);
-    window.addEventListener("courtiq_equipped_changed",eqHandler);
-    return()=>{window.removeEventListener("courtiq_items_purchased",handler);window.removeEventListener("courtiq_equipped_changed",eqHandler);};
-  },[user]);
+
 
   useEffect(()=>{
     if(!user||!selGroup) return;
@@ -489,7 +481,7 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
               <span style={{fontSize:T.font.xs,color:T.text.tertiary}}>Saldo </span>
               <span style={{fontSize:T.font.base,fontWeight:700,color:T.text.primary}}>{balance}</span>
             </div>}
-            {shields>0&&<div style={{background:T.surface[2],border:`1px solid ${T.border.subtle}`,borderRadius:T.radius.sm,padding:`${T.space[1]}px ${T.space[3]}px`,cursor:"pointer"}} onClick={async()=>{if(!confirm(`¿Usar un escudo de racha? Te quedan ${shields}.`))return;const d=await pickemAPI("useShield",{body:{userId:user.id}});if(d.ok){setShields(d.shieldsLeft);setMsg("Escudo usado — tu racha está protegida");}}} title="Escudo de racha">
+            {shields>0&&<div style={{background:T.surface[2],border:`1px solid ${T.border.subtle}`,borderRadius:T.radius.sm,padding:`${T.space[1]}px ${T.space[3]}px`,cursor:"pointer"}} onClick={async()=>{if(!confirm(`¿Usar un escudo de racha? Te quedan ${shields}.`))return;const d=await pickemAPI("useShield",{body:{userId:user.id}});if(d.ok){useShield(d.shieldsLeft);setMsg("Escudo usado — tu racha está protegida");}}} title="Escudo de racha">
               <span style={{fontSize:T.font.xs,color:T.text.tertiary}}>Escudos </span>
               <span style={{fontSize:T.font.base,fontWeight:700,color:T.accent.base}}>{shields}</span>
             </div>}

@@ -4,21 +4,20 @@ import { Card, ST, Spin, Tag } from "./ui";
 import { SHOP_ITEMS } from "../data/shop";
 import { pickemAPI } from "../api/pickem";
 import { getNameColor, getNamePrefix, getBorderColor } from "../utils/cosmetics";
+import { useCosmetics } from "../context/CosmeticsContext";
 
 const TYPE_LABEL={title:"Título",color:"Color de nombre",border:"Marco"};
 
 export const ShopTab=({userCtx})=>{
   const {user}=userCtx||{};
-  const [shopItems,setShopItems]=useState([]);
-  const [equipped,setEquipped]=useState({});
   const [balance,setBalance]=useState(null);
-  const [shields,setShields]=useState(0);
   const [loading,setLoading]=useState(false);
   const [msg,setMsg]=useState(null);            // {text, kind:"ok"|"error"}
   const [groupId,setGroupId]=useState(null);
   const [selCat,setSelCat]=useState("Todos");
   const [showOwned,setShowOwned]=useState(false);
   const [confirmItem,setConfirmItem]=useState(null);
+  const { items:shopItems, equipped, shields, equip:equipItem, addItem } = useCosmetics();
 
   const readEquipped=(uid)=>{
     try{ return JSON.parse(localStorage.getItem("courtiq_equipped_"+uid)||"{}"); }
@@ -34,21 +33,14 @@ export const ShopTab=({userCtx})=>{
     const gid=localStorage.getItem("courtiq_lastgroup");
     setGroupId(gid);
     if(gid) pickemAPI("getBalance",{params:{userId:user.id,groupId:gid}}).then(d=>{if(d.ok)setBalance(d.balance);});
-    pickemAPI("myShopItems",{params:{userId:user.id}}).then(d=>{if(d.ok)setShopItems(d.items||[]);});
-    pickemAPI("getShields",{params:{userId:user.id}}).then(d=>{if(d.ok)setShields(d.shields||0);});
-    setEquipped(readEquipped(user.id));
   },[user]);
 
   const flash=(text,kind="ok")=>{setMsg({text,kind});setTimeout(()=>setMsg(null),3500);};
 
   const equip=(item)=>{
-    const next=equipped[item.type]===item.key?null:item.key;
-    const updated={...equipped};
-    if(next) updated[item.type]=next; else delete updated[item.type];
-    setEquipped(updated);
-    writeEquipped(user.id,updated);
-    window.dispatchEvent(new CustomEvent("courtiq_equipped_changed"));
-    flash(next?`${item.name} equipado`:"Item desequipado");
+    const wasEquipped = equipped[item.type]===item.key;
+    equipItem(item);
+    flash(wasEquipped?"Item desequipado":`${item.name} equipado`);
   };
 
   const doBuy=async(item)=>{
@@ -57,17 +49,10 @@ export const ShopTab=({userCtx})=>{
     setLoading(true);
     const d=await pickemAPI("purchaseItem",{body:{userId:user.id,groupId,itemKey:item.key,itemCost:item.cost}});
     if(d.ok){
-      if(item.type==="shield"){setShields(s=>s+1);flash("Escudo de racha agregado");}
-      else if(item.type==="extra_pick"){flash("Pick extra agregado");}
-      else{
-        setShopItems(prev=>[...prev,item.key]);
-        const updated={...equipped,[item.type]:item.key};
-        setEquipped(updated);
-        writeEquipped(user.id,updated);
-        window.dispatchEvent(new CustomEvent("courtiq_items_purchased",{detail:{userId:user.id}}));
-        window.dispatchEvent(new CustomEvent("courtiq_equipped_changed"));
-        flash(`${item.name} comprado y equipado`);
-      }
+      addItem(item);
+      flash(item.type==="shield"?"Escudo de racha agregado"
+           :item.type==="extra_pick"?"Pick extra agregado"
+           :`${item.name} comprado y equipado`);
       setBalance(b=>b-item.cost);
     } else flash(d.error||"No se pudo completar la compra","error");
     setLoading(false);

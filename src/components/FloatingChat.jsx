@@ -5,7 +5,7 @@ import { pickemAPI } from "../api/pickem";
 import { store } from "../utils/storage";
 
 /* ═══ FLOATING CHAT ═══ */
-export const FloatingChat=({userCtx})=>{
+export const FloatingChat=({userCtx,selGroup})=>{
   const {user}=userCtx||{};
   const [open,setOpen]=useState(false);
   const [msgs,setMsgs]=useState([]);
@@ -44,35 +44,23 @@ export const FloatingChat=({userCtx})=>{
     loadMsgs(g,openRef.current);
   };
 
+  // El grupo viene de App; reaccionamos cuando cambia
   useEffect(()=>{
-    if(!user) return;
-    const params=new URLSearchParams(window.location.search);
-    const chatParam=params.get("chat");
-    const gid=chatParam||store.get("courtiq_lastgroup");
-    if(!gid) return;
-    if(chatParam){
-      const url=new URL(window.location.href);
-      url.searchParams.delete("chat");
-      window.history.replaceState({},"",url.toString());
-    }
-    pickemAPI("myGroups",{params:{userId:user.id}}).then(d=>{
-      if(d.ok&&d.groups?.length){
-        const g=d.groups.find(x=>x.id===gid)||d.groups[0];
-        switchGroup(g);
-        if(chatParam) setOpen(true);
-      }
-    });
-  },[user]);
+    if(!user||!selGroup) return;
+    if(groupRef.current?.id===selGroup.id) return;
+    switchGroup(selGroup);
+  },[user,selGroup]);
 
+  // Deep-link desde una notificación: abre el chat automáticamente
   useEffect(()=>{
-    if(!user) return;
-    const handler=(e)=>{
-      const g=e.detail;
-      if(g&&g.id!==groupRef.current?.id) switchGroup(g);
-    };
-    window.addEventListener("courtiq_group_changed",handler);
-    return()=>window.removeEventListener("courtiq_group_changed",handler);
-  },[user]);
+    const params=new URLSearchParams(window.location.search);
+    if(!params.get("chat")) return;
+    const url=new URL(window.location.href);
+    url.searchParams.delete("chat");
+    window.history.replaceState({},"",url.toString());
+    setOpen(true);
+  },[]);
+
 
   useEffect(()=>{
     const t=setInterval(()=>{

@@ -5,7 +5,7 @@ import { SHOP_ITEMS, ACHIEVEMENT_DEFS } from "../data/shop";
 import { pickemAPI } from "../api/pickem";
 import { getNameColor, getNamePrefix, getBorderColor } from "../utils/cosmetics";
 import { isIOS, autoSubscribePush } from "../utils/push";
-
+import { useCosmetics } from "../context/CosmeticsContext";
 /* ═══ SETTINGS TAB ═══ */
 const EMOJI_OPTS=["🏀","🏆","🔥","⭐","💎","👑","🦁","🐺","🦅","🐯","💪","🎯","🚀","✨","🌟","🎮","🃏","🥇","🎖️","🏅","🧠","💫","⚡","🎪","🦎","🐻","🏟️","🔮","🎲","🌊"];
 
@@ -30,8 +30,7 @@ export const SettingsTab=({userCtx,installPrompt,onInstalled})=>{
   const [emailLoading,setEmailLoading]=useState(false);
   const [emailMsg,setEmailMsg]=useState(null);
   const [myStats,setMyStats]=useState(null);
-  const [myShopItems,setMyShopItems]=useState([]);
-  const [myEquipped,setMyEquipped]=useState({});
+    const { items:myShopItems, equipped:myEquipped } = useCosmetics();
 
   const readEquipped=(uid)=>{
     try{ return JSON.parse(localStorage.getItem("courtiq_equipped_"+uid)||"{}"); }
@@ -42,8 +41,7 @@ export const SettingsTab=({userCtx,installPrompt,onInstalled})=>{
     if(!user) return;
     pickemAPI("getNotifPrefs",{params:{userId:user.id}}).then(d=>{if(d.ok)setNotifPrefs(d.prefs);});
     pickemAPI("getAchievements",{params:{userId:user.id}}).then(d=>{if(d.ok)setAchievements(d.achievements||[]);});
-    pickemAPI("userProfile",{params:{userId:user.id,targetId:user.id}}).then(d=>{if(d.ok){setMyStats(d.stats);setMyShopItems(d.shopItems||[]);}});
-    setMyEquipped(readEquipped(user.id));
+    pickemAPI("userProfile",{params:{userId:user.id,targetId:user.id}}).then(d=>{if(d.ok)setMyStats(d.stats);});
     if(user.email) setEmailInput(user.email);
   },[user]);
 
