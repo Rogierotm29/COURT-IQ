@@ -36,9 +36,10 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          "react-vendor": ["react", "react-dom"],
-          "recharts": ["recharts"],
+        // Vite 8 (Rolldown) sólo acepta función, no objeto
+        manualChunks(id) {
+          if (id.includes("node_modules/react/") || id.includes("node_modules/react-dom/")) return "react-vendor";
+          if (id.includes("node_modules/recharts/")) return "recharts";
         },
       },
     },
