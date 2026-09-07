@@ -1,161 +1,254 @@
 import { useState, useEffect } from "react";
-import { C } from "../theme";
-import { Card, ST, Spin } from "./ui";
+import { T } from "../theme";
+import { Card, ST, Spin, Tag } from "./ui";
 import { SHOP_ITEMS } from "../data/shop";
 import { pickemAPI } from "../api/pickem";
 import { getNameColor, getNamePrefix, getBorderColor } from "../utils/cosmetics";
 
-/* ═══ SHOP TAB ═══ */
+const TYPE_LABEL={title:"Título",color:"Color de nombre",border:"Marco"};
+
 export const ShopTab=({userCtx})=>{
   const {user}=userCtx||{};
   const [shopItems,setShopItems]=useState([]);
-  const [equipped,setEquipped]=useState(()=>JSON.parse(localStorage.getItem("courtiq_equipped_"+(user?.id||""))||"{}"));
+  const [equipped,setEquipped]=useState({});
   const [balance,setBalance]=useState(null);
   const [shields,setShields]=useState(0);
   const [loading,setLoading]=useState(false);
-  const [msg,setMsg]=useState("");
+  const [msg,setMsg]=useState(null);            // {text, kind:"ok"|"error"}
   const [groupId,setGroupId]=useState(null);
   const [selCat,setSelCat]=useState("Todos");
   const [showOwned,setShowOwned]=useState(false);
+  const [confirmItem,setConfirmItem]=useState(null);
+
+  const readEquipped=(uid)=>{
+    try{ return JSON.parse(localStorage.getItem("courtiq_equipped_"+uid)||"{}"); }
+    catch(e){ console.warn("No se pudieron leer los items equipados:",e.message); return {}; }
+  };
+  const writeEquipped=(uid,val)=>{
+    try{ localStorage.setItem("courtiq_equipped_"+uid,JSON.stringify(val)); }
+    catch(e){ console.warn("No se pudieron guardar los items equipados:",e.message); }
+  };
 
   useEffect(()=>{
-    if(!user)return;
+    if(!user) return;
     const gid=localStorage.getItem("courtiq_lastgroup");
     setGroupId(gid);
     if(gid) pickemAPI("getBalance",{params:{userId:user.id,groupId:gid}}).then(d=>{if(d.ok)setBalance(d.balance);});
     pickemAPI("myShopItems",{params:{userId:user.id}}).then(d=>{if(d.ok)setShopItems(d.items||[]);});
     pickemAPI("getShields",{params:{userId:user.id}}).then(d=>{if(d.ok)setShields(d.shields||0);});
-    setEquipped(JSON.parse(localStorage.getItem("courtiq_equipped_"+user.id)||"{}"));
+    setEquipped(readEquipped(user.id));
   },[user]);
 
+  const flash=(text,kind="ok")=>{setMsg({text,kind});setTimeout(()=>setMsg(null),3500);};
+
   const equip=(item)=>{
-    const type=item.type;
-    const cur=equipped[type];
-    const next=cur===item.key?null:item.key; // toggle off if already equipped
-    const updated=next?{...equipped,[type]:next}:{...equipped};
-    if(!next)delete updated[type];
+    const next=equipped[item.type]===item.key?null:item.key;
+    const updated={...equipped};
+    if(next) updated[item.type]=next; else delete updated[item.type];
     setEquipped(updated);
-    localStorage.setItem("courtiq_equipped_"+user.id,JSON.stringify(updated));
+    writeEquipped(user.id,updated);
     window.dispatchEvent(new CustomEvent("courtiq_equipped_changed"));
-    setMsg(next?`⚡ "${item.name}" equipado en tu perfil`:`✅ Item desequipado`);
+    flash(next?`${item.name} equipado`:"Item desequipado");
   };
 
-  const buy=async(item)=>{
-    if(!groupId){setMsg("Abre un grupo primero para gastar monedas");return;}
-    if(!confirm(`¿Comprar "${item.name}" por 🪙${item.cost}?`))return;
-    setLoading(true);setMsg("");
+  const doBuy=async(item)=>{
+    setConfirmItem(null);
+    if(!groupId){flash("Abre un grupo primero para gastar monedas","error");return;}
+    setLoading(true);
     const d=await pickemAPI("purchaseItem",{body:{userId:user.id,groupId,itemKey:item.key,itemCost:item.cost}});
     if(d.ok){
-      if(item.type==="shield"){setShields(s=>s+1);setMsg("✅ +1 escudo de racha agregado");}
-      else if(item.type==="extra_pick"){setMsg("✅ +1 pick extra agregado");}
+      if(item.type==="shield"){setShields(s=>s+1);flash("Escudo de racha agregado");}
+      else if(item.type==="extra_pick"){flash("Pick extra agregado");}
       else{
-        const newItems=[...shopItems,item.key];
-        setShopItems(newItems);
-        // Auto-equip al comprar
+        setShopItems(prev=>[...prev,item.key]);
         const updated={...equipped,[item.type]:item.key};
         setEquipped(updated);
-        localStorage.setItem("courtiq_equipped_"+user.id,JSON.stringify(updated));
+        writeEquipped(user.id,updated);
         window.dispatchEvent(new CustomEvent("courtiq_items_purchased",{detail:{userId:user.id}}));
         window.dispatchEvent(new CustomEvent("courtiq_equipped_changed"));
-        setMsg(`✅ ¡${item.name} comprado y equipado!`);
+        flash(`${item.name} comprado y equipado`);
       }
       setBalance(b=>b-item.cost);
-    }else setMsg(d.error||"Error");
+    } else flash(d.error||"No se pudo completar la compra","error");
     setLoading(false);
   };
 
-  if(!user)return<div className="fade-up"><Card style={{textAlign:"center",padding:40}}><div style={{fontSize:48,marginBottom:12}}>🛍️</div><div style={{fontSize:16,fontWeight:700,color:C.text}}>Inicia sesión para acceder a la tienda</div></Card></div>;
+  const label={fontSize:T.font.xs,color:T.text.tertiary,textTransform:"uppercase",letterSpacing:1.2,fontWeight:600};
+
+  if(!user) return<div className="fade-up">
+    <ST sub="Personaliza tu perfil">Tienda</ST>
+    <Card style={{textAlign:"center",padding:T.space[7]}}>
+      <div style={{fontSize:T.font.base,fontWeight:600,color:T.text.primary,marginBottom:T.space[2]}}>Inicia sesión para acceder</div>
+      <div style={{fontSize:T.font.sm,color:T.text.tertiary}}>Necesitas una cuenta para comprar y equipar items</div>
+    </Card>
+  </div>;
 
   const cats=["Todos",...new Set(SHOP_ITEMS.map(i=>i.cat))];
-  const allOwned=SHOP_ITEMS.filter(i=>i.type!=="shield"&&i.type!=="extra_pick"&&shopItems.includes(i.key));
-  const filtered=(showOwned?allOwned:(selCat==="Todos"?SHOP_ITEMS:SHOP_ITEMS.filter(i=>i.cat===selCat)));
+  const consumable=i=>i.type==="shield"||i.type==="extra_pick";
+  const allOwned=SHOP_ITEMS.filter(i=>!consumable(i)&&shopItems.includes(i.key));
+  const filtered=showOwned?allOwned:(selCat==="Todos"?SHOP_ITEMS:SHOP_ITEMS.filter(i=>i.cat===selCat));
 
-  // Preview del jugador con items equipados
   const previewColor=getNameColor(shopItems,equipped);
   const previewPrefix=getNamePrefix(shopItems,equipped);
   const previewBorder=getBorderColor(shopItems,equipped);
 
   return(<div className="fade-up">
-    <ST sub="Personaliza tu perfil">Coin Shop 🛍️</ST>
+    <ST sub="Personaliza tu perfil">Tienda</ST>
 
     {/* Saldo */}
-    <Card style={{marginBottom:14,background:"linear-gradient(135deg,#FFB80012,#0d1117)",borderColor:"#FFB80044",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
-      <div><div style={{fontSize:9,color:"#FFB800",textTransform:"uppercase",letterSpacing:2}}>Tu saldo</div><div style={{fontSize:40,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:"#FFB800"}}>{balance!==null?balance:<Spin/>} 🪙</div><div style={{fontSize:10,color:C.dim}}>Gana monedas acertando picks</div></div>
-      {shields>0&&<div style={{background:"#00C2FF11",border:"1px solid #00C2FF33",borderRadius:10,padding:"10px 16px",textAlign:"center"}}><div style={{fontSize:9,color:C.accent,textTransform:"uppercase",letterSpacing:1}}>Escudos</div><div style={{fontSize:28,fontWeight:900,fontFamily:"'Bebas Neue',sans-serif",color:C.accent}}>🛡️ {shields}</div></div>}
+    <Card style={{marginBottom:T.space[4],display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:T.space[4]}}>
+      <div>
+        <div style={label}>Tu saldo</div>
+        <div style={{fontSize:T.font["2xl"],fontWeight:700,color:T.text.primary,letterSpacing:-0.8,lineHeight:1.2}}>
+          {balance!==null?balance:<Spin s={20}/>}
+        </div>
+        <div style={{fontSize:T.font.xs,color:T.text.tertiary}}>Ganas monedas acertando picks</div>
+      </div>
+      {shields>0&&<div style={{background:T.surface[2],border:`1px solid ${T.border.subtle}`,borderRadius:T.radius.base,padding:`${T.space[2]}px ${T.space[4]}px`,textAlign:"center"}}>
+        <div style={label}>Escudos</div>
+        <div style={{fontSize:T.font.xl,fontWeight:700,color:T.accent.base}}>{shields}</div>
+      </div>}
     </Card>
 
-    {/* Vista previa del perfil */}
-    {allOwned.length>0&&<Card style={{marginBottom:14,background:"#0a1018",borderColor:C.border}}>
-      <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>Vista previa de tu perfil</div>
-      <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <div style={{width:38,height:38,borderRadius:"50%",background:"#0d1117",border:`2px solid ${previewBorder||C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,boxShadow:previewBorder?`0 0 10px ${previewBorder}66`:undefined}}>{user?.emoji||"🏀"}</div>
-        <div>
-          <div style={{fontSize:14,fontWeight:800,color:previewColor||C.text}}>{previewPrefix}{user?.name||"Tú"}</div>
-          <div style={{fontSize:10,color:C.dim}}>Así te ven en el ranking</div>
+    {/* Vista previa */}
+    {allOwned.length>0&&<Card style={{marginBottom:T.space[4]}}>
+      <div style={{...label,marginBottom:T.space[3]}}>Así te ven en el ranking</div>
+      <div style={{display:"flex",alignItems:"center",gap:T.space[3]}}>
+        <div style={{width:36,height:36,borderRadius:"50%",background:T.surface[2],border:`1px solid ${previewBorder||T.border.base}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:T.font.lg,boxShadow:previewBorder?`0 0 8px ${previewBorder}55`:undefined}}>
+          {user?.avatar_emoji||"🏀"}
         </div>
+        <div style={{fontSize:T.font.base,fontWeight:600,color:previewColor||T.text.primary}}>{previewPrefix}{user?.name||"Tú"}</div>
       </div>
     </Card>}
 
-    {/* Mis items equipados */}
-    {allOwned.length>0&&<Card style={{marginBottom:14,borderColor:"#FFB80033",background:"#FFB80008"}}>
-      <div style={{fontSize:9,color:"#FFB800",textTransform:"uppercase",letterSpacing:2,marginBottom:10}}>⚡ Items Equipados</div>
+    {/* Equipados */}
+    {allOwned.length>0&&<Card style={{marginBottom:T.space[4]}}>
+      <div style={{...label,marginBottom:T.space[3]}}>Items equipados</div>
       {["title","color","border"].map(type=>{
-        const eqKey=equipped[type];
         const ownedOfType=allOwned.filter(i=>i.type===type);
-        if(ownedOfType.length===0)return null;
-        return<div key={type} style={{marginBottom:8}}>
-          <div style={{fontSize:9,color:C.dim,textTransform:"uppercase",letterSpacing:1,marginBottom:5}}>{type==="title"?"Título":type==="color"?"Color de nombre":"Marco"}</div>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        if(ownedOfType.length===0) return null;
+        return<div key={type} style={{marginBottom:T.space[3]}}>
+          <div style={{fontSize:T.font.xs,color:T.text.tertiary,marginBottom:T.space[2]}}>{TYPE_LABEL[type]}</div>
+          <div style={{display:"flex",gap:T.space[2],flexWrap:"wrap"}}>
             {ownedOfType.map(item=>{
               const isEq=equipped[type]===item.key;
-              return<button key={item.key} className="btn" onClick={()=>equip(item)} style={{padding:"5px 10px",borderRadius:20,background:isEq?"#FFB80022":"#0d1117",border:`1px solid ${isEq?"#FFB800":C.border}`,color:isEq?"#FFB800":C.dim,fontSize:11,fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
-                <span>{item.emoji}</span><span>{item.name.replace("Título ","").replace("Nombre ","").replace("Marco ","")}</span>
-                {isEq&&<span style={{fontSize:9,color:"#FFB800"}}>✓</span>}
-              </button>;
+              return<button key={item.key} className="btn" onClick={()=>equip(item)} style={{
+                padding:`${T.space[1]}px ${T.space[3]}px`, borderRadius:T.radius.full,
+                background:isEq?T.accent.subtle:T.surface[2],
+                border:`1px solid ${isEq?T.accent.base:T.border.subtle}`,
+                color:isEq?T.accent.base:T.text.tertiary,
+                fontSize:T.font.xs, fontWeight:600,
+              }}>{item.name.replace("Título ","").replace("Nombre ","").replace("Marco ","")}</button>;
             })}
           </div>
         </div>;
       })}
+      <div style={{fontSize:T.font.xs,color:T.text.tertiary,marginTop:T.space[1]}}>
+        Puedes equipar un título, un color y un marco a la vez. Toca de nuevo para quitarlo.
+      </div>
     </Card>}
 
-    {msg&&<div style={{marginBottom:14,padding:"10px 14px",background:msg.startsWith("✅")||msg.startsWith("⚡")?"#00FF9D11":"#ff444411",border:`1px solid ${msg.startsWith("✅")||msg.startsWith("⚡")?"#00FF9D33":"#ff444433"}`,borderRadius:10,fontSize:12,color:msg.startsWith("✅")||msg.startsWith("⚡")?"#00FF9D":"#ff6666"}}>{msg}</div>}
+    {msg&&<div style={{
+      marginBottom:T.space[4], padding:`${T.space[3]}px ${T.space[4]}px`,
+      background:T.surface[1], border:`1px solid ${T.border.base}`,
+      borderLeft:`3px solid ${msg.kind==="error"?T.danger.base:T.success.base}`,
+      borderRadius:T.radius.sm, fontSize:T.font.sm, color:T.text.secondary,
+    }}>{msg.text}</div>}
 
     {/* Filtros */}
-    <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:14,paddingBottom:4}}>
-      <button className="btn" onClick={()=>{setShowOwned(o=>!o);setSelCat("Todos");}} style={{padding:"6px 14px",borderRadius:20,background:showOwned?"#FFB800":"#0d1117",border:`1px solid ${showOwned?"#FFB800":C.border}`,color:showOwned?"#07090f":C.dim,fontSize:11,fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>
-        🎒 Mis items {allOwned.length>0&&`(${allOwned.length})`}
-      </button>
-      {!showOwned&&cats.map(c=><button key={c} className="btn" onClick={()=>setSelCat(c)} style={{padding:"6px 14px",borderRadius:20,background:selCat===c?C.accent:"#0d1117",border:`1px solid ${selCat===c?C.accent:C.border}`,color:selCat===c?"#07090f":C.dim,fontSize:11,fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>{c}</button>)}
+    <div style={{display:"flex",gap:T.space[2],overflowX:"auto",marginBottom:T.space[4],paddingBottom:T.space[1]}}>
+      <button className="btn" onClick={()=>{setShowOwned(o=>!o);setSelCat("Todos");}} style={{
+        padding:`${T.space[1]}px ${T.space[4]}px`, borderRadius:T.radius.full,
+        background:showOwned?T.accent.subtle:T.surface[2],
+        border:`1px solid ${showOwned?T.accent.base:T.border.subtle}`,
+        color:showOwned?T.accent.base:T.text.tertiary,
+        fontSize:T.font.xs, fontWeight:600, whiteSpace:"nowrap", flexShrink:0,
+      }}>Mis items{allOwned.length>0?` (${allOwned.length})`:""}</button>
+      {!showOwned&&cats.map(c=><button key={c} className="btn" onClick={()=>setSelCat(c)} style={{
+        padding:`${T.space[1]}px ${T.space[4]}px`, borderRadius:T.radius.full,
+        background:selCat===c?T.accent.subtle:T.surface[2],
+        border:`1px solid ${selCat===c?T.accent.base:T.border.subtle}`,
+        color:selCat===c?T.accent.base:T.text.tertiary,
+        fontSize:T.font.xs, fontWeight:600, whiteSpace:"nowrap", flexShrink:0,
+      }}>{c}</button>)}
     </div>
 
-    {/* Grid de items */}
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:22}}>
-      {filtered.map(item=>{
-        const owned=item.type==="shield"||item.type==="extra_pick"?false:shopItems.includes(item.key);
-        const isEquipped=owned&&equipped[item.type]===item.key;
-        const canAfford=balance===null||balance>=item.cost;
-        const isRainbow=item.value==="rainbow";
-        return<Card key={item.key} style={{padding:"16px 12px",borderColor:isEquipped?`#FFB80077`:owned?`${C.accent}55`:C.border,position:"relative",overflow:"hidden",background:isEquipped?"#FFB80008":undefined}}>
-          {isEquipped&&<div style={{position:"absolute",top:6,right:6,background:"#FFB80022",border:"1px solid #FFB80066",borderRadius:8,padding:"2px 6px",fontSize:8,fontWeight:700,color:"#FFB800"}}>⚡ PUESTO</div>}
-          {owned&&!isEquipped&&<div style={{position:"absolute",top:6,right:6,background:`${C.accent}22`,border:`1px solid ${C.accent}44`,borderRadius:8,padding:"2px 6px",fontSize:8,fontWeight:700,color:C.accent}}>TUYO</div>}
-          <div style={{fontSize:32,marginBottom:6,textAlign:"center"}}>{item.emoji}</div>
-          <div style={{fontSize:12,fontWeight:800,color:owned?C.text:C.muted,textAlign:"center",marginBottom:4}}>{item.name}</div>
-          <div style={{fontSize:9,color:C.dim,textAlign:"center",marginBottom:10,lineHeight:1.4}}>{item.desc}</div>
-          {item.type==="color"&&<div style={{height:4,borderRadius:2,background:item.value,marginBottom:10}}/>}
-          {item.type==="border"&&<div style={{height:4,borderRadius:2,background:isRainbow?"linear-gradient(90deg,#FF0000,#FF7F00,#FFFF00,#00FF00,#00C2FF,#8B00FF)":`linear-gradient(90deg,transparent,${item.value},transparent)`,marginBottom:10}}/>}
-          {owned&&item.type!=="shield"&&item.type!=="extra_pick"
-            ?<button className="btn" onClick={()=>equip(item)} style={{width:"100%",padding:"8px",borderRadius:8,background:isEquipped?"linear-gradient(135deg,#FFB800,#ff9500)":"#0d1117",color:isEquipped?"#07090f":C.muted,fontSize:11,fontWeight:900,border:`1px solid ${isEquipped?"#FFB800":C.border}`}}>
-              {isEquipped?"⚡ Equipado":"Equipar"}
-            </button>
-            :<button className="btn" onClick={()=>buy(item)} disabled={loading||(!owned&&!canAfford)} style={{width:"100%",padding:"8px",borderRadius:8,background:canAfford?`linear-gradient(135deg,#FFB800,#ff9500)`:"#0a1018",color:canAfford?"#07090f":C.muted,fontSize:12,fontWeight:900}}>
-              {item.type==="shield"?"🛡️ ":item.type==="extra_pick"?"🔄 ":""}🪙{item.cost}
-            </button>
-          }
-        </Card>;
-      })}
+    {/* Items */}
+    {filtered.length===0
+      ?<Card style={{textAlign:"center",padding:T.space[6],marginBottom:T.space[5]}}>
+        <div style={{fontSize:T.font.sm,color:T.text.tertiary}}>
+          {showOwned?"Todavía no tienes items. Compra alguno para personalizar tu perfil.":"No hay items en esta categoría"}
+        </div>
+      </Card>
+      :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:T.space[3],marginBottom:T.space[5]}}>
+        {filtered.map(item=>{
+          const owned=!consumable(item)&&shopItems.includes(item.key);
+          const isEquipped=owned&&equipped[item.type]===item.key;
+          const canAfford=balance===null||balance>=item.cost;
+          const isRainbow=item.value==="rainbow";
+          return<Card key={item.key} style={{padding:T.space[4],borderColor:isEquipped?T.accent.base:owned?T.accent.border:T.border.subtle,display:"flex",flexDirection:"column"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:T.space[2],marginBottom:T.space[2]}}>
+              <div style={{fontSize:T.font.sm,fontWeight:600,color:T.text.primary,lineHeight:1.3}}>{item.name}</div>
+              {isEquipped?<Tag c={T.accent.base}>Puesto</Tag>:owned?<Tag c={T.text.tertiary}>Tuyo</Tag>:null}
+            </div>
+
+            <div style={{fontSize:T.font.xs,color:T.text.tertiary,lineHeight:1.5,marginBottom:T.space[3],flex:1}}>{item.desc}</div>
+
+            {/* Muestra del cosmético — aquí el color SÍ es el producto */}
+            {item.type==="color"&&<div style={{height:3,borderRadius:2,background:item.value,marginBottom:T.space[3]}}/>}
+            {item.type==="border"&&<div style={{height:3,borderRadius:2,marginBottom:T.space[3],background:isRainbow?"linear-gradient(90deg,#FF0000,#FF7F00,#FFFF00,#00FF00,#00C2FF,#8B00FF)":`linear-gradient(90deg,transparent,${item.value},transparent)`}}/>}
+
+            {owned&&!consumable(item)
+              ?<button className="btn" onClick={()=>equip(item)} style={{
+                width:"100%", padding:T.space[2], borderRadius:T.radius.sm,
+                background:isEquipped?T.accent.subtle:T.surface[2],
+                border:`1px solid ${isEquipped?T.accent.base:T.border.subtle}`,
+                color:isEquipped?T.accent.base:T.text.secondary,
+                fontSize:T.font.xs, fontWeight:600,
+              }}>{isEquipped?"Equipado":"Equipar"}</button>
+              :<button className="btn" onClick={()=>setConfirmItem(item)} disabled={loading||!canAfford} style={{
+                width:"100%", padding:T.space[2], borderRadius:T.radius.sm,
+                background:canAfford?T.accent.base:T.surface[2],
+                border:canAfford?"none":`1px solid ${T.border.subtle}`,
+                color:canAfford?"#fff":T.text.disabled,
+                fontSize:T.font.sm, fontWeight:600,
+              }}>{canAfford?`${item.cost} monedas`:`Faltan ${item.cost-balance}`}</button>}
+          </Card>;
+        })}
+      </div>}
+
+    <div style={{padding:`${T.space[3]}px ${T.space[4]}px`,background:T.surface[1],border:`1px solid ${T.border.subtle}`,borderRadius:T.radius.base,fontSize:T.font.sm,color:T.text.secondary,lineHeight:1.6}}>
+      Los items cosméticos se ven en el ranking de tu grupo. El escudo de racha protege una racha de aciertos cuando fallas.
     </div>
-    <div style={{padding:"12px 16px",background:"#0a1018",borderRadius:10,border:`1px solid ${C.border}`,fontSize:11,color:C.dim}}>
-      💡 Equipa solo un título, color y marco a la vez. Se ven en el ranking de tu grupo. El escudo protege tu racha de aciertos.
-    </div>
+
+    {/* Confirmación de compra — reemplaza confirm() nativo (D8) */}
+    {confirmItem&&<div
+      onClick={()=>setConfirmItem(null)}
+      role="dialog" aria-modal="true"
+      style={{position:"fixed",inset:0,background:"#00000099",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:T.space[5]}}
+    >
+      <div onClick={e=>e.stopPropagation()} style={{
+        background:T.surface[1], border:`1px solid ${T.border.base}`,
+        borderRadius:T.radius.lg, padding:T.space[5], maxWidth:340, width:"100%",
+        boxShadow:T.shadow.lg,
+      }}>
+        <div style={{fontSize:T.font.lg,fontWeight:700,color:T.text.primary,marginBottom:T.space[2]}}>Confirmar compra</div>
+        <div style={{fontSize:T.font.sm,color:T.text.secondary,lineHeight:1.6,marginBottom:T.space[5]}}>
+          Vas a comprar <b style={{color:T.text.primary}}>{confirmItem.name}</b> por {confirmItem.cost} monedas.
+          {balance!==null&&<> Te quedarán {balance-confirmItem.cost}.</>}
+        </div>
+        <div style={{display:"flex",gap:T.space[2]}}>
+          <button className="btn" onClick={()=>setConfirmItem(null)} style={{
+            flex:1, padding:T.space[3], borderRadius:T.radius.base,
+            background:T.surface[2], border:`1px solid ${T.border.base}`,
+            color:T.text.secondary, fontSize:T.font.sm, fontWeight:600,
+          }}>Cancelar</button>
+          <button className="btn" onClick={()=>doBuy(confirmItem)} disabled={loading} style={{
+            flex:1, padding:T.space[3], borderRadius:T.radius.base,
+            background:T.accent.base, color:"#fff", fontSize:T.font.sm, fontWeight:600,
+          }}>{loading?<Spin s={13}/>:"Comprar"}</button>
+        </div>
+      </div>
+    </div>}
   </div>);
 };
