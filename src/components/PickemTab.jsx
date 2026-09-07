@@ -58,6 +58,8 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
   const [profileModal,setProfileModal]=useState(null);const [profileData,setProfileData]=useState(null);
   const gameStatusKey = games.map(g=>`${g.id}:${g.status}`).join("|");
   const { items:shopItems, equipped:myEquipped, shields, useShield } = useCosmetics();
+  const [confirmLeave,setConfirmLeave]=useState(false);
+  const [leaveLoading,setLeaveLoading]=useState(false);
 
   const now=new Date();
   const upcoming=games.filter(g=>g.startTime?now<new Date(g.startTime):g.status==="Upcoming");
@@ -208,6 +210,20 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
     if(d.ok){setGroups(g=>[...g,d.group]);setSelGroup(d.group);setPanel(null);setNewGroupName("");setMsg(`Grupo creado. Comparte el código: ${d.group.code}`);}
     else setMsg(d.error);
     setLoading(false);
+  };
+
+  const leaveGroup=async()=>{
+    if(!selGroup) return;
+    setLeaveLoading(true);
+    const d=await pickemAPI("leaveGroup",{body:{userId:user.id,groupId:selGroup.id}});
+    if(d.ok){
+      const remaining=groups.filter(g=>g.id!==selGroup.id);
+      setGroups(remaining);
+      setSelGroup(remaining[0]||null);
+      setConfirmLeave(false);
+      setMsg(d.groupDeleted?"Saliste del grupo y se eliminó por quedar vacío":"Saliste del grupo");
+    } else setMsg(d.error);
+    setLeaveLoading(false);
   };
 
   const joinGroup=async()=>{
@@ -490,9 +506,10 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
               <button className="btn" onClick={copyCode} style={{background:"transparent",borderRadius:T.radius.sm,padding:`2px ${T.space[2]}px`,color:copied?T.success.base:T.text.tertiary,fontSize:T.font.xs,fontWeight:600}}>{copied?"Copiado":"Copiar"}</button>
               <button className="btn" onClick={shareGroup} style={{background:"transparent",borderRadius:T.radius.sm,padding:`2px ${T.space[2]}px`,color:T.text.tertiary,fontSize:T.font.xs,fontWeight:600}}>Compartir</button>
               {selGroup.owner_id===user.id&&<button className="btn" onClick={()=>{setEditGroup(p=>!p);setEditGroupName(selGroup.name);setEditGroupEmoji(selGroup.emoji||"🏀");}} style={{background:"transparent",borderRadius:T.radius.sm,padding:`2px ${T.space[2]}px`,color:T.text.tertiary,fontSize:T.font.xs,fontWeight:600}}>Editar</button>}
+              <button className="btn" onClick={()=>setConfirmLeave(true)} style={{background:"transparent",borderRadius:T.radius.sm,padding:`2px ${T.space[2]}px`,color:T.text.tertiary,fontSize:T.font.xs,fontWeight:600}}>Salir</button>
+            </div>
             </div>
           </div>
-        </div>
         {myLbStats&&<div style={{display:"flex",gap:T.space[6],marginTop:T.space[4],paddingTop:T.space[3],borderTop:`1px solid ${T.border.subtle}`}}>
           {[["Posición",`#${myRank+1}`],["Aciertos",`${myLbStats.correct_picks}/${myLbStats.total_picks}`],["Precisión",`${myLbStats.accuracy}%`],["Puntos",myLbStats.total_points]].map(([l,v])=>
             <div key={l}><div style={{fontSize:T.font.xs,color:T.text.tertiary}}>{l}</div><div style={{fontSize:T.font.lg,fontWeight:700,color:T.text.primary}}>{v}</div></div>)}
@@ -956,6 +973,19 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
           </div>)}
       </div>
     </Card>
+
+    {confirmLeave&&<div onClick={()=>!leaveLoading&&setConfirmLeave(false)} role="dialog" aria-modal="true" style={{position:"fixed",inset:0,background:"#00000099",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:T.space[5]}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:T.surface[1],border:`1px solid ${T.border.base}`,borderRadius:T.radius.lg,padding:T.space[5],maxWidth:340,width:"100%",boxShadow:T.shadow.lg}}>
+        <div style={{fontSize:T.font.lg,fontWeight:700,color:T.text.primary,marginBottom:T.space[2]}}>¿Salir de {selGroup?.name}?</div>
+        <div style={{fontSize:T.font.sm,color:T.text.secondary,lineHeight:1.6,marginBottom:T.space[5]}}>
+          Dejarás de aparecer en el ranking. Tus apuestas abiertas se cancelarán y se te devolverán las monedas. Puedes volver a entrar con el código.
+        </div>
+        <div style={{display:"flex",gap:T.space[2]}}>
+          <button className="btn" onClick={()=>setConfirmLeave(false)} disabled={leaveLoading} style={{...btnGhost,flex:1,padding:T.space[3],fontSize:T.font.sm}}>Cancelar</button>
+          <button className="btn" onClick={leaveGroup} disabled={leaveLoading} style={{flex:1,padding:T.space[3],borderRadius:T.radius.base,background:T.danger.base,color:"#fff",fontSize:T.font.sm,fontWeight:600}}>{leaveLoading?<Spin s={13}/>:"Salir"}</button>
+        </div>
+      </div>
+    </div>}
 
     {/* ─── PERFIL ─── */}
     {profileModal&&(()=>{

@@ -168,7 +168,7 @@ export default async function handler(req, res) {
   // Rate limiting — stricter on auth, looser on reads
   const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || "unknown";
   const authActions = ["register", "resetPin", "forgotPin", "resetPinByEmail"];
-  const writeActions = ["makePick","createGroup","joinGroup","createBet","acceptBet","sendChat","claimDailyBonus","deleteAccount"];
+  const writeActions = ["makePick","createGroup","joinGroup","leaveGroup","createBet","acceptBet","sendChat","claimDailyBonus","deleteAccount"];
   const maxReqs = authActions.includes(action) ? 10 : writeActions.includes(action) ? 60 : 120;
   if (rateLimit(ip, action, maxReqs)) {
     return res.status(429).json({ ok: false, error: "Demasiadas solicitudes. Espera un momento." });
@@ -353,6 +353,49 @@ export default async function handler(req, res) {
         });
         grantAchievement(userId, "joined_group");
         return res.json({ ok: true, group });
+      }
+
+            // ─── LEAVE GROUP ──────────────────────────────────────
+      case "leaveGroup": {
+        const { userId, groupId } = body;
+        if (!userId || !groupId) return res.json({ ok: false, error: "Faltan datos" });
+
+        const membership = await supabase("group_members", { filters: `?group_id=eq.${groupId}&user_id=eq.${userId}&limit=1` });
+        if (!membership?.length) return res.json({ ok: false, error: "No perteneces a este grupo" });
+
+        const groups = await supabase("groups", { filters: `?id=eq.${groupId}&select=owner_id&limit=1` });
+        const isOwner = groups?.[0]?.owner_id === userId;
+
+        const members = await supabase("group_members", { filters: `?group_id=eq.${groupId}&select=user_id` });
+        const memberCount = members?.length || 0;
+
+        // El dueño no puede abandonar si queda gente: el grupo se quedaría sin admin
+        if (isOwner && memberCount > 1) {
+          return res.json({ ok: false, error: "Eres el creador del grupo. Transfiere la propiedad o elimina el grupo primero." });
+        }
+
+        // Apuestas abiertas: devolver monedas antes de salir
+        const openBets = await supabase("bets", { filters: `?group_id=eq.${groupId}&requester_id=eq.${userId}&status=in.(open,pending)` });
+        if (openBets?.length) {
+          const refund = openBets.reduce((s, b) => s + (b.amount || 0), 0);
+          const bal = await supabase("coin_balances", { filters: `?user_id=eq.${userId}&group_id=eq.${groupId}&limit=1` });
+          if (bal?.length) {
+            await supabase(`coin_balances?id=eq.${bal[0].id}`, { method: "PATCH", body: { balance: bal[0].balance + refund } });
+          }
+          await Promise.allSettled(openBets.map(b =>
+            supabase(`bets?id=eq.${b.id}`, { method: "PATCH", body: { status: "cancelled" } })
+          ));
+        }
+
+        await supabase(`group_members?group_id=eq.${groupId}&user_id=eq.${userId}`, { method: "DELETE" });
+
+        // Si era el último miembro, el grupo se elimina
+        if (memberCount === 1) {
+          await supabase(`groups?id=eq.${groupId}`, { method: "DELETE" });
+          return res.json({ ok: true, groupDeleted: true });
+        }
+
+        return res.json({ ok: true });
       }
 
       // ─── MY GROUPS ────────────────────────────────────────
