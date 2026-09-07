@@ -27,6 +27,7 @@ export const HomeTab=({games,live,userCtx,standings,picks,confidence,setConfiden
   const [floatingPts,setFloatingPts]=useState({});
   const prevStatusRef=useRef({});
   const prevStreakRef=useRef(streak);
+  const gameStatusKey = games.map(g=>`${g.id}:${g.status}`).join("|");
 
   const triggerCelebration=(correctPts,str,gameId)=>{
     const cKey=`courtiq_celebrated_${user?.id}_${gameId}`;
@@ -76,7 +77,7 @@ export const HomeTab=({games,live,userCtx,standings,picks,confidence,setConfiden
   useEffect(()=>{
     if(!user||!selGroup) return;
     pickemAPI("groupPicks",{params:{groupId:selGroup.id,date:getToday()}}).then(r=>{if(r.ok)setGrpPicks(r.picks||[]);});
-  },[user,selGroup,games.map(g=>g.status).join(",")]);
+    },[user,selGroup,gameStatusKey]);
 
   useEffect(()=>{
     if(streak>prevStreakRef.current&&streak>=2){
@@ -101,7 +102,7 @@ export const HomeTab=({games,live,userCtx,standings,picks,confidence,setConfiden
       }
       prevStatusRef.current[g.id]=g.status;
     });
-  },[games.map(g=>g.status).join(",")]);
+    },[gameStatusKey]);
 
   const lockAllPicks=()=>{
     if(!selGroup) return;

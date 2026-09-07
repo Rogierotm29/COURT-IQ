@@ -155,7 +155,7 @@ export default function App(){
   const [selGroup,setSelGroup]=useState(null);
   const [groups,setGroups]=useState([]);
   const [apiDown,setApiDown]=useState(false);
-
+  const gameStatusKey = games.map(g=>`${g.id}:${g.status}`).join("|");
   const makePick=useCallback(async(gameId,team,home,away,conf=1,g=null)=>{
     if(!selGroup||!userCtx.user) return;
     setPicks(p=>({...p,[gameId]:team}));
@@ -170,6 +170,8 @@ export default function App(){
       }})
     ));
   },[selGroup,userCtx.user,standings,groups]);
+
+
 
   // Escucha la salud de la API — el cliente reporta cada fallo o recuperación
   useEffect(()=>{
@@ -229,7 +231,7 @@ export default function App(){
     const hasLive=games.some(g=>g.status==="LIVE");
     const t=setInterval(refreshAll,hasLive?30000:90000);
     return()=>clearInterval(t);
-  },[games.map(g=>g.status).join(","),refreshAll]);
+  },[gameStatusKey,refreshAll]);
 
   useEffect(()=>{
     pickemAPI("scoreGames").then(d=>{if(!d.ok)console.warn("scoreGames:",d.error);});

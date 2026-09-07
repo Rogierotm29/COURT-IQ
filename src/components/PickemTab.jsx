@@ -57,6 +57,7 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
   const [recoveryNewPin,setRecoveryNewPin]=useState(["","","",""]);
   const [editGroup,setEditGroup]=useState(false);const [editGroupName,setEditGroupName]=useState("");const [editGroupEmoji,setEditGroupEmoji]=useState("");
   const [profileModal,setProfileModal]=useState(null);const [profileData,setProfileData]=useState(null);
+  const gameStatusKey = games.map(g=>`${g.id}:${g.status}`).join("|");
 
   const now=new Date();
   const upcoming=games.filter(g=>g.startTime?now<new Date(g.startTime):g.status==="Upcoming");
@@ -169,7 +170,7 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
   useEffect(()=>{
     if(!user||!selGroup) return;
     pickemAPI("groupPicks",{params:{groupId:selGroup.id,date:getToday()}}).then(d=>{if(d.ok)setGrpPicks(d.picks||[]);});
-  },[user,selGroup,games.map(g=>g.status).join(",")]);
+    },[user,selGroup,gameStatusKey]);
 
   const register=async()=>{
     if(!name.trim()) return;
