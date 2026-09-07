@@ -81,16 +81,23 @@ async function espnDirect(url) {
 
 async function loadGames() {
   let d = await api("/api/scoreboard");
-  if (d?.ok) return d.games;
+  if (d?.ok) return { games: d.games, seasonType: d.seasonType ?? null };
+
   d = await espnDirect("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard");
-  if (!d) return [];
-  return (d.events||[]).map(e=>{
+  if (!d) return { games: [], seasonType: null };
+
+  // ESPN: 1 = pretemporada, 2 = temporada regular, 3 = playoffs
+  const seasonType = d.leagues?.[0]?.season?.type?.type ?? null;
+
+  const games = (d.events||[]).map(e=>{
     const comp=e.competitions?.[0],home=comp?.competitors?.find(c=>c.homeAway==="home"),away=comp?.competitors?.find(c=>c.homeAway==="away"),st=comp?.status?.type;
     return{id:e.id,home:fix(home?.team?.abbreviation),away:fix(away?.team?.abbreviation),homeScore:parseInt(home?.score||0),awayScore:parseInt(away?.score||0),
       status:st?.completed||st?.state==="post"?"Final":st?.state==="in"?"LIVE":"Upcoming",
       startTime:e.date||null,
       detail:st?.state==="in"?`Q${comp?.status?.period||"?"} ${comp?.status?.displayClock||""}`:(st?.state==="post"?"Final":st?.shortDetail||"")};
   });
+
+  return { games, seasonType };
 }
 
 async function loadStandings() {
@@ -157,6 +164,7 @@ export default function App(){
   const [groups,setGroups]=useState([]);
   const [apiDown,setApiDown]=useState(false);
   const gameStatusKey = games.map(g=>`${g.id}:${g.status}`).join("|");
+  const [seasonType,setSeasonType]=useState(null);
   const makePick=useCallback(async(gameId,team,home,away,conf=1,g=null)=>{
     if(!selGroup||!userCtx.user) return;
     setPicks(p=>({...p,[gameId]:team}));
@@ -220,7 +228,9 @@ export default function App(){
 
   const refreshAll=useCallback(async()=>{
     setLoading(true);
-    const g=await loadGames();if(g.length>0){setGames(g);setLive(l=>({...l,games:true}));}
+    const g=await loadGames();
+    if(g.games.length>0){setGames(g.games);setLive(l=>({...l,games:true}));}
+    if(g.seasonType!=null) setSeasonType(g.seasonType);
     const st=await loadStandings();if(st?.length>=25){setStandings(st);setLive(l=>({...l,standings:true}));}
     const pl=await loadPlayers();if(pl?.length>10){setPlayers(pl);setLive(l=>({...l,players:true}));} else {setPlayers(FB_PL);}
     setLastUpd(new Date());setLoading(false);
@@ -331,6 +341,7 @@ export default function App(){
       {tab==="ou"&&<OUTab games={games} userCtx={userCtx}/>}
       {tab==="shop"&&<ShopTab userCtx={userCtx}/>}
       {tab==="bracket"&&<BracketTab userCtx={userCtx} standings={standings}/>}
+      {tab==="bracket"&&<BracketTab userCtx={userCtx} standings={standings} seasonType={seasonType}/>}
       {tab==="games"&&<MiniGamesTab players={players} userCtx={userCtx}/>}
       {tab==="settings"&&<SettingsTab userCtx={userCtx} installPrompt={installPrompt} onInstalled={()=>setInstallPrompt(null)}/>}
     </div>

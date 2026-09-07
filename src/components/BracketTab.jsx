@@ -16,18 +16,21 @@ export const MVP_CANDIDATES=[
   {name:"Scottie Barnes",team:"TOR"},{name:"Devin Booker",team:"PHX"},{name:"Paolo Banchero",team:"ORL"},
 ];
 
-/* Los playoffs sólo se desbloquean si la temporada regular terminó
-   Y estamos dentro de la ventana de playoffs (abril–junio).
-   Fuera de esa ventana los standings son de una temporada pasada. */
-function getBracketPhase(maxGP){
-  const month=new Date().getMonth(); // 0 = enero
-  const inPlayoffWindow=month>=3&&month<=5; // abr, may, jun
-  if(maxGP>=82&&inPlayoffWindow) return "open";
-  if(maxGP>=82) return "offseason";
-  return "regular";
-}
+/* Los playoffs sólo se desbloquean si la temporada regular terminó Y ESPN
+   reporta que estamos en postemporada. Antes se usaba una ventana de meses
+   fija (abr–jun), que falla si la NBA mueve el calendario. */
+function getBracketPhase(maxGP, seasonType){
+  const seasonDone = maxGP >= 82;
+  if (!seasonDone) return "regular";
 
-export const BracketTab=({userCtx,standings})=>{
+  // 3 = playoffs según ESPN. Si no tenemos el dato, caemos a la heurística.
+  if (seasonType === 3) return "open";
+  if (seasonType != null) return "offseason";
+
+  const month = new Date().getMonth();
+  return (month >= 3 && month <= 5) ? "open" : "offseason";
+}
+export const BracketTab=({userCtx,standings,seasonType})=>{
   const {user}=userCtx;
   const [picks,setPicks]=useState({});
   const [games,setGames]=useState({});
@@ -42,7 +45,7 @@ export const BracketTab=({userCtx,standings})=>{
   const SEEDS_E=east.slice(0,10).map((t,i)=>({seed:i+1,s:t.abbr}));
   const SEEDS_W=west.slice(0,10).map((t,i)=>({seed:i+1,s:t.abbr}));
   const maxGP=standings.length?Math.max(...standings.map(t=>t.w+t.l)):0;
-  const phase=getBracketPhase(maxGP);
+  const phase=getBracketPhase(maxGP, seasonType);
 
   useEffect(()=>{
     if(!user) return;
