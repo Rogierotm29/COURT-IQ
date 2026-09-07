@@ -48,6 +48,6 @@ export const getBorderColor=(items=[],equipped={})=>{
   if(active==="gold_border")return "#FFB800";
   const found=SHOP_ITEMS.find(i=>i.key===active);
   if(found?.value&&found.value!=="rainbow")return found.value;
-  if(found?.value==="rainbow")return "#FF6B35"; // fallback for rainbow
+    if(found?.value==="rainbow")return "#3B82F6"; // el arcoíris animado no se puede expresar como color único
   return null;
 };
