@@ -451,23 +451,45 @@ export default async function handler(req, res) {
       case "leaderboard": {
         const { groupId } = req.query;
         if (!groupId) return res.json({ ok: false, error: "groupId requerido" });
-        // Query members directly — no dependency on the view
+
         const members = await supabase("group_members", { filters: `?group_id=eq.${groupId}&select=user_id,users(name,avatar_emoji)` });
         if (!members?.length) return res.json({ ok: true, leaderboard: [] });
-        // Get all picks for this group
-        const picks = await supabase("picks", { filters: `?group_id=eq.${groupId}&select=user_id,correct,points&limit=2000` });
-        // Aggregate by user
+
+        // Traemos los picks una sola vez, ordenados del más reciente al más viejo.
+        // Con eso calculamos totales Y rachas sin una petición por usuario (evita N+1).
+        const picks = await supabase("picks", {
+          filters: `?group_id=eq.${groupId}&select=user_id,correct,points,scored,game_date&order=game_date.desc,created_at.desc&limit=2000`,
+        });
+
         const agg = {};
         for (const m of members) {
-          agg[m.user_id] = { user_id: m.user_id, name: m.users?.name, avatar_emoji: m.users?.avatar_emoji, correct_picks: 0, total_picks: 0, total_points: 0 };
+          agg[m.user_id] = {
+            user_id: m.user_id,
+            name: m.users?.name,
+            avatar_emoji: m.users?.avatar_emoji,
+            correct_picks: 0, total_picks: 0, total_points: 0,
+            streak: 0, _streakOpen: true,   // _streakOpen: seguimos contando aciertos consecutivos
+          };
         }
+
         for (const p of (picks || [])) {
-          if (!agg[p.user_id]) continue;
-          agg[p.user_id].total_picks++;
-          if (p.correct) { agg[p.user_id].correct_picks++; agg[p.user_id].total_points += (p.points || 10); }
+          const u = agg[p.user_id];
+          if (!u) continue;
+          u.total_picks++;
+          if (p.correct) { u.correct_picks++; u.total_points += (p.points || 10); }
+          // Racha: sólo cuentan picks ya calificados, en orden desde el más reciente
+          if (p.scored) {
+            if (u._streakOpen) {
+              if (p.correct) u.streak++;
+              else u._streakOpen = false;
+            }
+          }
         }
-        const rows = Object.values(agg).map(r => ({ ...r, accuracy: r.total_picks > 0 ? Math.round(r.correct_picks / r.total_picks * 100) : 0 })).sort((a, b) => b.total_points - a.total_points);
-        // Attach shop cosmetics
+
+        const rows = Object.values(agg)
+          .map(({ _streakOpen, ...r }) => ({ ...r, accuracy: r.total_picks > 0 ? Math.round(r.correct_picks / r.total_picks * 100) : 0 }))
+          .sort((a, b) => b.total_points - a.total_points);
+
         const userIds = rows.map(r => r.user_id).filter(Boolean).join(",");
         const cosmetics = userIds ? await supabase("user_achievements", { filters: `?user_id=in.(${userIds})&achievement_key=like.shop_%25&select=user_id,achievement_key` }) : [];
         const cosmeticsByUser = {};
@@ -475,6 +497,7 @@ export default async function handler(req, res) {
           if (!cosmeticsByUser[c.user_id]) cosmeticsByUser[c.user_id] = [];
           cosmeticsByUser[c.user_id].push(c.achievement_key.replace("shop_", ""));
         }
+
         return res.json({ ok: true, leaderboard: rows.map(r => ({ ...r, shopItems: cosmeticsByUser[r.user_id] || [] })) });
       }
 

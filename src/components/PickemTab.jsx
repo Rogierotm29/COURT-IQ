@@ -116,15 +116,11 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
       if(d.ok){const pts={};(d.picks||[]).forEach(p=>{if(p.points!=null)pts[p.game_id]=p.points;});setPicksPoints(pts);}
     });
     pickemAPI("leaderboard",{params:{groupId:selGroup.id}}).then(d=>{
-      if(d.ok){
-        const lb=d.leaderboard||[];
-        setLeaderboard(lb);
-        lb.forEach(r=>{
-          pickemAPI("getStreak",{params:{userId:r.user_id,groupId:selGroup.id}}).then(s=>{
-            if(s.ok)setStreaks(prev=>({...prev,[r.user_id]:s.streak}));
-          });
-        });
-      }
+      if(!d.ok) return;
+      const lb=d.leaderboard||[];
+      setLeaderboard(lb);
+      // Las rachas ahora vienen en la misma respuesta — sin N+1
+      setStreaks(Object.fromEntries(lb.map(r=>[r.user_id,r.streak||0])));
     });
     pickemAPI("dailyWinner",{params:{groupId:selGroup.id,date:getToday()}}).then(d=>{if(d.ok)setDailyWinner(d.winner);});
   },[user,selGroup]);
