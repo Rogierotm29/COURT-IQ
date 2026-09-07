@@ -173,8 +173,7 @@ npm run test        # watch mode
 npm run test:run    # single run
 ```
 
-Unit tests cover the scoring module — win probability, dynamic point calculation, and the confidence multiplier — including edge cases like missing standings, division by zero on teams with no games played, and score clamping.
-## Roadmap
+Unit tests cover the two pure-function modules: scoring (win probability, dynamic points, confidence multipliers) and cosmetics (shop item resolution). 36 tests including edge cases — missing standings, division by zero, equipped items the user doesn't own, and legacy item keys.
 
 - Unit tests for the pure scoring and cosmetics functions
 - Full NBA roster search (currently limited to league scoring leaders)
