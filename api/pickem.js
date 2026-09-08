@@ -464,54 +464,60 @@ export default async function handler(req, res) {
         const existing = await supabase("picks", {
           filters: `?user_id=eq.${userId}&group_id=eq.${groupId}&game_id=eq.${gameId}`,
         });
+
         if (existing?.length) {
-          // Try with win_pct first, fall back without it if column doesn't exist
+          // También corregimos game_date: picks viejos pueden tener la fecha
+          // en que se hicieron en vez de la del partido
+          const patchBody = {
+            picked_team: pickedTeam,
+            confidence: conf,
+            game_date: gameDate || existing[0].game_date,
+          };
           try {
             await supabase(`picks?id=eq.${existing[0].id}`, {
-              method: "PATCH", body: { picked_team: pickedTeam, confidence: conf, win_pct: wPct },
+              method: "PATCH", body: { ...patchBody, win_pct: wPct },
             });
           } catch {
             await supabase(`picks?id=eq.${existing[0].id}`, {
-              method: "PATCH", body: { picked_team: pickedTeam, confidence: conf },
+              method: "PATCH", body: patchBody,
             });
           }
           return res.json({ ok: true, updated: true });
         }
-        // Try with win_pct first, fall back without it if column doesn't exist
+
+        const newPickBody = {
+          user_id: userId, group_id: groupId, game_id: gameId,
+          game_date: gameDate || new Date().toISOString().split("T")[0],
+          picked_team: pickedTeam, home_team: homeTeam, away_team: awayTeam, confidence: conf,
+        };
         let pick;
         try {
-          [pick] = await supabase("picks", {
-            method: "POST",
-            body: {
-              user_id: userId, group_id: groupId, game_id: gameId,
-              game_date: gameDate || new Date().toISOString().split("T")[0],
-              picked_team: pickedTeam, home_team: homeTeam, away_team: awayTeam, confidence: conf, win_pct: wPct,
-            },
-          });
+          [pick] = await supabase("picks", { method: "POST", body: { ...newPickBody, win_pct: wPct } });
         } catch {
-          [pick] = await supabase("picks", {
-            method: "POST",
-            body: {
-              user_id: userId, group_id: groupId, game_id: gameId,
-              game_date: gameDate || new Date().toISOString().split("T")[0],
-              picked_team: pickedTeam, home_team: homeTeam, away_team: awayTeam, confidence: conf,
-            },
-          });
+          [pick] = await supabase("picks", { method: "POST", body: newPickBody });
         }
         grantAchievement(userId, "first_pick");
         return res.json({ ok: true, pick });
       }
 
       // ─── MY PICKS ─────────────────────────────────────────
+      // ─── MY PICKS ─────────────────────────────────────────
       case "myPicks": {
-        const { userId, groupId, date } = req.query;
+        const { userId, groupId, date, gameIds } = req.query;
         if (!userId || !groupId) return res.json({ ok: false, error: "userId y groupId requeridos" });
         let filters = `?user_id=eq.${userId}&group_id=eq.${groupId}&order=created_at.desc&limit=50`;
-        if (date) filters += `&game_date=eq.${date}`;
+        // Preferimos filtrar por los partidos en pantalla: la fecha del pick es
+        // la del juego, que puede no ser hoy (pretemporada, juegos nocturnos)
+        if (gameIds) {
+          const ids = gameIds.split(",").filter(Boolean);
+          if (!ids.length) return res.json({ ok: true, picks: [] });
+          filters += `&game_id=in.(${ids.join(",")})`;
+        } else if (date) {
+          filters += `&game_date=eq.${date}`;
+        }
         const picks = await supabase("picks", { filters });
         return res.json({ ok: true, picks: picks || [] });
       }
-
       // ─── LEADERBOARD ──────────────────────────────────────
       case "leaderboard": {
         const { groupId } = req.query;
@@ -820,14 +826,19 @@ export default async function handler(req, res) {
         return res.json({ ok: true, picks: picks || [] });
       }
 
-      // ─── GROUP PICKS (all members today) ──────────────────
+      // ─── GROUP PICKS ──────────────────────────────────────
       case "groupPicks": {
-        const { groupId, date } = req.query;
+        const { groupId, date, gameIds } = req.query;
         if (!groupId) return res.json({ ok: false, error: "groupId requerido" });
-        const queryDate = date || new Date().toISOString().split("T")[0];
-        const picks = await supabase("picks", {
-          filters: `?group_id=eq.${groupId}&game_date=eq.${queryDate}&select=*,users(name,avatar_emoji)&order=created_at.asc`,
-        });
+        let filters = `?group_id=eq.${groupId}&select=*,users(name,avatar_emoji)&order=created_at.asc`;
+        if (gameIds) {
+          const ids = gameIds.split(",").filter(Boolean);
+          if (!ids.length) return res.json({ ok: true, picks: [] });
+          filters += `&game_id=in.(${ids.join(",")})`;
+        } else {
+          filters += `&game_date=eq.${date || new Date().toISOString().split("T")[0]}`;
+        }
+        const picks = await supabase("picks", { filters });
         return res.json({ ok: true, picks: picks || [] });
       }
 

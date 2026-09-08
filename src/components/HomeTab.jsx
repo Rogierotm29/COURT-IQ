@@ -28,6 +28,7 @@ export const HomeTab=({games,live,userCtx,standings,picks,confidence,setConfiden
   const prevStatusRef=useRef({});
   const prevStreakRef=useRef(streak);
   const gameStatusKey = games.map(g=>`${g.id}:${g.status}`).join("|");
+  const gameIdsKey = games.map(g=>g.id).join(",");
 
   const triggerCelebration=(correctPts,str,gameId)=>{
     const cKey=`courtiq_celebrated_${user?.id}_${gameId}`;
@@ -48,7 +49,7 @@ export const HomeTab=({games,live,userCtx,standings,picks,confidence,setConfiden
     const today=getToday();
     setLockedPicks(!!store.get(`courtiq_locked_${selGroup.id}_${today}`));
 
-    pickemAPI("myPicks",{params:{userId:user.id,groupId:selGroup.id,date:today}}).then(r=>{
+    pickemAPI("myPicks",{params:{userId:user.id,groupId:selGroup.id,gameIds:gameIdsKey}}).then(r=>{
       if(!r.ok) return;
       const pts={};
       (r.picks||[]).forEach(p=>{if(p.points!=null)pts[p.game_id]=p.points;});
@@ -76,8 +77,8 @@ export const HomeTab=({games,live,userCtx,standings,picks,confidence,setConfiden
   // Recargar picks del grupo cuando cambia el estado de los juegos
   useEffect(()=>{
     if(!user||!selGroup) return;
-    pickemAPI("groupPicks",{params:{groupId:selGroup.id,date:getToday()}}).then(r=>{if(r.ok)setGrpPicks(r.picks||[]);});
-    },[user,selGroup,gameStatusKey]);
+    pickemAPI("groupPicks",{params:{groupId:selGroup.id,gameIds:gameIdsKey}}).then(r=>{if(r.ok)setGrpPicks(r.picks||[]);});
+  },[user,selGroup,gameStatusKey,gameIdsKey]);
 
   useEffect(()=>{
     if(streak>prevStreakRef.current&&streak>=2){

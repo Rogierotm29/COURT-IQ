@@ -57,6 +57,7 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
   const [editGroup,setEditGroup]=useState(false);const [editGroupName,setEditGroupName]=useState("");const [editGroupEmoji,setEditGroupEmoji]=useState("");
   const [profileModal,setProfileModal]=useState(null);const [profileData,setProfileData]=useState(null);
   const gameStatusKey = games.map(g=>`${g.id}:${g.status}`).join("|");
+  const gameIdsKey = games.map(g=>g.id).join(",");
   const { items:shopItems, equipped:myEquipped, shields, useShield } = useCosmetics();
   const [confirmLeave,setConfirmLeave]=useState(false);
   const [leaveLoading,setLeaveLoading]=useState(false);
@@ -114,7 +115,7 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
     if(!user||!selGroup) return;
     const today=getToday();
     setLockedPicks(!!store.get(`courtiq_locked_${selGroup.id}_${today}`));
-    pickemAPI("myPicks",{params:{userId:user.id,groupId:selGroup.id,date:today}}).then(d=>{
+    pickemAPI("myPicks",{params:{userId:user.id,groupId:selGroup.id,gameIds:gameIdsKey}}).then(d=>{
       if(d.ok){const pts={};(d.picks||[]).forEach(p=>{if(p.points!=null)pts[p.game_id]=p.points;});setPicksPoints(pts);}
     });
     pickemAPI("leaderboard",{params:{groupId:selGroup.id}}).then(d=>{
@@ -159,8 +160,8 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
 
   useEffect(()=>{
     if(!user||!selGroup) return;
-    pickemAPI("groupPicks",{params:{groupId:selGroup.id,date:getToday()}}).then(d=>{if(d.ok)setGrpPicks(d.picks||[]);});
-    },[user,selGroup,gameStatusKey]);
+    pickemAPI("groupPicks",{params:{groupId:selGroup.id,gameIds:gameIdsKey}}).then(d=>{if(d.ok)setGrpPicks(d.picks||[]);});
+  },[user,selGroup,gameStatusKey,gameIdsKey]);
 
   const register=async()=>{
     if(!name.trim()) return;

@@ -200,20 +200,27 @@ export default function App(){
   const [groups,setGroups]=useState([]);
   const [apiDown,setApiDown]=useState(false);
   const gameStatusKey = games.map(g=>`${g.id}:${g.status}`).join("|");
+  const gameIdsKey = games.map(g=>g.id).join(",");
   const [seasonType,setSeasonType]=useState(null);
   const makePick=useCallback(async(gameId,team,home,away,conf=1,g=null)=>{
     if(!selGroup||!userCtx.user) return;
     setPicks(p=>({...p,[gameId]:team}));
     const pickedSide=team===home?"home":"away";
     const wPct=g?.status==="Upcoming"?calcWinPct(g,pickedSide,standings):50;
-    const today=getToday();
+    // La fecha del pick es la del partido, no la de hoy: así un pick para
+    // un juego futuro no desaparece al cambiar el día
+    const gameDate=g?.startTime
+      ? new Date(g.startTime).toLocaleDateString("en-CA")
+      : getToday();
     const targets=groups.length?groups:[selGroup];
-    await Promise.all(targets.map(grp=>
+    const results=await Promise.all(targets.map(grp=>
       pickemAPI("makePick",{body:{
-        userId:userCtx.user.id, groupId:grp.id, gameId, gameDate:today,
+        userId:userCtx.user.id, groupId:grp.id, gameId, gameDate,
         pickedTeam:team, homeTeam:home, awayTeam:away, confidence:conf, winPct:wPct
       }})
     ));
+    const failed=results.find(r=>!r.ok);
+    if(failed) console.warn("makePick rechazado:",failed.error);
   },[selGroup,userCtx.user,standings,groups]);
 
 
@@ -225,8 +232,8 @@ export default function App(){
   },[]);
 
   useEffect(()=>{
-    if(!userCtx.user||!selGroup){setPicks({});setConfidence({});return;}
-    pickemAPI("myPicks",{params:{userId:userCtx.user.id,groupId:selGroup.id,date:getToday()}}).then(r=>{
+    if(!userCtx.user||!selGroup||!gameIdsKey){setPicks({});setConfidence({});return;}
+    pickemAPI("myPicks",{params:{userId:userCtx.user.id,groupId:selGroup.id,gameIds:gameIdsKey}}).then(r=>{
       if(!r.ok) return;
       const m={},conf={};
       (r.picks||[]).forEach(p=>{
@@ -235,7 +242,7 @@ export default function App(){
       });
       setPicks(m);setConfidence(conf);
     });
-  },[userCtx.user,selGroup]);
+  },[userCtx.user,selGroup,gameIdsKey]);
 
   useEffect(()=>{
     if(!userCtx.user) return;
