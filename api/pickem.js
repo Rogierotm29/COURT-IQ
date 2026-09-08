@@ -22,6 +22,26 @@ async function getScoreboard() {
   return data;
 }
 
+// ─── FASE DEL BRACKET (validación de servidor) ────────────────────────────────
+// Los picks de playoffs sólo se aceptan cuando ESPN reporta postemporada.
+// El frontend ya lo bloquea, pero eso es cosmético: la regla vive aquí.
+async function isBracketOpen() {
+  try {
+    const data = await getScoreboard();
+    const seasonType = data.leagues?.[0]?.season?.type?.type ?? null;
+    if (seasonType === 3) return { open: true };
+    if (seasonType != null) return { open: false, reason: "Los picks de playoffs sólo están disponibles durante la postemporada" };
+    // Sin dato de ESPN: heurística de meses como respaldo
+    const month = new Date().getMonth();
+    return (month >= 3 && month <= 5)
+      ? { open: true }
+      : { open: false, reason: "Los picks de playoffs sólo están disponibles durante la postemporada" };
+  } catch (e) {
+    console.warn("isBracketOpen: no se pudo verificar la temporada:", e.message);
+    return { open: false, reason: "No pudimos verificar el estado de la temporada. Intenta de nuevo." };
+  }
+}
+
 // Devuelve "pre" | "in" | "post" | null (null = no encontrado)
 async function getGameState(gameId) {
   const data = await getScoreboard();
@@ -664,6 +684,9 @@ export default async function handler(req, res) {
       case "bracketPick": {
         const { userId, matchupId, round, teamA, teamB, predictedWinner, predictedGames } = body;
         if (!userId || !matchupId || !predictedWinner) return res.json({ ok: false, error: "Faltan datos" });
+
+        const phase = await isBracketOpen();
+        if (!phase.open) return res.json({ ok: false, error: phase.reason });
         const existing = await supabase("bracket_picks", {
           filters: `?user_id=eq.${userId}&matchup_id=eq.${matchupId}`,
         });
@@ -695,6 +718,9 @@ export default async function handler(req, res) {
       case "mvpPick": {
         const { userId, playerName, playerTeam } = body;
         if (!userId || !playerName) return res.json({ ok: false, error: "Faltan datos" });
+
+        const phase = await isBracketOpen();
+        if (!phase.open) return res.json({ ok: false, error: phase.reason });
         const existing = await supabase("mvp_picks", {
           filters: `?user_id=eq.${userId}`,
         });

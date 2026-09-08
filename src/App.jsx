@@ -376,7 +376,6 @@ export default function App(){
       {tab==="parlay"&&<PickemTab games={games} standings={standings} userCtx={userCtx} picks={picks} confidence={confidence} setConfidence={setConfidence} makePick={makePick} selGroup={selGroup} setSelGroup={setSelGroup} initSubTab="parlay" standalone/>}
       {tab==="ou"&&<OUTab games={games} userCtx={userCtx}/>}
       {tab==="shop"&&<ShopTab userCtx={userCtx}/>}
-      {tab==="bracket"&&<BracketTab userCtx={userCtx} standings={standings}/>}
       {tab==="bracket"&&<BracketTab userCtx={userCtx} standings={standings} seasonType={seasonType}/>}
       {tab==="games"&&<MiniGamesTab players={players} userCtx={userCtx}/>}
       {tab==="settings"&&<SettingsTab userCtx={userCtx} installPrompt={installPrompt} onInstalled={()=>setInstallPrompt(null)}/>}
