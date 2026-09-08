@@ -111,6 +111,13 @@ export const HomeTab=({games,live,userCtx,standings,picks,confidence,setConfiden
     setExpandedCard(null);
   };
 
+    const unlockPicks=()=>{
+    if(!selGroup) return;
+    store.remove(`courtiq_locked_${selGroup.id}_${getToday()}`);
+    setLockedPicks(false);
+    setExpandedCard(null);
+  };
+
   const anyStarted=games.some(g=>g.status==="LIVE"||g.status==="Final");
 
   const claimBonus=async()=>{
@@ -351,6 +358,13 @@ export const HomeTab=({games,live,userCtx,standings,picks,confidence,setConfiden
       <div style={{fontSize:T.font.base,fontWeight:600,color:T.text.primary,marginBottom:T.space[1]}}>¿Listo con tus picks?</div>
       <div style={{fontSize:T.font.sm,color:T.text.secondary,marginBottom:T.space[4],lineHeight:1.5}}>Al cerrarlos podrás ver qué eligieron los demás. Ya no podrás cambiarlos.</div>
       <button className="btn" onClick={lockAllPicks} style={{width:"100%",padding:T.space[3],borderRadius:T.radius.base,background:T.accent.base,color:"#fff",fontWeight:600,fontSize:T.font.base}}>Cerrar mis picks</button>
+    </div>}
+
+
+    {user&&selGroup&&lockedPicks&&!anyStarted&&<div style={{background:T.surface[1],border:`1px solid ${T.border.base}`,borderRadius:T.radius.lg,padding:T.space[5],marginBottom:T.space[3]}}>
+      <div style={{fontSize:T.font.base,fontWeight:600,color:T.text.primary,marginBottom:T.space[1]}}>Picks cerrados</div>
+      <div style={{fontSize:T.font.sm,color:T.text.secondary,marginBottom:T.space[4],lineHeight:1.5}}>Puedes reabrirlos mientras ningún partido haya empezado.</div>
+      <button className="btn" onClick={unlockPicks} style={{width:"100%",padding:T.space[3],borderRadius:T.radius.base,background:T.surface[2],border:`1px solid ${T.border.base}`,color:T.text.primary,fontWeight:600,fontSize:T.font.base}}>Reabrir mis picks</button>
     </div>}
 
     {user&&games.some(g=>g.status==="Final"&&picks[g.id])&&
