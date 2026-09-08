@@ -1508,7 +1508,7 @@ export default async function handler(req, res) {
 
       // ─── CHECK DAILY BONUS STATUS ──────────────────────────
       case "dailyBonusStatus": {
-        const { userId } = req.query;
+        const { userId, date } = req.query;
         if (!userId) return res.json({ ok: false, error: "userId requerido" });
         const today = date || new Date().toISOString().split("T")[0];
         const users = await supabase("users", { filters: `?id=eq.${userId}&select=last_daily_bonus&limit=1` });
