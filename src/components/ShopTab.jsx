@@ -5,6 +5,7 @@ import { SHOP_ITEMS } from "../data/shop";
 import { pickemAPI } from "../api/pickem";
 import { getNameColor, getNamePrefix, getBorderColor } from "../utils/cosmetics";
 import { useCosmetics } from "../context/CosmeticsContext";
+import { getToday } from "../utils/date";
 
 const TYPE_LABEL={title:"Título",color:"Color de nombre",border:"Marco"};
 

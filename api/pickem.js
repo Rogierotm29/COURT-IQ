@@ -927,24 +927,50 @@ export default async function handler(req, res) {
 
       // ─── COIN BALANCE ──────────────────────────────────────
       case "getBalance": {
-        const { userId, groupId } = req.query;
-        if (!userId || !groupId) return res.json({ ok: false, error: "Faltan datos" });
+        const { userId, groupId, date } = req.query;
+
+        if (!userId || !groupId) {
+          return res.json({ ok: false, error: "Faltan datos" });
+        }
+
         const today = date || new Date().toISOString().split("T")[0];
+
         const rows = await supabase("coin_balances", {
           filters: `?user_id=eq.${userId}&group_id=eq.${groupId}&limit=1`,
         });
+
         if (!rows?.length) {
           await supabase("coin_balances", {
             method: "POST",
-            body: { user_id: userId, group_id: groupId, balance: 500, last_reset_date: today },
+            body: {
+              user_id: userId,
+              group_id: groupId,
+              balance: 500,
+              last_reset_date: today,
+            },
           });
-          return res.json({ ok: true, balance: 500, isNew: true });
+
+          return res.json({
+            ok: true,
+            balance: 500,
+            isNew: true,
+          });
         }
+
         let { balance, last_reset_date, id } = rows[0];
+
         if (last_reset_date !== today && balance < 200) {
           balance = Math.min(balance + 100, 500);
-          await supabase(`coin_balances?id=eq.${id}`, { method: "PATCH", body: { balance, last_reset_date: today } });
+
+          await supabase(`coin_balances?id=eq.${id}`, {
+            method: "PATCH",
+            body: {
+              balance,
+              last_reset_date: today,
+            },
+          });
         }
+
         return res.json({ ok: true, balance });
       }
 
