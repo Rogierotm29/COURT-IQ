@@ -40,7 +40,7 @@ export const HomeTab=({games,live,userCtx,standings,picks,confidence,setConfiden
 
   useEffect(()=>{
     if(!user) return;
-    pickemAPI("dailyBonusStatus",{params:{userId:user.id}}).then(d=>{if(d.ok)setBonusClaimed(d.claimed);});
+        pickemAPI("dailyBonusStatus",{params:{userId:user.id,date:getToday()}}).then(d=>{if(d.ok)setBonusClaimed(d.claimed);});
   },[user]);
 
   useEffect(()=>{
@@ -114,7 +114,7 @@ export const HomeTab=({games,live,userCtx,standings,picks,confidence,setConfiden
   const anyStarted=games.some(g=>g.status==="LIVE"||g.status==="Final");
 
   const claimBonus=async()=>{
-    const d=await pickemAPI("claimDailyBonus",{body:{userId:user.id}});
+    const d=await pickemAPI("claimDailyBonus",{body:{userId:user.id,date:getToday()}});
     if(d.ok){setBonusClaimed(true);setBonusMsg(`+${d.bonus} monedas de bonus diario`);}
     else setBonusMsg(d.error||"Error");
     setTimeout(()=>setBonusMsg(""),4000);

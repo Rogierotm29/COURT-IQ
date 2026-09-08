@@ -138,14 +138,14 @@ export const PickemTab=({games,standings,userCtx,picks,confidence,setConfidence,
     if(!user||!selGroup) return;
     if(subTab==="historial") pickemAPI("pickHistory",{params:{userId:user.id,groupId:selGroup.id}}).then(d=>{if(d.ok)setHistory(d.picks||[]);});
     if(subTab==="apuestas"){
-      pickemAPI("getBalance",{params:{userId:user.id,groupId:selGroup.id}}).then(d=>{if(d.ok)setBalance(d.balance);});
+      pickemAPI("getBalance",{params:{userId:user.id,groupId:selGroup.id,date:getToday()}}).then(d=>{if(d.ok)setBalance(d.balance);});
       pickemAPI("groupBets",{params:{groupId:selGroup.id}}).then(d=>{if(d.ok)setBets(d.bets||[]);});
     }
     if(subTab==="chat") pickemAPI("getChat",{params:{groupId:selGroup.id}}).then(d=>{if(d.ok)setChat(d.messages||[]);});
     if(subTab==="estadisticas") pickemAPI("myStats",{params:{userId:user.id}}).then(d=>{if(d.ok)setMyStatsData(d.stats);});
     if(subTab==="parlay"){
       pickemAPI("myParlay",{params:{userId:user.id,groupId:selGroup.id}}).then(d=>{if(d.ok)setParlay(d.parlay);});
-      pickemAPI("getBalance",{params:{userId:user.id,groupId:selGroup.id}}).then(d=>{if(d.ok)setBalance(d.balance);});
+      pickemAPI("getBalance",{params:{userId:user.id,groupId:selGroup.id,date:getToday()}}).then(d=>{if(d.ok)setBalance(d.balance);});
     }
   },[subTab,user,selGroup]);
 

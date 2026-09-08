@@ -32,7 +32,7 @@ export const ShopTab=({userCtx})=>{
     if(!user) return;
     const gid=localStorage.getItem("courtiq_lastgroup");
     setGroupId(gid);
-    if(gid) pickemAPI("getBalance",{params:{userId:user.id,groupId:gid}}).then(d=>{if(d.ok)setBalance(d.balance);});
+    if(gid) pickemAPI("getBalance",{params:{userId:user.id,groupId:gid,date:getToday()}}).then(d=>{if(d.ok)setBalance(d.balance);});
   },[user]);
 
   const flash=(text,kind="ok")=>{setMsg({text,kind});setTimeout(()=>setMsg(null),3500);};

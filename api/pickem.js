@@ -918,7 +918,7 @@ export default async function handler(req, res) {
       case "getBalance": {
         const { userId, groupId } = req.query;
         if (!userId || !groupId) return res.json({ ok: false, error: "Faltan datos" });
-        const today = new Date().toISOString().split("T")[0];
+        const today = date || new Date().toISOString().split("T")[0];
         const rows = await supabase("coin_balances", {
           filters: `?user_id=eq.${userId}&group_id=eq.${groupId}&limit=1`,
         });
@@ -1479,7 +1479,7 @@ export default async function handler(req, res) {
       case "claimDailyBonus": {
         const { userId } = body;
         if (!userId) return res.json({ ok: false, error: "userId requerido" });
-        const today = new Date().toISOString().split("T")[0];
+        const today = date || new Date().toISOString().split("T")[0];
         const users = await supabase("users", { filters: `?id=eq.${userId}&limit=1` });
         if (!users?.length) return res.json({ ok: false, error: "Usuario no encontrado" });
         const u = users[0];
@@ -1499,7 +1499,7 @@ export default async function handler(req, res) {
       case "dailyBonusStatus": {
         const { userId } = req.query;
         if (!userId) return res.json({ ok: false, error: "userId requerido" });
-        const today = new Date().toISOString().split("T")[0];
+        const today = date || new Date().toISOString().split("T")[0];
         const users = await supabase("users", { filters: `?id=eq.${userId}&select=last_daily_bonus&limit=1` });
         const claimed = users?.[0]?.last_daily_bonus === today;
         return res.json({ ok: true, claimed });
